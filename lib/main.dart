@@ -326,7 +326,7 @@ class _MyAppState extends State<MyApp> {
       home: Scaffold(
         backgroundColor: isDarkMode ? Colors.black : Colors.grey[100],
         appBar: AppBar(
-          title: Text("CGPA Calculator"),
+          title: Text("CGPA Calcul"),
           centerTitle: true,
           actions: [
             IconButton(
