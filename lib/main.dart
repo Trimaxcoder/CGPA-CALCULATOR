@@ -56,12 +56,14 @@ double getPoint(int score) {
   if (score >= 60) return 4.0;
   if (score >= 50) return 3.0;
   if (score >= 45) return 2.0;
+  if (score >= 40) return 1.0;
   return 0.0;
 }
 
 Color getColor(int score) {
   if (score >= 70) return Colors.green;
-  if (score >= 50) return Colors.orange;
+  if (score >= 50) return Colors.blue;
+  if (score >= 40) return Colors.orange;
   return Colors.red;
 }
 
@@ -310,8 +312,6 @@ class _MyAppState extends State<MyApp> {
       ).showSnackBar(SnackBar(content: Text("Course deleted")));
     }
   }
-
-  /* ================= CLEAR ALL ================= */
 
   /* ================= CLEAR ALL ================= */
 
