@@ -69,12 +69,156 @@ Color getColor(int score) {
 
 /* ================= APP ================= */
 
-class MyApp extends StatefulWidget {
+class MyApp extends StatelessWidget {
   @override
-  State<MyApp> createState() => _MyAppState();
+  Widget build(BuildContext context) {
+    return MaterialApp(debugShowCheckedModeBanner: false, home: SplashScreen());
+  }
 }
 
-class _MyAppState extends State<MyApp> {
+/* ================= SPLASH SCREEN ================= */
+
+class SplashScreen extends StatefulWidget {
+  @override
+  State<SplashScreen> createState() => _SplashScreenState();
+}
+
+class _SplashScreenState extends State<SplashScreen>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _fadeAnimation;
+  late Animation<double> _scaleAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _controller = AnimationController(
+      vsync: this,
+      duration: Duration(milliseconds: 1200),
+    );
+
+    _fadeAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeIn));
+
+    _scaleAnimation = Tween<double>(
+      begin: 0.7,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutBack));
+
+    _controller.forward();
+
+    // Navigate to HomeScreen after 3 seconds
+    Future.delayed(Duration(seconds: 2), () {
+      if (mounted) {
+        Navigator.of(context).pushReplacement(
+          PageRouteBuilder(
+            transitionDuration: Duration(milliseconds: 600),
+            pageBuilder: (_, __, ___) => HomeScreen(),
+            transitionsBuilder: (_, animation, __, child) {
+              return FadeTransition(opacity: animation, child: child);
+            },
+          ),
+        );
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Colors.blue.shade700, Colors.indigo.shade900],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+        ),
+        child: FadeTransition(
+          opacity: _fadeAnimation,
+          child: ScaleTransition(
+            scale: _scaleAnimation,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // Icon
+                Container(
+                  width: 110,
+                  height: 110,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(Icons.school, size: 60, color: Colors.white),
+                ),
+
+                SizedBox(height: 30),
+
+                // App name
+                Text(
+                  "CGPA Calculator",
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+
+                SizedBox(height: 10),
+
+                // Subtitle
+                Text(
+                  "Track your academic performance",
+                  style: TextStyle(color: Colors.white70, fontSize: 15),
+                ),
+
+                SizedBox(height: 60),
+
+                Text(
+                  "Developed by TRIMAX",
+                  style: TextStyle(color: Colors.white70, fontSize: 18),
+                ),
+
+                SizedBox(height: 60),
+
+                // Loading indicator
+                SizedBox(
+                  width: 36,
+                  height: 36,
+                  child: CircularProgressIndicator(
+                    color: Colors.white,
+                    strokeWidth: 3,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/* ================= HOME SCREEN ================= */
+
+class HomeScreen extends StatefulWidget {
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
   List<Course> courses = [];
 
   final nameController = TextEditingController();
@@ -253,14 +397,21 @@ class _MyAppState extends State<MyApp> {
     selectedSemester = course.semester;
 
     setState(() {
-      courses.remove(course);
+      courses.removeWhere(
+        (c) =>
+            c.name == course.name &&
+            c.score == course.score &&
+            c.unit == course.unit &&
+            c.year == course.year &&
+            c.semester == course.semester,
+      );
       currentPage = getCurrentIndex();
     });
 
+    saveCourses();
+
     pageController.jumpToPage(currentPage);
   }
-
-  /* ================= DELETE ================= */
 
   /* ================= DELETE COURSE ================= */
 
@@ -302,7 +453,14 @@ class _MyAppState extends State<MyApp> {
 
     if (confirm == true) {
       setState(() {
-        courses.remove(course);
+        courses.removeWhere(
+          (c) =>
+              c.name == course.name &&
+              c.score == course.score &&
+              c.unit == course.unit &&
+              c.year == course.year &&
+              c.semester == course.semester,
+        );
       });
 
       await saveCourses();
@@ -397,13 +555,10 @@ class _MyAppState extends State<MyApp> {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-
-      theme: isDarkMode ? ThemeData.dark() : ThemeData.light(),
-
-      home: Scaffold(
-        backgroundColor: isDarkMode ? Colors.black : Colors.grey.shade100,
+    return Theme(
+      data: isDarkMode ? ThemeData.dark() : ThemeData.light(),
+      child: Scaffold(
+        backgroundColor: isDarkMode ? Colors.black : Colors.blue[100],
 
         appBar: AppBar(
           elevation: 0,
@@ -523,7 +678,7 @@ class _MyAppState extends State<MyApp> {
                               controller: nameController,
 
                               decoration: InputDecoration(
-                                hintText: "Course e.g MTH101",
+                                hintText: "Course Code e.g MTH101",
 
                                 prefixIcon: Icon(Icons.book),
 
@@ -579,6 +734,8 @@ class _MyAppState extends State<MyApp> {
                                 onPressed: addCourse,
 
                                 style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.blue[200],
+                                  foregroundColor: Colors.white,
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(14),
                                   ),
@@ -674,113 +831,133 @@ class _MyAppState extends State<MyApp> {
 
                               /* COURSE LIST */
                               Expanded(
-                                child: list.isEmpty
-                                    ? Center(
-                                        child: Text(
-                                          "No courses added",
-                                          style: TextStyle(fontSize: 16),
-                                        ),
-                                      )
-                                    : ListView.builder(
-                                        padding: EdgeInsets.only(bottom: 20),
+                                child: Container(
+                                  padding: EdgeInsets.all(
+                                    10,
+                                  ), // padding for whole list area
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(16),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.green.withOpacity(0.3),
+                                        blurRadius: 12,
+                                        spreadRadius: 2,
+                                        offset: Offset(0, 4),
+                                      ),
+                                    ],
+                                  ),
+                                  child: list.isEmpty
+                                      ? Center(
+                                          child: Text(
+                                            "No courses added",
+                                            style: TextStyle(fontSize: 16),
+                                          ),
+                                        )
+                                      : ListView.builder(
+                                          padding: EdgeInsets.only(bottom: 20),
 
-                                        itemCount: list.length,
+                                          itemCount: list.length,
 
-                                        itemBuilder: (context, i) {
-                                          var c = list[i];
+                                          itemBuilder: (context, i) {
+                                            var c = list[i];
 
-                                          return Card(
-                                            elevation: 3,
+                                            return Card(
+                                              elevation: 3,
 
-                                            margin: EdgeInsets.only(bottom: 14),
-
-                                            shape: RoundedRectangleBorder(
-                                              borderRadius:
-                                                  BorderRadius.circular(16),
-                                            ),
-
-                                            child: Padding(
-                                              padding: EdgeInsets.symmetric(
-                                                vertical: 6,
+                                              margin: EdgeInsets.only(
+                                                bottom: 14,
                                               ),
 
-                                              child: ListTile(
-                                                contentPadding:
-                                                    EdgeInsets.symmetric(
-                                                      horizontal: 14,
-                                                      vertical: 6,
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(16),
+                                              ),
+
+                                              child: Padding(
+                                                padding: EdgeInsets.symmetric(
+                                                  vertical: 6,
+                                                ),
+
+                                                child: ListTile(
+                                                  contentPadding:
+                                                      EdgeInsets.symmetric(
+                                                        horizontal: 14,
+                                                        vertical: 6,
+                                                      ),
+
+                                                  leading: CircleAvatar(
+                                                    radius: 24,
+
+                                                    backgroundColor: getColor(
+                                                      c.score,
                                                     ),
 
-                                                leading: CircleAvatar(
-                                                  radius: 24,
+                                                    child: Text(
+                                                      getGrade(c.score),
 
-                                                  backgroundColor: getColor(
-                                                    c.score,
+                                                      style: TextStyle(
+                                                        color: Colors.white,
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                      ),
+                                                    ),
                                                   ),
 
-                                                  child: Text(
-                                                    getGrade(c.score),
+                                                  title: Text(
+                                                    c.name,
 
                                                     style: TextStyle(
-                                                      color: Colors.white,
                                                       fontWeight:
                                                           FontWeight.bold,
+                                                      fontSize: 16,
                                                     ),
                                                   ),
-                                                ),
 
-                                                title: Text(
-                                                  c.name,
+                                                  subtitle: Padding(
+                                                    padding: EdgeInsets.only(
+                                                      top: 6,
+                                                    ),
 
-                                                  style: TextStyle(
-                                                    fontWeight: FontWeight.bold,
-                                                    fontSize: 16,
-                                                  ),
-                                                ),
-
-                                                subtitle: Padding(
-                                                  padding: EdgeInsets.only(
-                                                    top: 6,
+                                                    child: Text(
+                                                      "Score ${c.score} • Unit ${c.unit}",
+                                                    ),
                                                   ),
 
-                                                  child: Text(
-                                                    "Score ${c.score} • Unit ${c.unit}",
-                                                  ),
-                                                ),
+                                                  trailing: Row(
+                                                    mainAxisSize:
+                                                        MainAxisSize.min,
 
-                                                trailing: Row(
-                                                  mainAxisSize:
-                                                      MainAxisSize.min,
+                                                    children: [
+                                                      IconButton(
+                                                        icon: Icon(
+                                                          Icons.edit,
+                                                          color: Colors.blue,
+                                                        ),
 
-                                                  children: [
-                                                    IconButton(
-                                                      icon: Icon(
-                                                        Icons.edit,
-                                                        color: Colors.blue,
+                                                        onPressed: () {
+                                                          editCourse(c);
+                                                        },
                                                       ),
 
-                                                      onPressed: () {
-                                                        editCourse(c);
-                                                      },
-                                                    ),
+                                                      IconButton(
+                                                        icon: Icon(
+                                                          Icons.delete,
+                                                          color: Colors.red,
+                                                        ),
 
-                                                    IconButton(
-                                                      icon: Icon(
-                                                        Icons.delete,
-                                                        color: Colors.red,
+                                                        onPressed: () {
+                                                          deleteCourse(c);
+                                                        },
                                                       ),
-
-                                                      onPressed: () {
-                                                        deleteCourse(c);
-                                                      },
-                                                    ),
-                                                  ],
+                                                    ],
+                                                  ),
                                                 ),
                                               ),
-                                            ),
-                                          );
-                                        },
-                                      ),
+                                            );
+                                          },
+                                        ),
+                                ),
                               ),
                             ],
                           ),
@@ -807,6 +984,9 @@ class _MyAppState extends State<MyApp> {
 
                       decoration: BoxDecoration(
                         color: Colors.black87,
+                        gradient: LinearGradient(
+                          colors: [Colors.black, Colors.indigo],
+                        ),
 
                         borderRadius: BorderRadius.circular(20),
 
