@@ -110,7 +110,7 @@ class _SplashScreenState extends State<SplashScreen>
 
     _controller.forward();
 
-    // Navigate to HomeScreen after 3 seconds
+    // Navigate to HomeScreen after 2 seconds
     Future.delayed(Duration(seconds: 2), () {
       if (mounted) {
         Navigator.of(context).pushReplacement(
@@ -381,6 +381,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
     saveCourses();
 
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text("Course added")));
+
     nameController.clear();
     scoreController.clear();
     unitController.clear();
@@ -421,13 +425,24 @@ class _HomeScreenState extends State<HomeScreen> {
       barrierDismissible: false,
       builder: (ctx) {
         return AlertDialog(
+          backgroundColor: isDarkMode ? Color(0xFF1E1E1E) : Colors.white,
+
+          surfaceTintColor: Colors.transparent,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
           ),
 
-          title: Text("Delete Course"),
+          title: Text(
+            "Delete Course",
+            style: TextStyle(color: isDarkMode ? Colors.white : Colors.black),
+          ),
 
-          content: Text("Are you sure you want to delete this course?"),
+          content: Text(
+            "Are you sure you want to delete this course?",
+            style: TextStyle(
+              color: isDarkMode ? Colors.white70 : Colors.black87,
+            ),
+          ),
 
           actions: [
             TextButton(
@@ -479,13 +494,24 @@ class _HomeScreenState extends State<HomeScreen> {
       barrierDismissible: false,
       builder: (ctx) {
         return AlertDialog(
+          backgroundColor: isDarkMode ? Color(0xFF1E1E1E) : Colors.white,
+
+          surfaceTintColor: Colors.transparent,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
           ),
 
-          title: Text("Clear All Courses"),
+          title: Text(
+            "Clear All Courses",
+            style: TextStyle(color: isDarkMode ? Colors.white : Colors.black),
+          ),
 
-          content: Text("This will delete ALL saved courses permanently."),
+          content: Text(
+            "This will delete ALL saved courses permanently.",
+            style: TextStyle(
+              color: isDarkMode ? Colors.white70 : Colors.black87,
+            ),
+          ),
 
           actions: [
             TextButton(
@@ -734,7 +760,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 onPressed: addCourse,
 
                                 style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.blue[200],
+                                  backgroundColor: Colors.blue,
                                   foregroundColor: Colors.white,
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(14),
@@ -836,16 +862,12 @@ class _HomeScreenState extends State<HomeScreen> {
                                     10,
                                   ), // padding for whole list area
                                   decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    borderRadius: BorderRadius.circular(16),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.green.withOpacity(0.3),
-                                        blurRadius: 12,
-                                        spreadRadius: 2,
-                                        offset: Offset(0, 4),
-                                      ),
-                                    ],
+                                    color:
+                                        Theme.of(context).brightness ==
+                                            Brightness.dark
+                                        ? Color(0xFF1E1E1E) // ← dark mode color
+                                        : Colors.white, // ← light mode color
+                                    borderRadius: BorderRadius.circular(20),
                                   ),
                                   child: list.isEmpty
                                       ? Center(
