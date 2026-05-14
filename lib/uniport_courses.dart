@@ -3280,10 +3280,14 @@ const UniversityData uniportData = UniversityData(
                   courses: [
                     CourseData(
                       code: 'MTH 110',
-                      title: 'Algebra and Trigonometry I',
+                      title: 'Algebra and Trigonometry',
                       unit: 3,
                     ),
-                    CourseData(code: 'MTH 120', title: 'Calculus', unit: 3),
+                    CourseData(
+                      code: 'MTH 120',
+                      title: 'Calculus',
+                      unit: 3,
+                    ),
                     CourseData(
                       code: 'PHY 101',
                       title: 'Mechanics and Properties of Matter',
@@ -3291,7 +3295,7 @@ const UniversityData uniportData = UniversityData(
                     ),
                     CourseData(
                       code: 'PHY 102',
-                      title: 'physics Laboratory I',
+                      title: 'Practical Physics I',
                       unit: 1,
                     ),
                     CourseData(
@@ -3301,7 +3305,7 @@ const UniversityData uniportData = UniversityData(
                     ),
                     CourseData(
                       code: 'GES 100',
-                      title: 'communication skills in English',
+                      title: 'Communication Skills in English',
                       unit: 3,
                     ),
                     CourseData(
@@ -3322,7 +3326,7 @@ const UniversityData uniportData = UniversityData(
                   courses: [
                     CourseData(
                       code: 'MTH 114',
-                      title: 'Introduction to Set, Logic and Numbers',
+                      title: 'Introduction to Set, Logic and Algebra',
                       unit: 3,
                     ),
                     CourseData(
@@ -3346,23 +3350,23 @@ const UniversityData uniportData = UniversityData(
                       unit: 3,
                     ),
                     CourseData(
-                      code: 'STA 190',
-                      title: 'Lab for Descriptive Statistics',
-                      unit: 1,
+                      code: 'GES 103',
+                      title: 'Nigerian People and Culture',
+                      unit: 3,
                     ),
                     CourseData(
-                      code: 'Stat 160',
+                      code: 'STA 160',
                       title: 'Descriptive Statistics',
                       unit: 2,
                     ),
                     CourseData(
-                      code: 'STA 121',
-                      title: 'Statistical Inference',
-                      unit: 2,
+                      code: 'STA 190',
+                      title: 'Lab for Descriptive Statistics',
+                      unit: 1,
                     ),
-                    CourseData(
-                      code: 'GES 101',
-                      title: 'Computer Appreciation and Application',
+                      CourseData(
+                      code: 'STA 121',
+                      title: 'Statistical Inference 1',
                       unit: 2,
                     ),
                     ..._gst100_2,
@@ -3377,32 +3381,37 @@ const UniversityData uniportData = UniversityData(
                   label: 'First Semester',
                   courses: [
                     CourseData(
-                      code: 'MTH 201',
-                      title: 'Mathematical Methods I',
+                      code: 'MTH 210',
+                      title: 'Linear Algebra 1',
                       unit: 3,
                     ),
                     CourseData(
-                      code: 'MTH 203',
-                      title: 'Linear Algebra I',
+                      code: 'MTH 220',
+                      title: 'Real Analysis',
                       unit: 3,
                     ),
                     CourseData(
-                      code: 'MTH 205',
-                      title: 'Real Analysis I',
+                      code: 'MTH 230',
+                      title: 'Group Theorem I',
                       unit: 3,
                     ),
                     CourseData(
-                      code: 'MTH 207',
-                      title: 'Vector Analysis',
-                      unit: 3,
+                      code: 'MTH 270',
+                      title: 'Numerical Analysis',
+                      unit: 2,
                     ),
                     CourseData(
-                      code: 'STA 201',
+                      code: 'STA 260',
                       title: 'Probability I',
                       unit: 3,
                     ),
                     CourseData(
-                      code: 'CSC 201',
+                      code: 'STA 261',
+                      title: 'Statistical inference II',
+                      unit: 3,
+                    ),
+                    CourseData(
+                      code: 'CSC 280',
                       title: 'Computer Programming',
                       unit: 2,
                     ),
