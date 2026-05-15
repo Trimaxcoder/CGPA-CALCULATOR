@@ -560,6 +560,10 @@ class _HomeScreenState extends State<HomeScreen>
 
   int _selYear = 1, _selSem = 1;
 
+  // Grade-letter input mode for manual entry
+  bool _useGradeInput = false;
+  String? _manualGrade; // selected grade letter when _useGradeInput is true
+
   // ── init / dispose ──────────────────────────────────────
   @override
   void initState() {
@@ -670,8 +674,18 @@ class _HomeScreenState extends State<HomeScreen>
     if (!_formKey.currentState!.validate()) return;
     HapticFeedback.lightImpact();
     final name = _nameCtrl.text.trim().toUpperCase();
-    final score = int.parse(_scoreCtrl.text.trim());
     final unit = int.parse(_unitCtrl.text.trim());
+    int score;
+    if (_useGradeInput) {
+      // Convert selected grade letter to its min score
+      final rule = grading.rules.firstWhere(
+        (r) => r.grade == _manualGrade,
+        orElse: () => GradeRule(grade: 'F', minScore: 0, gradePoint: 0),
+      );
+      score = rule.minScore;
+    } else {
+      score = int.parse(_scoreCtrl.text.trim());
+    }
     setState(() {
       courses.add(Course(name, '', score, unit, _selYear, _selSem));
       currentPage = _pageIndex;
@@ -681,6 +695,7 @@ class _HomeScreenState extends State<HomeScreen>
     _nameCtrl.clear();
     _scoreCtrl.clear();
     _unitCtrl.clear();
+    _manualGrade = null;
     _formKey.currentState!.reset();
     _showSuccessDialog(name);
   }
@@ -911,8 +926,13 @@ class _HomeScreenState extends State<HomeScreen>
     final controllers = {
       for (final c in picked) c.code: TextEditingController(),
     };
+    // Grade selections when in grade mode
+    final gradeSelections = <String, String?>{
+      for (final c in picked) c.code: null,
+    };
     final fk = GlobalKey<FormState>();
-    bool _saved = false; // prevent double-tap
+    bool _saved = false;
+    bool _useGrade = false; // local toggle for this sheet
 
     final textColor = isDarkMode ? Colors.white : Colors.black87;
     final labelColor = isDarkMode ? Colors.white70 : Colors.black54;
@@ -920,6 +940,7 @@ class _HomeScreenState extends State<HomeScreen>
         ? const Color(0xFF2A2A2A)
         : Colors.grey.shade50;
     final subColor = isDarkMode ? Colors.grey.shade400 : Colors.grey.shade500;
+    final gradeLetters = grading.rules.map((r) => r.grade).toList();
 
     showModalBottomSheet(
       context: context,
@@ -932,171 +953,316 @@ class _HomeScreenState extends State<HomeScreen>
             color: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
             borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _sheetHandle(),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 14, 20, 8),
-                child: Row(
-                  children: [
-                    const Icon(Icons.edit_note, color: Colors.blue),
-                    const SizedBox(width: 10),
-                    Text(
-                      'Enter Scores',
-                      style: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.bold,
-                        color: textColor,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxHeight: MediaQuery.of(ctx).size.height * 0.46,
-                ),
-                child: Form(
-                  key: fk,
-                  child: ListView.builder(
-                    shrinkWrap: true,
-                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
-                    itemCount: picked.length,
-                    itemBuilder: (_, i) {
-                      final cd = picked[i];
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              flex: 3,
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    cd.code,
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 13,
-                                      color: textColor,
-                                    ),
-                                  ),
-                                  Text(
-                                    cd.title,
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: subColor,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              flex: 2,
-                              child: TextFormField(
-                                controller: controllers[cd.code],
-                                keyboardType: TextInputType.number,
-                                style: TextStyle(color: textColor),
-                                decoration: InputDecoration(
-                                  labelText: 'Score',
-                                  labelStyle: TextStyle(color: labelColor),
-                                  filled: true,
-                                  fillColor: fillColor,
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  isDense: true,
-                                ),
-                                validator: (v) {
-                                  final s = int.tryParse(v ?? '');
-                                  if (s == null || s < 0 || s > 100)
-                                    return '0–100';
-                                  return null;
-                                },
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ),
-              SafeArea(
-                top: false,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                  child: StatefulBuilder(
-                    builder: (ctx2, setSt) => SizedBox(
-                      width: double.infinity,
-                      height: 50,
-                      child: ElevatedButton(
-                        onPressed: _saved
-                            ? null
-                            : () {
-                                if (!fk.currentState!.validate()) return;
-                                setSt(() => _saved = true);
-                                // Deduplicate: skip any course already saved with same code+unit
-                                final existingKeys = courses
-                                    .map((c) => '${c.name}_${c.unit}')
-                                    .toSet();
-                                int added = 0;
-                                for (final cd in picked) {
-                                  final key = '${cd.code}_${cd.unit}';
-                                  if (existingKeys.contains(key)) continue;
-                                  final score = int.parse(
-                                    controllers[cd.code]!.text.trim(),
-                                  );
-                                  courses.add(
-                                    Course(
-                                      cd.code,
-                                      cd.title,
-                                      score,
-                                      cd.unit,
-                                      _selYear,
-                                      _selSem,
-                                    ),
-                                  );
-                                  existingKeys.add(key);
-                                  added++;
-                                }
-                                setState(() => currentPage = _pageIndex);
-                                _pageCtrl.jumpToPage(currentPage);
-                                _saveCourses();
-                                Navigator.pop(ctx);
-                                final skipped = picked.length - added;
-                                final msg = added == 0
-                                    ? 'All courses already saved — no duplicates added'
-                                    : '${added} course${added > 1 ? 's' : ''} added ✓'
-                                          '${skipped > 0 ? ' ($skipped duplicate${skipped > 1 ? 's' : ''} skipped)' : ''}';
-                                ScaffoldMessenger.of(
-                                  context,
-                                ).showSnackBar(SnackBar(content: Text(msg)));
-                              },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: _saved ? Colors.grey : Colors.blue,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
+          child: StatefulBuilder(
+            builder: (ctx2, setSheet) => Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _sheetHandle(),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 14, 20, 8),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.edit_note, color: Colors.blue),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          _useGrade ? 'Enter Grades' : 'Enter Scores',
+                          style: TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.bold,
+                            color: textColor,
                           ),
                         ),
-                        child: Text(
-                          _saved ? 'Saved ✓' : 'Save All Courses',
-                          style: const TextStyle(fontSize: 15),
+                      ),
+                      // Toggle between Score / Grade mode
+                      _inputModeToggle(
+                        useGrade: _useGrade,
+                        onChanged: (v) {
+                          setSheet(() {
+                            _useGrade = v;
+                            fk.currentState?.reset();
+                          });
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+                ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: MediaQuery.of(ctx).size.height * 0.46,
+                  ),
+                  child: Form(
+                    key: fk,
+                    child: ListView.builder(
+                      shrinkWrap: true,
+                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+                      itemCount: picked.length,
+                      itemBuilder: (_, i) {
+                        final cd = picked[i];
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                flex: 3,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      cd.code,
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 13,
+                                        color: textColor,
+                                      ),
+                                    ),
+                                    Text(
+                                      cd.title,
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: subColor,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                flex: 2,
+                                child: _useGrade
+                                    ? _gradeDropdownFormField(
+                                        value: gradeSelections[cd.code],
+                                        grades: gradeLetters,
+                                        fillColor: fillColor,
+                                        labelColor: labelColor,
+                                        textColor: textColor,
+                                        onChanged: (v) => setSheet(
+                                          () => gradeSelections[cd.code] = v,
+                                        ),
+                                      )
+                                    : TextFormField(
+                                        controller: controllers[cd.code],
+                                        keyboardType: TextInputType.number,
+                                        style: TextStyle(color: textColor),
+                                        decoration: InputDecoration(
+                                          labelText: 'Score',
+                                          labelStyle: TextStyle(
+                                            color: labelColor,
+                                          ),
+                                          filled: true,
+                                          fillColor: fillColor,
+                                          border: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              10,
+                                            ),
+                                          ),
+                                          isDense: true,
+                                        ),
+                                        validator: (v) {
+                                          final s = int.tryParse(v ?? '');
+                                          if (s == null || s < 0 || s > 100)
+                                            return '0–100';
+                                          return null;
+                                        },
+                                      ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+                SafeArea(
+                  top: false,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                    child: StatefulBuilder(
+                      builder: (ctx2, setSt) => SizedBox(
+                        width: double.infinity,
+                        height: 50,
+                        child: ElevatedButton(
+                          onPressed: _saved
+                              ? null
+                              : () {
+                                  // Validate grade selections when in grade mode
+                                  if (_useGrade) {
+                                    final missing = picked
+                                        .where(
+                                          (c) =>
+                                              gradeSelections[c.code] == null,
+                                        )
+                                        .map((c) => c.code)
+                                        .toList();
+                                    if (missing.isNotEmpty) {
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            'Select grade for: ${missing.join(', ')}',
+                                          ),
+                                        ),
+                                      );
+                                      return;
+                                    }
+                                  } else {
+                                    if (!fk.currentState!.validate()) return;
+                                  }
+                                  setSt(() => _saved = true);
+                                  final existingKeys = courses
+                                      .map((c) => '${c.name}_${c.unit}')
+                                      .toSet();
+                                  int added = 0;
+                                  for (final cd in picked) {
+                                    final key = '${cd.code}_${cd.unit}';
+                                    if (existingKeys.contains(key)) continue;
+                                    final int score;
+                                    if (_useGrade) {
+                                      final grade = gradeSelections[cd.code]!;
+                                      final rule = grading.rules.firstWhere(
+                                        (r) => r.grade == grade,
+                                        orElse: () => GradeRule(
+                                          grade: 'F',
+                                          minScore: 0,
+                                          gradePoint: 0,
+                                        ),
+                                      );
+                                      score = rule.minScore;
+                                    } else {
+                                      score = int.parse(
+                                        controllers[cd.code]!.text.trim(),
+                                      );
+                                    }
+                                    courses.add(
+                                      Course(
+                                        cd.code,
+                                        cd.title,
+                                        score,
+                                        cd.unit,
+                                        _selYear,
+                                        _selSem,
+                                      ),
+                                    );
+                                    existingKeys.add(key);
+                                    added++;
+                                  }
+                                  setState(() => currentPage = _pageIndex);
+                                  _pageCtrl.jumpToPage(currentPage);
+                                  _saveCourses();
+                                  Navigator.pop(ctx);
+                                  final skipped = picked.length - added;
+                                  final msg = added == 0
+                                      ? 'All courses already saved — no duplicates added'
+                                      : '${added} course${added > 1 ? 's' : ''} added ✓'
+                                            '${skipped > 0 ? ' ($skipped duplicate${skipped > 1 ? 's' : ''} skipped)' : ''}';
+                                  ScaffoldMessenger.of(
+                                    context,
+                                  ).showSnackBar(SnackBar(content: Text(msg)));
+                                },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: _saved ? Colors.grey : Colors.blue,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                          ),
+                          child: Text(
+                            _saved ? 'Saved ✓' : 'Save All Courses',
+                            style: const TextStyle(fontSize: 15),
+                          ),
                         ),
                       ),
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
+    );
+  }
+
+  // ── input mode toggle widget (Score / Grade) ─────────────
+  Widget _inputModeToggle({
+    required bool useGrade,
+    required ValueChanged<bool> onChanged,
+  }) {
+    return Container(
+      height: 32,
+      decoration: BoxDecoration(
+        color: isDarkMode ? const Color(0xFF2A2A2A) : Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _modeChip('Score', !useGrade, () => onChanged(false)),
+          _modeChip('Grade', useGrade, () => onChanged(true)),
+        ],
+      ),
+    );
+  }
+
+  Widget _modeChip(String label, bool active, VoidCallback onTap) =>
+      GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+          decoration: BoxDecoration(
+            color: active ? Colors.blue : Colors.transparent,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: active ? Colors.white : Colors.grey,
+            ),
+          ),
+        ),
+      );
+
+  Widget _gradeDropdownFormField({
+    required String? value,
+    required List<String> grades,
+    required Color fillColor,
+    required Color labelColor,
+    required Color textColor,
+    required ValueChanged<String?> onChanged,
+  }) {
+    return DropdownButtonFormField<String>(
+      value: value,
+      isExpanded: true,
+      decoration: InputDecoration(
+        labelText: 'Grade',
+        labelStyle: TextStyle(color: labelColor),
+        filled: true,
+        fillColor: fillColor,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+        isDense: true,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 10,
+          vertical: 10,
+        ),
+      ),
+      dropdownColor: isDarkMode ? const Color(0xFF2A2A2A) : Colors.white,
+      style: TextStyle(color: textColor, fontSize: 14),
+      items: grades
+          .map(
+            (g) => DropdownMenuItem(
+              value: g,
+              child: Text(g, style: TextStyle(color: textColor)),
+            ),
+          )
+          .toList(),
+      onChanged: onChanged,
+      validator: (v) => v == null ? 'Select' : null,
     );
   }
 
@@ -1107,6 +1273,9 @@ class _HomeScreenState extends State<HomeScreen>
     _unitCtrl.text = c.unit.toString();
     _selYear = c.year;
     _selSem = c.semester;
+    _useGradeInput =
+        false; // always edit with score so user sees the real value
+    _manualGrade = null;
     setState(() {
       courses.removeWhere((x) => x.id == c.id);
       currentPage = _pageIndex;
@@ -1638,6 +1807,9 @@ class _HomeScreenState extends State<HomeScreen>
       builder: (ctx) => Padding(
         padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
         child: Container(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(ctx).size.height * 0.88,
+          ),
           decoration: BoxDecoration(
             color: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
             borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
@@ -1652,12 +1824,14 @@ class _HomeScreenState extends State<HomeScreen>
                   children: [
                     const Icon(Icons.tune, color: Colors.blue),
                     const SizedBox(width: 10),
-                    Text(
-                      'Grading System',
-                      style: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.bold,
-                        color: textColor,
+                    Flexible(
+                      child: Text(
+                        'Grading System',
+                        style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.bold,
+                          color: textColor,
+                        ),
                       ),
                     ),
                   ],
@@ -1719,10 +1893,7 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
               ),
               const Divider(height: 20),
-              ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxHeight: MediaQuery.of(ctx).size.height * 0.42,
-                ),
+              Flexible(
                 child: Form(
                   key: fk,
                   child: ListView.builder(
@@ -3357,24 +3528,67 @@ class _HomeScreenState extends State<HomeScreen>
                     },
                   ),
                   const SizedBox(height: 14),
-                  TextFormField(
-                    controller: _scoreCtrl,
-                    keyboardType: TextInputType.number,
-                    decoration: InputDecoration(
-                      hintText: 'Score (0–100)',
-                      prefixIcon: const Icon(Icons.numbers),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
+                  // Score / Grade toggle + input
+                  Row(
+                    children: [
+                      const Text('Input Mode:', style: TextStyle(fontSize: 13)),
+                      const SizedBox(width: 10),
+                      _inputModeToggle(
+                        useGrade: _useGradeInput,
+                        onChanged: (v) => setState(() {
+                          _useGradeInput = v;
+                          _manualGrade = null;
+                          _scoreCtrl.clear();
+                          _formKey.currentState?.reset();
+                        }),
                       ),
-                    ),
-                    validator: (v) {
-                      if (v == null || v.isEmpty) return 'Enter a score';
-                      final s = int.tryParse(v);
-                      if (s == null || s < 0 || s > 100)
-                        return 'Score must be 0–100';
-                      return null;
-                    },
+                    ],
                   ),
+                  const SizedBox(height: 10),
+                  if (_useGradeInput)
+                    DropdownButtonFormField<String>(
+                      value: _manualGrade,
+                      isExpanded: true,
+                      decoration: InputDecoration(
+                        hintText: 'Select Grade',
+                        prefixIcon: const Icon(Icons.grade),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      items: grading.rules
+                          .map(
+                            (r) => DropdownMenuItem(
+                              value: r.grade,
+                              child: Text(
+                                '${r.grade}  — ${r.grade == 'F' ? 'Below ${grading.rules.firstWhere((x) => x.gradePoint > 0, orElse: () => r).minScore}' : '≥ ${r.minScore}'}'
+                                '  (GP ${r.gradePoint.toStringAsFixed(1)})',
+                              ),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (v) => setState(() => _manualGrade = v),
+                      validator: (v) => v == null ? 'Select a grade' : null,
+                    )
+                  else
+                    TextFormField(
+                      controller: _scoreCtrl,
+                      keyboardType: TextInputType.number,
+                      decoration: InputDecoration(
+                        hintText: 'Score (0–100)',
+                        prefixIcon: const Icon(Icons.numbers),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      validator: (v) {
+                        if (v == null || v.isEmpty) return 'Enter a score';
+                        final s = int.tryParse(v);
+                        if (s == null || s < 0 || s > 100)
+                          return 'Score must be 0–100';
+                        return null;
+                      },
+                    ),
                   const SizedBox(height: 14),
                   TextFormField(
                     controller: _unitCtrl,

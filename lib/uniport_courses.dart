@@ -3413,7 +3413,7 @@ const UniversityData uniportData = UniversityData(
                     CourseData(
                       code: 'CSC 280',
                       title: 'Computer Programming',
-                      unit: 2,
+                      unit: 3,
                     ),
                     ..._gst200_1,
                   ],

@@ -254,27 +254,25 @@ class _LoginScreenState extends State<LoginScreen> {
   final _nameC = TextEditingController();
   final _emailC = TextEditingController();
   final _matricC = TextEditingController();
-  final _deptC = TextEditingController();
+  final _schoolC = TextEditingController();
   final _facC = TextEditingController();
+  final _deptC = TextEditingController();
 
-  // School / Faculty / Department selections
-  String? _selSchool;
-  String? _selFaculty;
-  String? _selDept;
   bool _loading = false;
 
   List<String> get _schools => getAllSchools();
   List<String> get _faculties => getFaculties();
   List<String> get _depts =>
-      _selFaculty != null ? getDepartments(_selFaculty!) : [];
+      _facC.text.trim().isNotEmpty ? getDepartments(_facC.text.trim()) : [];
 
   @override
   void dispose() {
     _nameC.dispose();
     _emailC.dispose();
     _matricC.dispose();
-    _deptC.dispose();
+    _schoolC.dispose();
     _facC.dispose();
+    _deptC.dispose();
     super.dispose();
   }
 
@@ -285,15 +283,21 @@ class _LoginScreenState extends State<LoginScreen> {
       name: _nameC.text.trim(),
       email: _emailC.text.trim(),
       matricNumber: _matricC.text.trim(),
-      school: _selSchool ?? '',
-      faculty: _selFaculty ?? _facC.text.trim(),
-      department: _selDept ?? _deptC.text.trim(),
+      school: _schoolC.text.trim(),
+      faculty: _facC.text.trim(),
+      department: _deptC.text.trim(),
     );
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('profile', jsonEncode(profile.toMap()));
     if (!mounted) return;
     setState(() => _loading = false);
-    Navigator.of(context).pushReplacement(_fade_(const HomeScreen()));
+    // Show preloader for 1 second then navigate
+    Navigator.of(context).pushReplacement(
+      PageRouteBuilder(
+        transitionDuration: Duration.zero,
+        pageBuilder: (_, __, ___) => _PreloaderScreen(),
+      ),
+    );
   }
 
   @override
@@ -345,6 +349,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   validator: (v) {
                     if (v == null || v.trim().isEmpty)
                       return 'Email is required';
+                    if (!v.trim().contains('@')) return 'Email must contain @';
                     if (!isValidEmail(v.trim())) return 'Enter a valid email';
                     return null;
                   },
@@ -363,47 +368,47 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 14),
 
-                // School dropdown
-                _dropdownField(
+                // School combo field
+                _ComboField(
+                  controller: _schoolC,
                   label: 'School / University',
                   icon: Icons.account_balance,
-                  value: _selSchool,
-                  items: _schools,
-                  onChanged: (v) => setState(() {
-                    _selSchool = v;
-                    _selFaculty = null;
-                    _selDept = null;
+                  suggestions: _schools,
+                  dark: false,
+                  onSuggestionSelected: (_) => setState(() {
+                    _facC.clear();
+                    _deptC.clear();
                   }),
-                  validator: (v) => v == null ? 'Select your school' : null,
+                  validator: (v) => (v == null || v.trim().isEmpty)
+                      ? 'Enter your school'
+                      : null,
                 ),
                 const SizedBox(height: 14),
 
-                // Faculty dropdown
-                _dropdownField(
+                // Faculty combo field
+                _ComboField(
+                  controller: _facC,
                   label: 'Faculty',
                   icon: Icons.account_balance_outlined,
-                  value: _selFaculty,
-                  items: _faculties,
-                  onChanged: (v) => setState(() {
-                    _selFaculty = v;
-                    _selDept = null;
-                  }),
-                  validator: (v) => v == null ? 'Select your faculty' : null,
-                  hint: 'Select faculty',
+                  suggestions: _faculties,
+                  dark: false,
+                  onSuggestionSelected: (_) => setState(() => _deptC.clear()),
+                  validator: (v) => (v == null || v.trim().isEmpty)
+                      ? 'Enter your faculty'
+                      : null,
                 ),
                 const SizedBox(height: 14),
 
-                // Department dropdown (depends on faculty)
-                _dropdownField(
+                // Department combo field
+                _ComboField(
+                  controller: _deptC,
                   label: 'Department',
                   icon: Icons.school_outlined,
-                  value: _selDept,
-                  items: _depts,
-                  onChanged: (v) => setState(() => _selDept = v),
-                  validator: (v) => v == null ? 'Select your department' : null,
-                  hint: _selFaculty == null
-                      ? 'Select faculty first'
-                      : 'Select department',
+                  suggestions: _depts,
+                  dark: false,
+                  validator: (v) => (v == null || v.trim().isEmpty)
+                      ? 'Enter your department'
+                      : null,
                 ),
                 const SizedBox(height: 36),
 
@@ -463,42 +468,6 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  Widget _dropdownField({
-    required String label,
-    required IconData icon,
-    required String? value,
-    required List<String> items,
-    required void Function(String?) onChanged,
-    String? Function(String?)? validator,
-    String? hint,
-  }) {
-    return DropdownButtonFormField<String>(
-      value: value,
-      dropdownColor: Colors.indigo.shade900,
-      style: const TextStyle(color: Colors.white, fontSize: 14),
-      isExpanded: true,
-      decoration: _loginDec(label, icon),
-      hint: Text(
-        hint ?? 'Select $label',
-        style: const TextStyle(color: Colors.white38, fontSize: 14),
-      ),
-      items: items
-          .map(
-            (e) => DropdownMenuItem(
-              value: e,
-              child: Text(
-                e,
-                style: const TextStyle(color: Colors.white, fontSize: 14),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          )
-          .toList(),
-      onChanged: items.isEmpty ? null : onChanged,
-      validator: validator,
-    );
-  }
-
   InputDecoration _loginDec(String label, IconData icon) => InputDecoration(
     labelText: label,
     prefixIcon: Icon(icon, color: Colors.blue.shade300),
@@ -530,6 +499,247 @@ class _LoginScreenState extends State<LoginScreen> {
 }
 
 // ══════════════════════════════════════════════════════════
+//  PRELOADER SCREEN (shown 1 second after successful registration)
+// ══════════════════════════════════════════════════════════
+
+class _PreloaderScreen extends StatefulWidget {
+  @override
+  State<_PreloaderScreen> createState() => _PreloaderScreenState();
+}
+
+class _PreloaderScreenState extends State<_PreloaderScreen> {
+  @override
+  void initState() {
+    super.initState();
+    Future.delayed(const Duration(seconds: 1), () {
+      if (!mounted) return;
+      Navigator.of(context).pushReplacement(_fade_(const HomeScreen()));
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    body: _gradientBox(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          _iconCircle(Icons.school, 100, 54),
+          const SizedBox(height: 28),
+          const Text(
+            'Setting up your account...',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 40),
+          const SizedBox(
+            width: 36,
+            height: 36,
+            child: CircularProgressIndicator(
+              color: Colors.white,
+              strokeWidth: 3,
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+// ══════════════════════════════════════════════════════════
+//  COMBO FIELD — dropdown suggestions + free-text fallback
+// ══════════════════════════════════════════════════════════
+
+class _ComboField extends StatefulWidget {
+  final TextEditingController controller;
+  final String label;
+  final IconData icon;
+  final List<String> suggestions;
+  final bool dark;
+  final String? Function(String?)? validator;
+  final void Function(String)? onSuggestionSelected;
+
+  const _ComboField({
+    required this.controller,
+    required this.label,
+    required this.icon,
+    required this.suggestions,
+    this.dark = false,
+    this.validator,
+    this.onSuggestionSelected,
+  });
+
+  @override
+  State<_ComboField> createState() => _ComboFieldState();
+}
+
+class _ComboFieldState extends State<_ComboField> {
+  final _focusNode = FocusNode();
+  bool _showList = false;
+  List<String> _filtered = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode.addListener(() {
+      if (_focusNode.hasFocus) {
+        setState(() {
+          _filtered = _buildFiltered(widget.controller.text);
+          _showList = _filtered.isNotEmpty;
+        });
+      } else {
+        // Small delay so tap on list item registers
+        Future.delayed(const Duration(milliseconds: 150), () {
+          if (mounted) setState(() => _showList = false);
+        });
+      }
+    });
+  }
+
+  @override
+  void didUpdateWidget(_ComboField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.suggestions != widget.suggestions) {
+      _filtered = _buildFiltered(widget.controller.text);
+    }
+  }
+
+  @override
+  void dispose() {
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  List<String> _buildFiltered(String q) {
+    if (q.trim().isEmpty) return widget.suggestions;
+    return widget.suggestions
+        .where((s) => s.toLowerCase().contains(q.trim().toLowerCase()))
+        .toList();
+  }
+
+  void _pick(String val) {
+    widget.controller.text = val;
+    _focusNode.unfocus();
+    setState(() => _showList = false);
+    widget.onSuggestionSelected?.call(val);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = widget.dark;
+    final textColor = isDark ? Colors.black87 : Colors.white;
+    final fillColor = isDark
+        ? Colors.grey.shade50
+        : Colors.white.withOpacity(0.08);
+    final labelColor = isDark ? Colors.black54 : Colors.white70;
+    final borderColor = isDark ? Colors.grey.shade300 : Colors.white24;
+    final focusColor = isDark ? Colors.blue : Colors.blue.shade300;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextFormField(
+          controller: widget.controller,
+          focusNode: _focusNode,
+          style: TextStyle(color: textColor, fontSize: 14),
+          validator: widget.validator,
+          onChanged: (v) {
+            setState(() {
+              _filtered = _buildFiltered(v);
+              _showList = _filtered.isNotEmpty;
+            });
+          },
+          decoration: InputDecoration(
+            labelText: widget.label,
+            hintText: 'Type or select from list',
+            hintStyle: TextStyle(
+              color: isDark ? Colors.black26 : Colors.white30,
+              fontSize: 13,
+            ),
+            prefixIcon: Icon(
+              widget.icon,
+              color: isDark ? Colors.blue : Colors.blue.shade300,
+            ),
+            suffixIcon: widget.suggestions.isNotEmpty
+                ? Icon(
+                    Icons.arrow_drop_down,
+                    color: isDark ? Colors.black38 : Colors.white38,
+                  )
+                : null,
+            filled: true,
+            fillColor: fillColor,
+            labelStyle: TextStyle(color: labelColor),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide(color: borderColor),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide(color: borderColor),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide(color: focusColor, width: 2),
+            ),
+            errorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: Colors.redAccent),
+            ),
+            focusedErrorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: Colors.redAccent, width: 2),
+            ),
+            errorStyle: const TextStyle(color: Colors.redAccent),
+          ),
+        ),
+        if (_showList)
+          Container(
+            constraints: const BoxConstraints(maxHeight: 180),
+            margin: const EdgeInsets.only(top: 2),
+            decoration: BoxDecoration(
+              color: isDark ? Colors.white : Colors.indigo.shade900,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.15),
+                  blurRadius: 8,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: ListView.builder(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              shrinkWrap: true,
+              itemCount: _filtered.length,
+              itemBuilder: (_, i) {
+                final item = _filtered[i];
+                return InkWell(
+                  onTap: () => _pick(item),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 10,
+                    ),
+                    child: Text(
+                      item,
+                      style: TextStyle(
+                        color: isDark ? Colors.black87 : Colors.white,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════
 //  HOME SCREEN
 // ══════════════════════════════════════════════════════════
 
@@ -546,6 +756,7 @@ class _HomeScreenState extends State<HomeScreen>
   GradingModel grading = GradingModel.defaultNigerian5();
 
   bool isDarkMode = false;
+  bool _cgpaHidden = false;
   String searchQuery = '';
   int currentPage = 0;
 
@@ -559,6 +770,10 @@ class _HomeScreenState extends State<HomeScreen>
   late TabController _tabCtrl;
 
   int _selYear = 1, _selSem = 1;
+
+  // Grade-letter input mode for manual entry
+  bool _useGradeInput = false;
+  String? _manualGrade; // selected grade letter when _useGradeInput is true
 
   // ── init / dispose ──────────────────────────────────────
   @override
@@ -670,8 +885,18 @@ class _HomeScreenState extends State<HomeScreen>
     if (!_formKey.currentState!.validate()) return;
     HapticFeedback.lightImpact();
     final name = _nameCtrl.text.trim().toUpperCase();
-    final score = int.parse(_scoreCtrl.text.trim());
     final unit = int.parse(_unitCtrl.text.trim());
+    int score;
+    if (_useGradeInput) {
+      // Convert selected grade letter to its min score
+      final rule = grading.rules.firstWhere(
+        (r) => r.grade == _manualGrade,
+        orElse: () => GradeRule(grade: 'F', minScore: 0, gradePoint: 0),
+      );
+      score = rule.minScore;
+    } else {
+      score = int.parse(_scoreCtrl.text.trim());
+    }
     setState(() {
       courses.add(Course(name, '', score, unit, _selYear, _selSem));
       currentPage = _pageIndex;
@@ -681,6 +906,7 @@ class _HomeScreenState extends State<HomeScreen>
     _nameCtrl.clear();
     _scoreCtrl.clear();
     _unitCtrl.clear();
+    _manualGrade = null;
     _formKey.currentState!.reset();
     _showSuccessDialog(name);
   }
@@ -911,8 +1137,13 @@ class _HomeScreenState extends State<HomeScreen>
     final controllers = {
       for (final c in picked) c.code: TextEditingController(),
     };
+    // Grade selections when in grade mode
+    final gradeSelections = <String, String?>{
+      for (final c in picked) c.code: null,
+    };
     final fk = GlobalKey<FormState>();
-    bool _saved = false; // prevent double-tap
+    bool _saved = false;
+    bool _useGrade = false; // local toggle for this sheet
 
     final textColor = isDarkMode ? Colors.white : Colors.black87;
     final labelColor = isDarkMode ? Colors.white70 : Colors.black54;
@@ -920,6 +1151,7 @@ class _HomeScreenState extends State<HomeScreen>
         ? const Color(0xFF2A2A2A)
         : Colors.grey.shade50;
     final subColor = isDarkMode ? Colors.grey.shade400 : Colors.grey.shade500;
+    final gradeLetters = grading.rules.map((r) => r.grade).toList();
 
     showModalBottomSheet(
       context: context,
@@ -932,171 +1164,316 @@ class _HomeScreenState extends State<HomeScreen>
             color: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
             borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _sheetHandle(),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 14, 20, 8),
-                child: Row(
-                  children: [
-                    const Icon(Icons.edit_note, color: Colors.blue),
-                    const SizedBox(width: 10),
-                    Text(
-                      'Enter Scores',
-                      style: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.bold,
-                        color: textColor,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxHeight: MediaQuery.of(ctx).size.height * 0.46,
-                ),
-                child: Form(
-                  key: fk,
-                  child: ListView.builder(
-                    shrinkWrap: true,
-                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
-                    itemCount: picked.length,
-                    itemBuilder: (_, i) {
-                      final cd = picked[i];
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              flex: 3,
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    cd.code,
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 13,
-                                      color: textColor,
-                                    ),
-                                  ),
-                                  Text(
-                                    cd.title,
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: subColor,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              flex: 2,
-                              child: TextFormField(
-                                controller: controllers[cd.code],
-                                keyboardType: TextInputType.number,
-                                style: TextStyle(color: textColor),
-                                decoration: InputDecoration(
-                                  labelText: 'Score',
-                                  labelStyle: TextStyle(color: labelColor),
-                                  filled: true,
-                                  fillColor: fillColor,
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  isDense: true,
-                                ),
-                                validator: (v) {
-                                  final s = int.tryParse(v ?? '');
-                                  if (s == null || s < 0 || s > 100)
-                                    return '0–100';
-                                  return null;
-                                },
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ),
-              SafeArea(
-                top: false,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                  child: StatefulBuilder(
-                    builder: (ctx2, setSt) => SizedBox(
-                      width: double.infinity,
-                      height: 50,
-                      child: ElevatedButton(
-                        onPressed: _saved
-                            ? null
-                            : () {
-                                if (!fk.currentState!.validate()) return;
-                                setSt(() => _saved = true);
-                                // Deduplicate: skip any course already saved with same code+unit
-                                final existingKeys = courses
-                                    .map((c) => '${c.name}_${c.unit}')
-                                    .toSet();
-                                int added = 0;
-                                for (final cd in picked) {
-                                  final key = '${cd.code}_${cd.unit}';
-                                  if (existingKeys.contains(key)) continue;
-                                  final score = int.parse(
-                                    controllers[cd.code]!.text.trim(),
-                                  );
-                                  courses.add(
-                                    Course(
-                                      cd.code,
-                                      cd.title,
-                                      score,
-                                      cd.unit,
-                                      _selYear,
-                                      _selSem,
-                                    ),
-                                  );
-                                  existingKeys.add(key);
-                                  added++;
-                                }
-                                setState(() => currentPage = _pageIndex);
-                                _pageCtrl.jumpToPage(currentPage);
-                                _saveCourses();
-                                Navigator.pop(ctx);
-                                final skipped = picked.length - added;
-                                final msg = added == 0
-                                    ? 'All courses already saved — no duplicates added'
-                                    : '${added} course${added > 1 ? 's' : ''} added ✓'
-                                          '${skipped > 0 ? ' ($skipped duplicate${skipped > 1 ? 's' : ''} skipped)' : ''}';
-                                ScaffoldMessenger.of(
-                                  context,
-                                ).showSnackBar(SnackBar(content: Text(msg)));
-                              },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: _saved ? Colors.grey : Colors.blue,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
+          child: StatefulBuilder(
+            builder: (ctx2, setSheet) => Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _sheetHandle(),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 14, 20, 8),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.edit_note, color: Colors.blue),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          _useGrade ? 'Enter Grades' : 'Enter Scores',
+                          style: TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.bold,
+                            color: textColor,
                           ),
                         ),
-                        child: Text(
-                          _saved ? 'Saved ✓' : 'Save All Courses',
-                          style: const TextStyle(fontSize: 15),
+                      ),
+                      // Toggle between Score / Grade mode
+                      _inputModeToggle(
+                        useGrade: _useGrade,
+                        onChanged: (v) {
+                          setSheet(() {
+                            _useGrade = v;
+                            fk.currentState?.reset();
+                          });
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+                ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: MediaQuery.of(ctx).size.height * 0.46,
+                  ),
+                  child: Form(
+                    key: fk,
+                    child: ListView.builder(
+                      shrinkWrap: true,
+                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+                      itemCount: picked.length,
+                      itemBuilder: (_, i) {
+                        final cd = picked[i];
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                flex: 3,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      cd.code,
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 13,
+                                        color: textColor,
+                                      ),
+                                    ),
+                                    Text(
+                                      cd.title,
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: subColor,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                flex: 2,
+                                child: _useGrade
+                                    ? _gradeDropdownFormField(
+                                        value: gradeSelections[cd.code],
+                                        grades: gradeLetters,
+                                        fillColor: fillColor,
+                                        labelColor: labelColor,
+                                        textColor: textColor,
+                                        onChanged: (v) => setSheet(
+                                          () => gradeSelections[cd.code] = v,
+                                        ),
+                                      )
+                                    : TextFormField(
+                                        controller: controllers[cd.code],
+                                        keyboardType: TextInputType.number,
+                                        style: TextStyle(color: textColor),
+                                        decoration: InputDecoration(
+                                          labelText: 'Score',
+                                          labelStyle: TextStyle(
+                                            color: labelColor,
+                                          ),
+                                          filled: true,
+                                          fillColor: fillColor,
+                                          border: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              10,
+                                            ),
+                                          ),
+                                          isDense: true,
+                                        ),
+                                        validator: (v) {
+                                          final s = int.tryParse(v ?? '');
+                                          if (s == null || s < 0 || s > 100)
+                                            return '0–100';
+                                          return null;
+                                        },
+                                      ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+                SafeArea(
+                  top: false,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                    child: StatefulBuilder(
+                      builder: (ctx2, setSt) => SizedBox(
+                        width: double.infinity,
+                        height: 50,
+                        child: ElevatedButton(
+                          onPressed: _saved
+                              ? null
+                              : () {
+                                  // Validate grade selections when in grade mode
+                                  if (_useGrade) {
+                                    final missing = picked
+                                        .where(
+                                          (c) =>
+                                              gradeSelections[c.code] == null,
+                                        )
+                                        .map((c) => c.code)
+                                        .toList();
+                                    if (missing.isNotEmpty) {
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            'Select grade for: ${missing.join(', ')}',
+                                          ),
+                                        ),
+                                      );
+                                      return;
+                                    }
+                                  } else {
+                                    if (!fk.currentState!.validate()) return;
+                                  }
+                                  setSt(() => _saved = true);
+                                  final existingKeys = courses
+                                      .map((c) => '${c.name}_${c.unit}')
+                                      .toSet();
+                                  int added = 0;
+                                  for (final cd in picked) {
+                                    final key = '${cd.code}_${cd.unit}';
+                                    if (existingKeys.contains(key)) continue;
+                                    final int score;
+                                    if (_useGrade) {
+                                      final grade = gradeSelections[cd.code]!;
+                                      final rule = grading.rules.firstWhere(
+                                        (r) => r.grade == grade,
+                                        orElse: () => GradeRule(
+                                          grade: 'F',
+                                          minScore: 0,
+                                          gradePoint: 0,
+                                        ),
+                                      );
+                                      score = rule.minScore;
+                                    } else {
+                                      score = int.parse(
+                                        controllers[cd.code]!.text.trim(),
+                                      );
+                                    }
+                                    courses.add(
+                                      Course(
+                                        cd.code,
+                                        cd.title,
+                                        score,
+                                        cd.unit,
+                                        _selYear,
+                                        _selSem,
+                                      ),
+                                    );
+                                    existingKeys.add(key);
+                                    added++;
+                                  }
+                                  setState(() => currentPage = _pageIndex);
+                                  _pageCtrl.jumpToPage(currentPage);
+                                  _saveCourses();
+                                  Navigator.pop(ctx);
+                                  final skipped = picked.length - added;
+                                  final msg = added == 0
+                                      ? 'All courses already saved — no duplicates added'
+                                      : '${added} course${added > 1 ? 's' : ''} added ✓'
+                                            '${skipped > 0 ? ' ($skipped duplicate${skipped > 1 ? 's' : ''} skipped)' : ''}';
+                                  ScaffoldMessenger.of(
+                                    context,
+                                  ).showSnackBar(SnackBar(content: Text(msg)));
+                                },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: _saved ? Colors.grey : Colors.blue,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                          ),
+                          child: Text(
+                            _saved ? 'Saved ✓' : 'Save All Courses',
+                            style: const TextStyle(fontSize: 15),
+                          ),
                         ),
                       ),
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
+    );
+  }
+
+  // ── input mode toggle widget (Score / Grade) ─────────────
+  Widget _inputModeToggle({
+    required bool useGrade,
+    required ValueChanged<bool> onChanged,
+  }) {
+    return Container(
+      height: 32,
+      decoration: BoxDecoration(
+        color: isDarkMode ? const Color(0xFF2A2A2A) : Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _modeChip('Score', !useGrade, () => onChanged(false)),
+          _modeChip('Grade', useGrade, () => onChanged(true)),
+        ],
+      ),
+    );
+  }
+
+  Widget _modeChip(String label, bool active, VoidCallback onTap) =>
+      GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+          decoration: BoxDecoration(
+            color: active ? Colors.blue : Colors.transparent,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: active ? Colors.white : Colors.grey,
+            ),
+          ),
+        ),
+      );
+
+  Widget _gradeDropdownFormField({
+    required String? value,
+    required List<String> grades,
+    required Color fillColor,
+    required Color labelColor,
+    required Color textColor,
+    required ValueChanged<String?> onChanged,
+  }) {
+    return DropdownButtonFormField<String>(
+      value: value,
+      isExpanded: true,
+      decoration: InputDecoration(
+        labelText: 'Grade',
+        labelStyle: TextStyle(color: labelColor),
+        filled: true,
+        fillColor: fillColor,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+        isDense: true,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 10,
+          vertical: 10,
+        ),
+      ),
+      dropdownColor: isDarkMode ? const Color(0xFF2A2A2A) : Colors.white,
+      style: TextStyle(color: textColor, fontSize: 14),
+      items: grades
+          .map(
+            (g) => DropdownMenuItem(
+              value: g,
+              child: Text(g, style: TextStyle(color: textColor)),
+            ),
+          )
+          .toList(),
+      onChanged: onChanged,
+      validator: (v) => v == null ? 'Select' : null,
     );
   }
 
@@ -1107,6 +1484,9 @@ class _HomeScreenState extends State<HomeScreen>
     _unitCtrl.text = c.unit.toString();
     _selYear = c.year;
     _selSem = c.semester;
+    _useGradeInput =
+        false; // always edit with score so user sees the real value
+    _manualGrade = null;
     setState(() {
       courses.removeWhere((x) => x.id == c.id);
       currentPage = _pageIndex;
@@ -1638,6 +2018,9 @@ class _HomeScreenState extends State<HomeScreen>
       builder: (ctx) => Padding(
         padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
         child: Container(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(ctx).size.height * 0.88,
+          ),
           decoration: BoxDecoration(
             color: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
             borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
@@ -1652,12 +2035,14 @@ class _HomeScreenState extends State<HomeScreen>
                   children: [
                     const Icon(Icons.tune, color: Colors.blue),
                     const SizedBox(width: 10),
-                    Text(
-                      'Grading System',
-                      style: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.bold,
-                        color: textColor,
+                    Flexible(
+                      child: Text(
+                        'Grading System',
+                        style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.bold,
+                          color: textColor,
+                        ),
                       ),
                     ),
                   ],
@@ -1719,10 +2104,7 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
               ),
               const Divider(height: 20),
-              ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxHeight: MediaQuery.of(ctx).size.height * 0.42,
-                ),
+              Flexible(
                 child: Form(
                   key: fk,
                   child: ListView.builder(
@@ -2277,16 +2659,15 @@ class _HomeScreenState extends State<HomeScreen>
     final nameC = TextEditingController(text: profile.name);
     final emailC = TextEditingController(text: profile.email);
     final matricC = TextEditingController(text: profile.matricNumber);
-    String? selSchool = profile.school.isNotEmpty ? profile.school : null;
-    String? selFac = profile.faculty.isNotEmpty ? profile.faculty : null;
-    String? selDept = profile.department.isNotEmpty ? profile.department : null;
+    final schoolC = TextEditingController(text: profile.school);
+    final facC = TextEditingController(text: profile.faculty);
+    final deptC = TextEditingController(text: profile.department);
 
     final textColor = isDarkMode ? Colors.white : Colors.black87;
     final labelColor = isDarkMode ? Colors.white70 : Colors.black54;
     final fillColor = isDarkMode
         ? const Color(0xFF2A2A2A)
         : Colors.grey.shade50;
-    final dropColor = isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
 
     showDialog(
       context: context,
@@ -2332,6 +2713,8 @@ class _HomeScreenState extends State<HomeScreen>
                     fillColor,
                     (v) {
                       if (v == null || v.trim().isEmpty) return 'Required';
+                      if (!v.trim().contains('@'))
+                        return 'Email must contain @';
                       if (!isValidEmail(v.trim())) return 'Invalid email';
                       return null;
                     },
@@ -2350,103 +2733,42 @@ class _HomeScreenState extends State<HomeScreen>
                     },
                   ),
                   const SizedBox(height: 12),
-                  // School dropdown
-                  DropdownButtonFormField<String>(
-                    value: getAllSchools().contains(selSchool)
-                        ? selSchool
-                        : null,
-                    isExpanded: true,
-                    dropdownColor: dropColor,
-                    style: TextStyle(color: textColor, fontSize: 14),
-                    decoration: _editDec(
-                      'School / University',
-                      Icons.account_balance,
-                      labelColor,
-                      fillColor,
-                    ),
-                    items: getAllSchools()
-                        .map(
-                          (e) => DropdownMenuItem(
-                            value: e,
-                            child: Text(
-                              e,
-                              style: TextStyle(color: textColor, fontSize: 14),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (v) => setD(() {
-                      selSchool = v;
-                    }),
-                    validator: (v) => v == null ? 'Required' : null,
+                  // School combo
+                  _ComboField(
+                    controller: schoolC,
+                    label: 'School / University',
+                    icon: Icons.account_balance,
+                    suggestions: getAllSchools(),
+                    dark: !isDarkMode,
+                    validator: (v) =>
+                        (v == null || v.trim().isEmpty) ? 'Required' : null,
                   ),
                   const SizedBox(height: 12),
-                  // Faculty dropdown
-                  DropdownButtonFormField<String>(
-                    value: getFaculties().contains(selFac) ? selFac : null,
-                    isExpanded: true,
-                    dropdownColor: dropColor,
-                    style: TextStyle(color: textColor, fontSize: 14),
-                    decoration: _editDec(
-                      'Faculty',
-                      Icons.account_balance_outlined,
-                      labelColor,
-                      fillColor,
-                    ),
-                    items: getFaculties()
-                        .map(
-                          (e) => DropdownMenuItem(
-                            value: e,
-                            child: Text(
-                              e,
-                              style: TextStyle(color: textColor, fontSize: 14),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (v) => setD(() {
-                      selFac = v;
-                      selDept = null;
-                    }),
-                    validator: (v) => v == null ? 'Required' : null,
+                  // Faculty combo
+                  _ComboField(
+                    controller: facC,
+                    label: 'Faculty',
+                    icon: Icons.account_balance_outlined,
+                    suggestions: getFaculties(),
+                    dark: !isDarkMode,
+                    onSuggestionSelected: (_) => setD(() => deptC.clear()),
+                    validator: (v) =>
+                        (v == null || v.trim().isEmpty) ? 'Required' : null,
                   ),
                   const SizedBox(height: 12),
-                  // Department dropdown
-                  DropdownButtonFormField<String>(
-                    value:
-                        selFac != null &&
-                            getDepartments(selFac!).contains(selDept)
-                        ? selDept
-                        : null,
-                    isExpanded: true,
-                    dropdownColor: dropColor,
-                    style: TextStyle(color: textColor, fontSize: 14),
-                    decoration: _editDec(
-                      'Department',
-                      Icons.school_outlined,
-                      labelColor,
-                      fillColor,
+                  // Department combo
+                  StatefulBuilder(
+                    builder: (_, setSub) => _ComboField(
+                      controller: deptC,
+                      label: 'Department',
+                      icon: Icons.school_outlined,
+                      suggestions: facC.text.trim().isNotEmpty
+                          ? getDepartments(facC.text.trim())
+                          : [],
+                      dark: !isDarkMode,
+                      validator: (v) =>
+                          (v == null || v.trim().isEmpty) ? 'Required' : null,
                     ),
-                    items:
-                        (selFac != null ? getDepartments(selFac!) : <String>[])
-                            .map(
-                              (e) => DropdownMenuItem(
-                                value: e,
-                                child: Text(
-                                  e,
-                                  style: TextStyle(
-                                    color: textColor,
-                                    fontSize: 14,
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            )
-                            .toList(),
-                    onChanged: (v) => setD(() => selDept = v),
-                    validator: (v) => v == null ? 'Required' : null,
                   ),
                 ],
               ),
@@ -2469,9 +2791,9 @@ class _HomeScreenState extends State<HomeScreen>
                     name: nameC.text.trim(),
                     email: emailC.text.trim(),
                     matricNumber: matricC.text.trim(),
-                    school: selSchool ?? '',
-                    faculty: selFac ?? '',
-                    department: selDept ?? '',
+                    school: schoolC.text.trim(),
+                    faculty: facC.text.trim(),
+                    department: deptC.text.trim(),
                   ),
                 );
                 _saveProfile();
@@ -2709,7 +3031,7 @@ class _HomeScreenState extends State<HomeScreen>
                     style: TextStyle(color: Colors.white54, fontSize: 13),
                   ),
                   Text(
-                    cgpa.toStringAsFixed(2),
+                    _cgpaHidden ? '••••' : cgpa.toStringAsFixed(2),
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 52,
@@ -2717,27 +3039,28 @@ class _HomeScreenState extends State<HomeScreen>
                     ),
                   ),
                   const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: degreeColor(cgpa, maxGP).withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: degreeColor(cgpa, maxGP).withOpacity(0.5),
+                  if (!_cgpaHidden)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: degreeColor(cgpa, maxGP).withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: degreeColor(cgpa, maxGP).withOpacity(0.5),
+                        ),
+                      ),
+                      child: Text(
+                        getDegreeClass(cgpa, maxGP),
+                        style: TextStyle(
+                          color: degreeColor(cgpa, maxGP),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                        ),
                       ),
                     ),
-                    child: Text(
-                      getDegreeClass(cgpa, maxGP),
-                      style: TextStyle(
-                        color: degreeColor(cgpa, maxGP),
-                        fontWeight: FontWeight.bold,
-                        fontSize: 15,
-                      ),
-                    ),
-                  ),
                   const SizedBox(height: 20),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -2867,16 +3190,11 @@ class _HomeScreenState extends State<HomeScreen>
           children: [
             Icon(icon, color: color, size: 24),
             const SizedBox(height: 12),
-            Expanded(
-              child: Text(
-                value,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 13,
-                ),
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
-              ),
+            Text(
+              value,
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
             ),
             const SizedBox(height: 6),
             Text(
@@ -2984,7 +3302,9 @@ class _HomeScreenState extends State<HomeScreen>
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                'GPA: ${gpa.toStringAsFixed(2)}',
+                                _cgpaHidden
+                                    ? 'GPA: ••••'
+                                    : 'GPA: ${gpa.toStringAsFixed(2)}',
                                 style: const TextStyle(
                                   color: Colors.white,
                                   fontSize: 26,
@@ -3357,24 +3677,84 @@ class _HomeScreenState extends State<HomeScreen>
                     },
                   ),
                   const SizedBox(height: 14),
-                  TextFormField(
-                    controller: _scoreCtrl,
-                    keyboardType: TextInputType.number,
-                    decoration: InputDecoration(
-                      hintText: 'Score (0–100)',
-                      prefixIcon: const Icon(Icons.numbers),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
+                  // Score / Grade toggle + input
+                  Row(
+                    children: [
+                      const Text('Input Mode:', style: TextStyle(fontSize: 13)),
+                      const SizedBox(width: 10),
+                      _inputModeToggle(
+                        useGrade: _useGradeInput,
+                        onChanged: (v) => setState(() {
+                          _useGradeInput = v;
+                          _manualGrade = null;
+                          _scoreCtrl.clear();
+                          _formKey.currentState?.reset();
+                        }),
                       ),
-                    ),
-                    validator: (v) {
-                      if (v == null || v.isEmpty) return 'Enter a score';
-                      final s = int.tryParse(v);
-                      if (s == null || s < 0 || s > 100)
-                        return 'Score must be 0–100';
-                      return null;
-                    },
+                    ],
                   ),
+                  const SizedBox(height: 10),
+                  if (_useGradeInput)
+                    DropdownButtonFormField<String>(
+                      value: _manualGrade,
+                      isExpanded: true,
+                      decoration: InputDecoration(
+                        hintText: 'Select Grade',
+                        prefixIcon: const Icon(Icons.grade),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      items:
+                          (() {
+                                // Sort: non-F grades by gradePoint descending, F always last
+                                final nonF =
+                                    grading.rules
+                                        .where((r) => r.grade != 'F')
+                                        .toList()
+                                      ..sort(
+                                        (a, b) => b.gradePoint.compareTo(
+                                          a.gradePoint,
+                                        ),
+                                      );
+                                final fRules = grading.rules
+                                    .where((r) => r.grade == 'F')
+                                    .toList();
+                                return [...nonF, ...fRules];
+                              })()
+                              .map(
+                                (r) => DropdownMenuItem(
+                                  value: r.grade,
+                                  child: Text(
+                                    '${r.grade}  — ${r.grade == 'F' ? 'Below ${grading.rules.firstWhere((x) => x.gradePoint > 0, orElse: () => r).minScore}' : '≥ ${r.minScore}'}'
+                                    '  (GP ${r.gradePoint.toStringAsFixed(1)})',
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              )
+                              .toList(),
+                      onChanged: (v) => setState(() => _manualGrade = v),
+                      validator: (v) => v == null ? 'Select a grade' : null,
+                    )
+                  else
+                    TextFormField(
+                      controller: _scoreCtrl,
+                      keyboardType: TextInputType.number,
+                      decoration: InputDecoration(
+                        hintText: 'Score (0–100)',
+                        prefixIcon: const Icon(Icons.numbers),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      validator: (v) {
+                        if (v == null || v.isEmpty) return 'Enter a score';
+                        final s = int.tryParse(v);
+                        if (s == null || s < 0 || s > 100)
+                          return 'Score must be 0–100';
+                        return null;
+                      },
+                    ),
                   const SizedBox(height: 14),
                   TextFormField(
                     controller: _unitCtrl,
@@ -3537,14 +3917,13 @@ class _HomeScreenState extends State<HomeScreen>
             // Persistent CGPA bar
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [Colors.black87, Colors.indigo.shade900],
                 ),
               ),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -3554,7 +3933,7 @@ class _HomeScreenState extends State<HomeScreen>
                         style: TextStyle(color: Colors.white54, fontSize: 11),
                       ),
                       Text(
-                        cgpa.toStringAsFixed(2),
+                        _cgpaHidden ? '••••' : cgpa.toStringAsFixed(2),
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 24,
@@ -3563,32 +3942,45 @@ class _HomeScreenState extends State<HomeScreen>
                       ),
                     ],
                   ),
-                  Flexible(
-                    child: Container(
-                      margin: const EdgeInsets.only(left: 8),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: degreeColor(cgpa, maxGP).withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: degreeColor(cgpa, maxGP).withOpacity(0.5),
+                  const SizedBox(width: 10),
+                  if (!_cgpaHidden)
+                    Flexible(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 5,
                         ),
-                      ),
-                      child: Text(
-                        getDegreeClass(cgpa, maxGP),
-                        textAlign: TextAlign.center,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: degreeColor(cgpa, maxGP),
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13,
+                        decoration: BoxDecoration(
+                          color: degreeColor(cgpa, maxGP).withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: degreeColor(cgpa, maxGP).withOpacity(0.5),
+                          ),
+                        ),
+                        child: Text(
+                          getDegreeClass(cgpa, maxGP),
+                          textAlign: TextAlign.center,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: degreeColor(cgpa, maxGP),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
                         ),
                       ),
                     ),
+                  const Spacer(),
+                  IconButton(
+                    icon: Icon(
+                      _cgpaHidden ? Icons.visibility_off : Icons.visibility,
+                      color: Colors.white54,
+                      size: 22,
+                    ),
+                    onPressed: () => setState(() => _cgpaHidden = !_cgpaHidden),
+                    tooltip: _cgpaHidden ? 'Show CGPA' : 'Hide CGPA',
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
                   ),
                 ],
               ),
