@@ -1,4 +1,4 @@
-# cgpa_calculator_app
+# gradex
 
 A new Flutter project.
 

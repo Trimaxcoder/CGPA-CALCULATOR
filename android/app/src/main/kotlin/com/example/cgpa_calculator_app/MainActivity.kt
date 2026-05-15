@@ -1,4 +1,4 @@
-package com.example.cgpa_calculator_app
+package com.example.gradex
 
 import io.flutter.embedding.android.FlutterActivity
 
