@@ -32,7 +32,10 @@ class Course {
   int semester;
 
   Course(this.name, this.title, this.score, this.unit, this.year, this.semester)
-    : id = '${DateTime.now().microsecondsSinceEpoch}_${name.hashCode}';
+    : id =
+          '${DateTime.now().microsecondsSinceEpoch}_${name.hashCode}_${_idCounter++}';
+
+  static int _idCounter = 0;
 
   Course.withId(
     this.id,
@@ -757,6 +760,21 @@ class _HomeScreenState extends State<HomeScreen>
 
   bool isDarkMode = false;
   bool _cgpaHidden = false;
+
+  // ── preference persistence ──────────────────────────────
+  Future<void> _loadPrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      isDarkMode = prefs.getBool('isDarkMode') ?? false;
+      _cgpaHidden = prefs.getBool('cgpaHidden') ?? false;
+    });
+  }
+
+  Future<void> _savePref(String key, bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(key, value);
+  }
+
   String searchQuery = '';
   int currentPage = 0;
 
@@ -774,14 +792,26 @@ class _HomeScreenState extends State<HomeScreen>
   // Grade-letter input mode for manual entry
   bool _useGradeInput = false;
   String? _manualGrade; // selected grade letter when _useGradeInput is true
+  Course? _editingCourse; // non-null while editing an existing course
+
+  // ── undo delete support ──────────────────────────────────
+  Course? _lastDeleted;
+  int? _lastDeletedIndex;
 
   // ── init / dispose ──────────────────────────────────────
   @override
   void initState() {
     super.initState();
     _tabCtrl = TabController(length: 5, vsync: this)
-      ..addListener(() => setState(() {}));
+      ..addListener(() {
+        // If user navigates away from Add tab (index 0) while editing, restore the course
+        if (_tabCtrl.indexIsChanging && _tabCtrl.index != 0) {
+          _cancelEdit();
+        }
+        setState(() {});
+      });
     _loadData();
+    _loadPrefs();
   }
 
   @override
@@ -899,6 +929,7 @@ class _HomeScreenState extends State<HomeScreen>
     }
     setState(() {
       courses.add(Course(name, '', score, unit, _selYear, _selSem));
+      _editingCourse = null; // edit committed successfully
       currentPage = _pageIndex;
     });
     _pageCtrl.jumpToPage(currentPage);
@@ -1479,15 +1510,19 @@ class _HomeScreenState extends State<HomeScreen>
 
   // ── edit / delete ────────────────────────────────────────
   void _editCourse(Course c) {
+    // If we were already editing another course, restore it first
+    if (_editingCourse != null) {
+      setState(() => courses.add(_editingCourse!));
+    }
     _nameCtrl.text = c.name;
     _scoreCtrl.text = c.score.toString();
     _unitCtrl.text = c.unit.toString();
     _selYear = c.year;
     _selSem = c.semester;
-    _useGradeInput =
-        false; // always edit with score so user sees the real value
+    _useGradeInput = false;
     _manualGrade = null;
     setState(() {
+      _editingCourse = c; // remember in case user navigates away
       courses.removeWhere((x) => x.id == c.id);
       currentPage = _pageIndex;
     });
@@ -1496,20 +1531,61 @@ class _HomeScreenState extends State<HomeScreen>
     _tabCtrl.animateTo(0);
   }
 
-  void _deleteCourse(Course c) async {
-    HapticFeedback.mediumImpact();
-    final ok = await _confirm(
-      'Delete ${c.name}?',
-      'This course will be permanently removed.',
-      'Delete',
-    );
-    if (ok) {
-      setState(() => courses.removeWhere((x) => x.id == c.id));
+  /// Call this when the user navigates away from the Add tab without saving,
+  /// to restore the course that was being edited.
+  void _cancelEdit() {
+    if (_editingCourse != null) {
+      setState(() {
+        courses.add(_editingCourse!);
+        _editingCourse = null;
+      });
       _saveCourses();
-      if (mounted)
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('${c.name} deleted')));
+      _nameCtrl.clear();
+      _scoreCtrl.clear();
+      _unitCtrl.clear();
+      _manualGrade = null;
+      _formKey.currentState?.reset();
+    }
+  }
+
+  void _deleteCourse(Course c, {int? atIndex}) async {
+    HapticFeedback.mediumImpact();
+    final idx = atIndex ?? courses.indexOf(c);
+    setState(() {
+      courses.removeWhere((x) => x.id == c.id);
+      _lastDeleted = c;
+      _lastDeletedIndex = idx;
+    });
+    _saveCourses();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).clearSnackBars();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('${c.name} deleted'),
+        duration: const Duration(seconds: 3),
+        action: SnackBarAction(label: 'UNDO', onPressed: _undoDelete),
+      ),
+    );
+  }
+
+  void _undoDelete() {
+    if (_lastDeleted == null) return;
+    final course = _lastDeleted!;
+    final idx = _lastDeletedIndex ?? courses.length;
+    setState(() {
+      if (idx >= 0 && idx <= courses.length) {
+        courses.insert(idx, course);
+      } else {
+        courses.add(course);
+      }
+      _lastDeleted = null;
+      _lastDeletedIndex = null;
+    });
+    _saveCourses();
+    if (mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('${course.name} restored')));
     }
   }
 
@@ -1961,6 +2037,246 @@ class _HomeScreenState extends State<HomeScreen>
                         color: resultBg,
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(color: Colors.teal.withOpacity(0.3)),
+                      ),
+                      child: Text(
+                        '$emoji  $result',
+                        style: TextStyle(
+                          fontSize: 13,
+                          height: 1.7,
+                          color: textColor,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Close'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════
+  //  MINIMUM SCORE NEEDED CALCULATOR
+  // ══════════════════════════════════════════════════════════
+
+  void _showMinScoreCalc() {
+    if (courses.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Add courses first to use this tool.')),
+      );
+      return;
+    }
+
+    final targetCtrl = TextEditingController();
+    final extraUnitsCtrl = TextEditingController();
+    String result = '';
+    String emoji = '';
+
+    void compute(void Function(void Function()) setD) {
+      final targetCgpa = double.tryParse(targetCtrl.text.trim());
+      final extraUnits = int.tryParse(extraUnitsCtrl.text.trim());
+
+      if (targetCgpa == null || targetCgpa <= 0 || targetCgpa > maxGP) {
+        setD(() {
+          result =
+              'Enter a valid target CGPA between 0.01 and ${maxGP.toStringAsFixed(1)}.';
+          emoji = '⚠️';
+        });
+        return;
+      }
+      if (extraUnits == null || extraUnits <= 0) {
+        setD(() {
+          result = 'Enter the number of remaining credit units (must be > 0).';
+          emoji = '⚠️';
+        });
+        return;
+      }
+
+      final currentTotalGP = courses.fold(
+        0.0,
+        (s, c) => s + grading.getPoint(c.score) * c.unit,
+      );
+      final currentUnits = totalUnits;
+
+      // neededGP = (targetCgpa * (currentUnits + extraUnits) - currentTotalGP) / extraUnits
+      final neededGP =
+          (targetCgpa * (currentUnits + extraUnits) - currentTotalGP) /
+          extraUnits;
+
+      if (neededGP <= 0) {
+        setD(() {
+          result =
+              'Great news! Your current CGPA (${cgpa.toStringAsFixed(2)}) already exceeds '
+              'or will naturally reach ${targetCgpa.toStringAsFixed(2)} with $extraUnits more units '
+              'even if you score 0 in all remaining courses. Keep it up!';
+          emoji = '🎉';
+        });
+        return;
+      }
+
+      if (neededGP > maxGP) {
+        final maxPoss =
+            (currentTotalGP + maxGP * extraUnits) / (currentUnits + extraUnits);
+        setD(() {
+          result =
+              'Not achievable with $extraUnits units.\n'
+              'Max possible CGPA: ${maxPoss.toStringAsFixed(2)}\n\n'
+              'Consider increasing your remaining units or lowering your target CGPA.';
+          emoji = '❌';
+        });
+        return;
+      }
+
+      // Find the grade boundary that covers neededGP
+      final sortedRules = List.of(grading.rules)
+        ..sort((a, b) => a.gradePoint.compareTo(b.gradePoint));
+      GradeRule? targetRule;
+      for (final r in sortedRules) {
+        if (r.gradePoint >= neededGP - 0.001) {
+          targetRule = r;
+          break;
+        }
+      }
+      final gradeNeeded = targetRule?.grade ?? 'F';
+      final minScoreNeeded = targetRule?.minScore ?? 0;
+      final maxPossibleCgpa =
+          (currentTotalGP + maxGP * extraUnits) / (currentUnits + extraUnits);
+
+      setD(() {
+        result =
+            'Current CGPA       : ${cgpa.toStringAsFixed(2)}\n'
+            'Target CGPA        : ${targetCgpa.toStringAsFixed(2)}\n'
+            'Remaining Units    : $extraUnits\n\n'
+            'You need an average GP of ${neededGP.toStringAsFixed(2)} per unit.\n\n'
+            'Minimum grade required: $gradeNeeded  (score ≥ $minScoreNeeded) in every remaining course.\n\n'
+            'Max achievable CGPA with $extraUnits units: ${maxPossibleCgpa.toStringAsFixed(2)}';
+        emoji = '📊';
+      });
+    }
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setD) {
+          final textColor = isDarkMode ? Colors.white : Colors.black87;
+          final labelColor = isDarkMode ? Colors.white70 : Colors.black54;
+          final fillColor = isDarkMode
+              ? const Color(0xFF2A2A2A)
+              : Colors.grey.shade50;
+          final bgColor = isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
+          final resultBg = isDarkMode
+              ? Colors.indigo.withOpacity(0.15)
+              : Colors.indigo.withOpacity(0.07);
+
+          return AlertDialog(
+            backgroundColor: bgColor,
+            surfaceTintColor: Colors.transparent,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            title: Row(
+              children: [
+                const Icon(Icons.calculate_outlined, color: Colors.indigo),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    'Min Score Calculator',
+                    style: TextStyle(color: textColor),
+                  ),
+                ),
+              ],
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Find the minimum score you need in remaining courses to reach your target CGPA.',
+                    style: TextStyle(
+                      color: labelColor,
+                      fontSize: 13,
+                      height: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: targetCtrl,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    style: TextStyle(color: textColor),
+                    decoration: InputDecoration(
+                      labelText:
+                          'Target CGPA (max ${maxGP.toStringAsFixed(1)})',
+                      labelStyle: TextStyle(color: labelColor),
+                      prefixIcon: const Icon(
+                        Icons.flag_outlined,
+                        color: Colors.indigo,
+                      ),
+                      filled: true,
+                      fillColor: fillColor,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: extraUnitsCtrl,
+                    keyboardType: TextInputType.number,
+                    style: TextStyle(color: textColor),
+                    decoration: InputDecoration(
+                      labelText: 'Remaining Credit Units',
+                      labelStyle: TextStyle(color: labelColor),
+                      prefixIcon: const Icon(
+                        Icons.library_books_outlined,
+                        color: Colors.indigo,
+                      ),
+                      filled: true,
+                      fillColor: fillColor,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      helperText: 'Total units of courses not yet taken',
+                      helperStyle: TextStyle(color: labelColor, fontSize: 11),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: () => compute(setD),
+                      icon: const Icon(Icons.calculate),
+                      label: const Text('Calculate'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.indigo,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                    ),
+                  ),
+                  if (result.isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: resultBg,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: Colors.indigo.withOpacity(0.3),
+                        ),
                       ),
                       child: Text(
                         '$emoji  $result',
@@ -3404,54 +3720,29 @@ class _HomeScreenState extends State<HomeScreen>
     }),
   );
 
-  Widget _dismissible(Course c) => Dismissible(
-    key: Key(c.id),
-    direction: DismissDirection.endToStart,
-    background: Container(
-      alignment: Alignment.centerRight,
-      padding: const EdgeInsets.only(right: 20),
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: Colors.red.shade400,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: const Icon(Icons.delete, color: Colors.white),
-    ),
-    confirmDismiss: (_) async {
-      HapticFeedback.mediumImpact();
-      return await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
-          ),
-          title: Text('Delete ${c.name}?'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text(
-                'Delete',
-                style: TextStyle(color: Colors.white),
-              ),
-            ),
-          ],
+  Widget _dismissible(Course c) {
+    final idx = courses.indexOf(c);
+    return Dismissible(
+      key: Key(c.id),
+      direction: DismissDirection.endToStart,
+      background: Container(
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 20),
+        margin: const EdgeInsets.only(bottom: 12),
+        decoration: BoxDecoration(
+          color: Colors.red.shade400,
+          borderRadius: BorderRadius.circular(16),
         ),
-      );
-    },
-    onDismissed: (_) {
-      setState(() => courses.removeWhere((x) => x.id == c.id));
-      _saveCourses();
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('${c.name} deleted')));
-    },
-    child: _courseCard(c),
-  );
+        child: const Icon(Icons.delete, color: Colors.white),
+      ),
+      confirmDismiss: (_) async {
+        HapticFeedback.mediumImpact();
+        return true; // allow dismiss; undo snackbar handles recovery
+      },
+      onDismissed: (_) => _deleteCourse(c, atIndex: idx),
+      child: _courseCard(c),
+    );
+  }
 
   Widget _courseCard(Course c) => Card(
     elevation: 2,
@@ -3501,8 +3792,6 @@ class _HomeScreenState extends State<HomeScreen>
   );
 
   // ══════════════════════════════════════════════════════════
-  //  ADD TAB
-  // ══════════════════════════════════════════════════════════
 
   Widget _buildAddTab() => SingleChildScrollView(
     padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
@@ -3510,6 +3799,42 @@ class _HomeScreenState extends State<HomeScreen>
       key: _formKey,
       child: Column(
         children: [
+          // Edit mode banner
+          if (_editingCourse != null)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              margin: const EdgeInsets.only(bottom: 12),
+              decoration: BoxDecoration(
+                color: Colors.orange.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.orange.withOpacity(0.4)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.edit, color: Colors.orange, size: 18),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Editing: ${_editingCourse!.name} — save to confirm or switch tabs to cancel.',
+                      style: const TextStyle(
+                        color: Colors.orange,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: _cancelEdit,
+                    child: const Icon(
+                      Icons.close,
+                      color: Colors.orange,
+                      size: 18,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
           // Profile mini-banner
           if (profile.name.isNotEmpty)
             GestureDetector(
@@ -3820,6 +4145,15 @@ class _HomeScreenState extends State<HomeScreen>
               const SizedBox(width: 8),
               Expanded(
                 child: _toolBtn(
+                  Icons.calculate_outlined,
+                  'Min Score',
+                  Colors.indigo,
+                  _showMinScoreCalc,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _toolBtn(
                   Icons.tune,
                   'Grading',
                   Colors.orange,
@@ -3892,7 +4226,10 @@ class _HomeScreenState extends State<HomeScreen>
         actions: [
           IconButton(
             icon: Icon(isDarkMode ? Icons.dark_mode : Icons.light_mode),
-            onPressed: () => setState(() => isDarkMode = !isDarkMode),
+            onPressed: () {
+              setState(() => isDarkMode = !isDarkMode);
+              _savePref('isDarkMode', isDarkMode);
+            },
           ),
           IconButton(
             icon: const Icon(Icons.delete_forever),
@@ -3977,7 +4314,10 @@ class _HomeScreenState extends State<HomeScreen>
                       color: Colors.white54,
                       size: 22,
                     ),
-                    onPressed: () => setState(() => _cgpaHidden = !_cgpaHidden),
+                    onPressed: () {
+                      setState(() => _cgpaHidden = !_cgpaHidden);
+                      _savePref('cgpaHidden', _cgpaHidden);
+                    },
                     tooltip: _cgpaHidden ? 'Show CGPA' : 'Hide CGPA',
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(),
