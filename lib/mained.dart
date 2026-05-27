@@ -15,6 +15,7 @@ import 'package:flutter/rendering.dart';
 
 import 'grading_model.dart';
 import 'uniport_courses.dart';
+import 'services/api_service.dart';
 
 void main() => runApp(const MyApp());
 
@@ -294,7 +295,6 @@ class _LoginScreenState extends State<LoginScreen> {
     await prefs.setString('profile', jsonEncode(profile.toMap()));
     if (!mounted) return;
     setState(() => _loading = false);
-    // Show preloader for 1 second then navigate
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(
         transitionDuration: Duration.zero,
@@ -371,7 +371,6 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 14),
 
-                // School combo field
                 _ComboField(
                   controller: _schoolC,
                   label: 'School / University',
@@ -388,7 +387,6 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 14),
 
-                // Faculty combo field
                 _ComboField(
                   controller: _facC,
                   label: 'Faculty',
@@ -402,7 +400,6 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 14),
 
-                // Department combo field
                 _ComboField(
                   controller: _deptC,
                   label: 'Department',
@@ -502,7 +499,7 @@ class _LoginScreenState extends State<LoginScreen> {
 }
 
 // ══════════════════════════════════════════════════════════
-//  PRELOADER SCREEN (shown 1 second after successful registration)
+//  PRELOADER SCREEN
 // ══════════════════════════════════════════════════════════
 
 class _PreloaderScreen extends StatefulWidget {
@@ -552,7 +549,7 @@ class _PreloaderScreenState extends State<_PreloaderScreen> {
 }
 
 // ══════════════════════════════════════════════════════════
-//  COMBO FIELD — dropdown suggestions + free-text fallback
+//  COMBO FIELD
 // ══════════════════════════════════════════════════════════
 
 class _ComboField extends StatefulWidget {
@@ -593,7 +590,6 @@ class _ComboFieldState extends State<_ComboField> {
           _showList = _filtered.isNotEmpty;
         });
       } else {
-        // Small delay so tap on list item registers
         Future.delayed(const Duration(milliseconds: 150), () {
           if (mounted) setState(() => _showList = false);
         });
@@ -761,7 +757,6 @@ class _HomeScreenState extends State<HomeScreen>
   bool isDarkMode = false;
   bool _cgpaHidden = false;
 
-  // ── preference persistence ──────────────────────────────
   Future<void> _loadPrefs() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
@@ -789,22 +784,18 @@ class _HomeScreenState extends State<HomeScreen>
 
   int _selYear = 1, _selSem = 1;
 
-  // Grade-letter input mode for manual entry
   bool _useGradeInput = false;
-  String? _manualGrade; // selected grade letter when _useGradeInput is true
-  Course? _editingCourse; // non-null while editing an existing course
+  String? _manualGrade;
+  Course? _editingCourse;
 
-  // ── undo delete support ──────────────────────────────────
   Course? _lastDeleted;
   int? _lastDeletedIndex;
 
-  // ── init / dispose ──────────────────────────────────────
   @override
   void initState() {
     super.initState();
     _tabCtrl = TabController(length: 5, vsync: this)
       ..addListener(() {
-        // If user navigates away from Add tab (index 0) while editing, restore the course
         if (_tabCtrl.indexIsChanging && _tabCtrl.index != 0) {
           _cancelEdit();
         }
@@ -825,7 +816,6 @@ class _HomeScreenState extends State<HomeScreen>
     super.dispose();
   }
 
-  // ── storage ─────────────────────────────────────────────
   Future<void> _loadData() async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getStringList('courses');
@@ -859,7 +849,6 @@ class _HomeScreenState extends State<HomeScreen>
     await prefs.setString('grading', grading.toJson());
   }
 
-  // ── calcs ────────────────────────────────────────────────
   int get _pageIndex => (_selYear - 1) * 2 + (_selSem - 1);
   List<Course> _semCourses(int y, int s) =>
       courses.where((c) => c.year == y && c.semester == s).toList();
@@ -908,7 +897,7 @@ class _HomeScreenState extends State<HomeScreen>
             .toList();
 
   // ══════════════════════════════════════════════════════════
-  //  ADD COURSE (Fix #1 — clears + success dialog)
+  //  ADD COURSE (single manual inline — used only by edit flow)
   // ══════════════════════════════════════════════════════════
 
   void _addCourse() {
@@ -918,7 +907,6 @@ class _HomeScreenState extends State<HomeScreen>
     final unit = int.parse(_unitCtrl.text.trim());
     int score;
     if (_useGradeInput) {
-      // Convert selected grade letter to its min score
       final rule = grading.rules.firstWhere(
         (r) => r.grade == _manualGrade,
         orElse: () => GradeRule(grade: 'F', minScore: 0, gradePoint: 0),
@@ -929,7 +917,7 @@ class _HomeScreenState extends State<HomeScreen>
     }
     setState(() {
       courses.add(Course(name, '', score, unit, _selYear, _selSem));
-      _editingCourse = null; // edit committed successfully
+      _editingCourse = null;
       currentPage = _pageIndex;
     });
     _pageCtrl.jumpToPage(currentPage);
@@ -996,7 +984,6 @@ class _HomeScreenState extends State<HomeScreen>
 
   // ── add from JSON picker ─────────────────────────────────
   void _addFromPicker() {
-    // Determine level from courses count or default
     final levelStr = '${_selYear * 100}';
     final semLabel = _selSem == 1 ? 'First Semester' : 'Second Semester';
     final available = getCourses(
@@ -1005,7 +992,6 @@ class _HomeScreenState extends State<HomeScreen>
       levelStr,
       semLabel,
     );
-    // Filter out already-added courses
     final added = _semCourses(_selYear, _selSem).map((c) => c.name).toSet();
     final selectable = available.where((c) => !added.contains(c.code)).toList();
 
@@ -1168,13 +1154,12 @@ class _HomeScreenState extends State<HomeScreen>
     final controllers = {
       for (final c in picked) c.code: TextEditingController(),
     };
-    // Grade selections when in grade mode
     final gradeSelections = <String, String?>{
       for (final c in picked) c.code: null,
     };
     final fk = GlobalKey<FormState>();
     bool _saved = false;
-    bool _useGrade = false; // local toggle for this sheet
+    bool _useGrade = false;
 
     final textColor = isDarkMode ? Colors.white : Colors.black87;
     final labelColor = isDarkMode ? Colors.white70 : Colors.black54;
@@ -1216,7 +1201,6 @@ class _HomeScreenState extends State<HomeScreen>
                           ),
                         ),
                       ),
-                      // Toggle between Score / Grade mode
                       _inputModeToggle(
                         useGrade: _useGrade,
                         onChanged: (v) {
@@ -1329,7 +1313,6 @@ class _HomeScreenState extends State<HomeScreen>
                           onPressed: _saved
                               ? null
                               : () {
-                                  // Validate grade selections when in grade mode
                                   if (_useGrade) {
                                     final missing = picked
                                         .where(
@@ -1428,7 +1411,7 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-  // ── input mode toggle widget (Score / Grade) ─────────────
+  // ── input mode toggle widget ─────────────────────────────
   Widget _inputModeToggle({
     required bool useGrade,
     required ValueChanged<bool> onChanged,
@@ -1510,7 +1493,6 @@ class _HomeScreenState extends State<HomeScreen>
 
   // ── edit / delete ────────────────────────────────────────
   void _editCourse(Course c) {
-    // If we were already editing another course, restore it first
     if (_editingCourse != null) {
       setState(() => courses.add(_editingCourse!));
     }
@@ -1522,7 +1504,7 @@ class _HomeScreenState extends State<HomeScreen>
     _useGradeInput = false;
     _manualGrade = null;
     setState(() {
-      _editingCourse = c; // remember in case user navigates away
+      _editingCourse = c;
       courses.removeWhere((x) => x.id == c.id);
       currentPage = _pageIndex;
     });
@@ -1531,8 +1513,6 @@ class _HomeScreenState extends State<HomeScreen>
     _tabCtrl.animateTo(0);
   }
 
-  /// Call this when the user navigates away from the Add tab without saving,
-  /// to restore the course that was being edited.
   void _cancelEdit() {
     if (_editingCourse != null) {
       setState(() {
@@ -1661,7 +1641,574 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   // ══════════════════════════════════════════════════════════
-  //  WHAT-IF (Fix #2 — existing courses only)
+  //  MANUAL BATCH ENTRY — tabular fast input sheet
+  // ══════════════════════════════════════════════════════════
+
+  void _showManualBatchEntry() {
+    const int initRows = 5;
+
+    final List<Map<String, TextEditingController>> rows = List.generate(
+      initRows,
+      (_) => {
+        'name': TextEditingController(),
+        'code': TextEditingController(),
+        'unit': TextEditingController(),
+        'score': TextEditingController(),
+      },
+    );
+    final List<String?> gradeSelections = List.filled(
+      initRows,
+      null,
+      growable: true,
+    );
+    bool useGrade = false;
+    final gradeLetters = grading.rules.map((r) => r.grade).toList();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+        child: Container(
+          height: MediaQuery.of(ctx).size.height * 0.92,
+          decoration: BoxDecoration(
+            color: isDarkMode ? const Color(0xFF121212) : Colors.white,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: StatefulBuilder(
+            builder: (ctx2, setSheet) {
+              final textColor = isDarkMode ? Colors.white : Colors.black87;
+              final labelColor = isDarkMode ? Colors.white70 : Colors.black54;
+              final fillColor = isDarkMode
+                  ? const Color(0xFF2A2A2A)
+                  : Colors.grey.shade50;
+              final borderColor = isDarkMode
+                  ? Colors.grey.shade800
+                  : Colors.grey.shade200;
+              final headerBg = isDarkMode
+                  ? const Color(0xFF1E1E1E)
+                  : Colors.blue.shade50;
+
+              InputDecoration cellDec(String hint) => InputDecoration(
+                hintText: hint,
+                hintStyle: TextStyle(
+                  color: isDarkMode
+                      ? Colors.grey.shade600
+                      : Colors.grey.shade400,
+                  fontSize: 12,
+                ),
+                filled: true,
+                fillColor: fillColor,
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 10,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide(color: borderColor),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide(color: borderColor),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: Colors.blue, width: 1.5),
+                ),
+                errorBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: Colors.red),
+                ),
+                errorStyle: const TextStyle(fontSize: 0, height: 0),
+              );
+
+              void addRow() {
+                setSheet(() {
+                  rows.add({
+                    'name': TextEditingController(),
+                    'code': TextEditingController(),
+                    'unit': TextEditingController(),
+                    'score': TextEditingController(),
+                  });
+                  gradeSelections.add(null);
+                });
+              }
+
+              void removeRow(int i) {
+                setSheet(() {
+                  rows[i].values.forEach((c) => c.dispose());
+                  rows.removeAt(i);
+                  gradeSelections.removeAt(i);
+                });
+              }
+
+              void saveAll() {
+                // Collect only non-empty rows
+                final filled = <int>[];
+                for (int i = 0; i < rows.length; i++) {
+                  final codeVal = rows[i]['code']!.text.trim();
+                  final unitVal = rows[i]['unit']!.text.trim();
+                  final scoreVal = rows[i]['score']!.text.trim();
+                  final gradeVal = gradeSelections[i];
+                  final nameVal = rows[i]['name']!.text.trim();
+                  if (nameVal.isEmpty &&
+                      codeVal.isEmpty &&
+                      unitVal.isEmpty &&
+                      scoreVal.isEmpty &&
+                      gradeVal == null)
+                    continue;
+                  filled.add(i);
+                }
+
+                if (filled.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('No course data entered.')),
+                  );
+                  return;
+                }
+
+                // Validate filled rows
+                final errors = <String>[];
+                for (final i in filled) {
+                  final code = rows[i]['code']!.text.trim();
+                  final unit = int.tryParse(rows[i]['unit']!.text.trim());
+                  final label = code.isNotEmpty ? code : 'Row ${i + 1}';
+                  if (code.isEmpty)
+                    errors.add('Row ${i + 1}: course code missing');
+                  if (unit == null || unit <= 0)
+                    errors.add('$label: invalid unit');
+                  if (useGrade) {
+                    if (gradeSelections[i] == null)
+                      errors.add('$label: grade not selected');
+                  } else {
+                    final s = int.tryParse(rows[i]['score']!.text.trim());
+                    if (s == null || s < 0 || s > 100)
+                      errors.add('$label: score must be 0–100');
+                  }
+                }
+
+                if (errors.isNotEmpty) {
+                  showDialog(
+                    context: ctx,
+                    builder: (d) => AlertDialog(
+                      backgroundColor: isDarkMode
+                          ? const Color(0xFF1E1E1E)
+                          : Colors.white,
+                      surfaceTintColor: Colors.transparent,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      title: Row(
+                        children: [
+                          const Icon(Icons.error_outline, color: Colors.red),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Fix these issues',
+                            style: TextStyle(
+                              color: isDarkMode ? Colors.white : Colors.black87,
+                            ),
+                          ),
+                        ],
+                      ),
+                      content: Text(
+                        errors.take(6).join('\n'),
+                        style: TextStyle(
+                          fontSize: 13,
+                          height: 1.6,
+                          color: isDarkMode ? Colors.white70 : Colors.black87,
+                        ),
+                      ),
+                      actions: [
+                        ElevatedButton(
+                          onPressed: () => Navigator.pop(d),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.blue,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: const Text('OK'),
+                        ),
+                      ],
+                    ),
+                  );
+                  return;
+                }
+
+                // Commit all valid rows
+                int added = 0;
+                final existingKeys = courses
+                    .map((c) => '${c.name}_${c.unit}')
+                    .toSet();
+                for (final i in filled) {
+                  final code = rows[i]['code']!.text.trim().toUpperCase();
+                  final name = rows[i]['name']!.text.trim();
+                  final unit = int.parse(rows[i]['unit']!.text.trim());
+                  final int score;
+                  if (useGrade) {
+                    final grade = gradeSelections[i]!;
+                    final rule = grading.rules.firstWhere(
+                      (r) => r.grade == grade,
+                      orElse: () =>
+                          GradeRule(grade: 'F', minScore: 0, gradePoint: 0),
+                    );
+                    score = rule.minScore;
+                  } else {
+                    score = int.parse(rows[i]['score']!.text.trim());
+                  }
+                  final key = '${code}_$unit';
+                  if (existingKeys.contains(key)) continue;
+                  courses.add(
+                    Course(code, name, score, unit, _selYear, _selSem),
+                  );
+                  existingKeys.add(key);
+                  added++;
+                }
+
+                setState(() => currentPage = _pageIndex);
+                _pageCtrl.jumpToPage(currentPage);
+                _saveCourses();
+                Navigator.pop(ctx);
+
+                final skipped = filled.length - added;
+                final msg = added == 0
+                    ? 'All courses already saved — no duplicates added'
+                    : '$added course${added > 1 ? 's' : ''} added ✓'
+                          '${skipped > 0 ? ' ($skipped duplicate${skipped > 1 ? 's' : ''} skipped)' : ''}';
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(SnackBar(content: Text(msg)));
+              }
+
+              final filledCount = rows
+                  .where((r) => r['code']!.text.trim().isNotEmpty)
+                  .length;
+
+              Widget headerCell(String t, {int flex = 2}) => Expanded(
+                flex: flex,
+                child: Text(
+                  t,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: isDarkMode
+                        ? Colors.blue.shade300
+                        : Colors.blue.shade700,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              );
+
+              return Column(
+                children: [
+                  _sheetHandle(),
+
+                  // ── Title + toggle ───────────────────────────
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(18, 12, 18, 4),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(
+                            Icons.table_rows_outlined,
+                            color: Colors.blue,
+                            size: 20,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Manual Batch Entry',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: textColor,
+                                ),
+                              ),
+                              Text(
+                                'Year $_selYear • Semester $_selSem  —  ${rows.length} row${rows.length != 1 ? 's' : ''}',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: labelColor,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        _inputModeToggle(
+                          useGrade: useGrade,
+                          onChanged: (v) => setSheet(() => useGrade = v),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // ── Column headers ───────────────────────────
+                  Container(
+                    margin: const EdgeInsets.fromLTRB(14, 8, 14, 0),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: headerBg,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Row(
+                      children: [
+                        headerCell('Course Name', flex: 2),
+                        const SizedBox(width: 6),
+                        headerCell('Code', flex: 2),
+                        const SizedBox(width: 6),
+                        headerCell('Unit', flex: 1),
+                        const SizedBox(width: 6),
+                        headerCell(useGrade ? 'Grade' : 'Score', flex: 2),
+                        const SizedBox(width: 6),
+                        const SizedBox(width: 28),
+                      ],
+                    ),
+                  ),
+
+                  // ── Scrollable rows ──────────────────────────
+                  Expanded(
+                    child: ListView.builder(
+                      padding: const EdgeInsets.fromLTRB(14, 6, 14, 12),
+                      itemCount: rows.length,
+                      itemBuilder: (_, i) {
+                        final row = rows[i];
+                        final rowNum = i + 1;
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 6),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isDarkMode
+                                ? const Color(0xFF1E1E1E)
+                                : Colors.grey.shade50,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: borderColor),
+                          ),
+                          child: Row(
+                            children: [
+                              // Course Name
+                              Expanded(
+                                flex: 2,
+                                child: TextField(
+                                  controller: row['name'],
+                                  textCapitalization:
+                                      TextCapitalization.sentences,
+                                  style: TextStyle(
+                                    color: textColor,
+                                    fontSize: 13,
+                                  ),
+                                  decoration: cellDec('Name'),
+                                  onChanged: (_) => setSheet(() {}),
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              // Course Code
+                              Expanded(
+                                flex: 2,
+                                child: TextField(
+                                  controller: row['code'],
+                                  textCapitalization:
+                                      TextCapitalization.characters,
+                                  style: TextStyle(
+                                    color: textColor,
+                                    fontSize: 13,
+                                  ),
+                                  decoration: cellDec('e.g. MTH101'),
+                                  onChanged: (_) => setSheet(() {}),
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              // Credit Unit
+                              Expanded(
+                                flex: 1,
+                                child: TextField(
+                                  controller: row['unit'],
+                                  keyboardType: TextInputType.number,
+                                  style: TextStyle(
+                                    color: textColor,
+                                    fontSize: 13,
+                                  ),
+                                  decoration: cellDec('1–6'),
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              // Score OR Grade
+                              Expanded(
+                                flex: 2,
+                                child: useGrade
+                                    ? DropdownButtonHideUnderline(
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 8,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: fillColor,
+                                            borderRadius: BorderRadius.circular(
+                                              8,
+                                            ),
+                                            border: Border.all(
+                                              color: borderColor,
+                                            ),
+                                          ),
+                                          child: DropdownButton<String>(
+                                            value: gradeSelections[i],
+                                            isExpanded: true,
+                                            isDense: true,
+                                            hint: Text(
+                                              'Grade',
+                                              style: TextStyle(
+                                                color: isDarkMode
+                                                    ? Colors.grey.shade600
+                                                    : Colors.grey.shade400,
+                                                fontSize: 12,
+                                              ),
+                                            ),
+                                            dropdownColor: isDarkMode
+                                                ? const Color(0xFF2A2A2A)
+                                                : Colors.white,
+                                            style: TextStyle(
+                                              color: textColor,
+                                              fontSize: 13,
+                                            ),
+                                            items: gradeLetters
+                                                .map(
+                                                  (g) => DropdownMenuItem(
+                                                    value: g,
+                                                    child: Text(
+                                                      g,
+                                                      style: TextStyle(
+                                                        color: textColor,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                )
+                                                .toList(),
+                                            onChanged: (v) => setSheet(
+                                              () => gradeSelections[i] = v,
+                                            ),
+                                          ),
+                                        ),
+                                      )
+                                    : TextField(
+                                        controller: row['score'],
+                                        keyboardType: TextInputType.number,
+                                        style: TextStyle(
+                                          color: textColor,
+                                          fontSize: 13,
+                                        ),
+                                        decoration: cellDec('0–100'),
+                                      ),
+                              ),
+                              const SizedBox(width: 6),
+                              // Delete row
+                              GestureDetector(
+                                onTap: rows.length > 1
+                                    ? () => removeRow(i)
+                                    : null,
+                                child: Icon(
+                                  Icons.remove_circle_outline,
+                                  size: 22,
+                                  color: rows.length > 1
+                                      ? Colors.red.shade400
+                                      : Colors.grey.shade300,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+
+                  // ── Footer ───────────────────────────────────
+                  Container(
+                    padding: const EdgeInsets.fromLTRB(14, 8, 14, 0),
+                    decoration: BoxDecoration(
+                      color: isDarkMode
+                          ? const Color(0xFF121212)
+                          : Colors.white,
+                      border: Border(
+                        top: BorderSide(
+                          color: isDarkMode
+                              ? Colors.grey.shade800
+                              : Colors.grey.shade200,
+                        ),
+                      ),
+                    ),
+                    child: SafeArea(
+                      top: false,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          TextButton.icon(
+                            onPressed: addRow,
+                            icon: const Icon(
+                              Icons.add_circle_outline,
+                              size: 18,
+                              color: Colors.blue,
+                            ),
+                            label: const Text(
+                              'Add Row',
+                              style: TextStyle(
+                                color: Colors.blue,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          SizedBox(
+                            width: double.infinity,
+                            height: 50,
+                            child: ElevatedButton.icon(
+                              onPressed: saveAll,
+                              icon: const Icon(Icons.save_alt),
+                              label: Text(
+                                filledCount == 0
+                                    ? 'Save Courses'
+                                    : 'Save $filledCount Course${filledCount != 1 ? 's' : ''}',
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.blue,
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════
+  //  WHAT-IF
   // ══════════════════════════════════════════════════════════
 
   void _showWhatIf() {
@@ -1723,7 +2270,6 @@ class _HomeScreenState extends State<HomeScreen>
                     ],
                   ),
                 ),
-                // CGPA bar
                 Container(
                   margin: const EdgeInsets.symmetric(horizontal: 20),
                   padding: const EdgeInsets.all(16),
@@ -1887,7 +2433,7 @@ class _HomeScreenState extends State<HomeScreen>
       );
 
   // ══════════════════════════════════════════════════════════
-  //  TARGET CGPA (Fix #3 — single input + button)
+  //  TARGET CGPA
   // ══════════════════════════════════════════════════════════
 
   void _showTargetCalc() {
@@ -2106,7 +2652,6 @@ class _HomeScreenState extends State<HomeScreen>
       );
       final currentUnits = totalUnits;
 
-      // neededGP = (targetCgpa * (currentUnits + extraUnits) - currentTotalGP) / extraUnits
       final neededGP =
           (targetCgpa * (currentUnits + extraUnits) - currentTotalGP) /
           extraUnits;
@@ -2135,7 +2680,6 @@ class _HomeScreenState extends State<HomeScreen>
         return;
       }
 
-      // Find the grade boundary that covers neededGP
       final sortedRules = List.of(grading.rules)
         ..sort((a, b) => a.gradePoint.compareTo(b.gradePoint));
       GradeRule? targetRule;
@@ -2372,7 +2916,6 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
               ),
               const SizedBox(height: 8),
-              // Preset buttons
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Row(
@@ -2809,7 +3352,6 @@ class _HomeScreenState extends State<HomeScreen>
     await Printing.layoutPdf(onLayout: (_) => pdf.save());
   }
 
-  // ── share as image ───────────────────────────────────────
   Future<void> _shareImage() async {
     try {
       final boundary =
@@ -2834,14 +3376,13 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   // ══════════════════════════════════════════════════════════
-  //  PROFILE TAB (Fix #4)
+  //  PROFILE TAB
   // ══════════════════════════════════════════════════════════
 
   Widget _buildProfile() => SingleChildScrollView(
     padding: const EdgeInsets.fromLTRB(20, 20, 20, 40),
     child: Column(
       children: [
-        // Header card
         Container(
           width: double.infinity,
           padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 20),
@@ -3049,7 +3590,6 @@ class _HomeScreenState extends State<HomeScreen>
                     },
                   ),
                   const SizedBox(height: 12),
-                  // School combo
                   _ComboField(
                     controller: schoolC,
                     label: 'School / University',
@@ -3060,7 +3600,6 @@ class _HomeScreenState extends State<HomeScreen>
                         (v == null || v.trim().isEmpty) ? 'Required' : null,
                   ),
                   const SizedBox(height: 12),
-                  // Faculty combo
                   _ComboField(
                     controller: facC,
                     label: 'Faculty',
@@ -3072,7 +3611,6 @@ class _HomeScreenState extends State<HomeScreen>
                         (v == null || v.trim().isEmpty) ? 'Required' : null,
                   ),
                   const SizedBox(height: 12),
-                  // Department combo
                   StatefulBuilder(
                     builder: (_, setSub) => _ComboField(
                       controller: deptC,
@@ -3301,7 +3839,7 @@ class _HomeScreenState extends State<HomeScreen>
   );
 
   // ══════════════════════════════════════════════════════════
-  //  SUMMARY (Fix #5 — no overflow, fixed stat cards)
+  //  SUMMARY
   // ══════════════════════════════════════════════════════════
 
   Widget _buildSummary() {
@@ -3417,7 +3955,6 @@ class _HomeScreenState extends State<HomeScreen>
             ],
           ),
           const SizedBox(height: 20),
-          // Equal-size stat cards
           IntrinsicHeight(
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -3522,7 +4059,7 @@ class _HomeScreenState extends State<HomeScreen>
       );
 
   // ══════════════════════════════════════════════════════════
-  //  COURSES TAB (Fix #5 — bottom margin)
+  //  COURSES TAB
   // ══════════════════════════════════════════════════════════
 
   Widget _buildCourses() => Column(
@@ -3563,12 +4100,7 @@ class _HomeScreenState extends State<HomeScreen>
                   ),
                 );
               return ListView.builder(
-                padding: const EdgeInsets.fromLTRB(
-                  14,
-                  14,
-                  14,
-                  40,
-                ), // bottom margin fix
+                padding: const EdgeInsets.fromLTRB(14, 14, 14, 40),
                 itemCount: r.length,
                 itemBuilder: (_, i) => _courseCard(r[i]),
               );
@@ -3687,7 +4219,7 @@ class _HomeScreenState extends State<HomeScreen>
                                   10,
                                   10,
                                   40,
-                                ), // bottom margin fix
+                                ),
                                 itemCount: list.length,
                                 itemBuilder: (_, i) => _dismissible(list[i]),
                               ),
@@ -3737,7 +4269,7 @@ class _HomeScreenState extends State<HomeScreen>
       ),
       confirmDismiss: (_) async {
         HapticFeedback.mediumImpact();
-        return true; // allow dismiss; undo snackbar handles recovery
+        return true;
       },
       onDismissed: (_) => _deleteCourse(c, atIndex: idx),
       child: _courseCard(c),
@@ -3791,6 +4323,8 @@ class _HomeScreenState extends State<HomeScreen>
     ),
   );
 
+  // ══════════════════════════════════════════════════════════
+  //  ADD TAB — updated with batch entry button
   // ══════════════════════════════════════════════════════════
 
   Widget _buildAddTab() => SingleChildScrollView(
@@ -3892,7 +4426,7 @@ class _HomeScreenState extends State<HomeScreen>
               ),
             ),
 
-          // Year / semester dropdowns
+          // Year / semester + action buttons card
           Card(
             elevation: 4,
             shape: RoundedRectangleBorder(
@@ -3902,6 +4436,7 @@ class _HomeScreenState extends State<HomeScreen>
               padding: const EdgeInsets.all(18),
               child: Column(
                 children: [
+                  // Year / Semester dropdowns
                   Row(
                     children: [
                       Expanded(
@@ -3965,7 +4500,9 @@ class _HomeScreenState extends State<HomeScreen>
                       ),
                     ),
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 12),
+
+                  // ── DIVIDER ──
                   Row(
                     children: [
                       Expanded(child: Divider(color: Colors.grey.shade300)),
@@ -3982,138 +4519,23 @@ class _HomeScreenState extends State<HomeScreen>
                       Expanded(child: Divider(color: Colors.grey.shade300)),
                     ],
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 12),
 
-                  // Manual fields
-                  TextFormField(
-                    controller: _nameCtrl,
-                    textCapitalization: TextCapitalization.characters,
-                    decoration: InputDecoration(
-                      hintText: 'Course Code e.g MTH101',
-                      prefixIcon: const Icon(Icons.book),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    validator: (v) {
-                      if (v == null || v.trim().isEmpty)
-                        return 'Enter a course code';
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 14),
-                  // Score / Grade toggle + input
-                  Row(
-                    children: [
-                      const Text('Input Mode:', style: TextStyle(fontSize: 13)),
-                      const SizedBox(width: 10),
-                      _inputModeToggle(
-                        useGrade: _useGradeInput,
-                        onChanged: (v) => setState(() {
-                          _useGradeInput = v;
-                          _manualGrade = null;
-                          _scoreCtrl.clear();
-                          _formKey.currentState?.reset();
-                        }),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  if (_useGradeInput)
-                    DropdownButtonFormField<String>(
-                      value: _manualGrade,
-                      isExpanded: true,
-                      decoration: InputDecoration(
-                        hintText: 'Select Grade',
-                        prefixIcon: const Icon(Icons.grade),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      items:
-                          (() {
-                                // Sort: non-F grades by gradePoint descending, F always last
-                                final nonF =
-                                    grading.rules
-                                        .where((r) => r.grade != 'F')
-                                        .toList()
-                                      ..sort(
-                                        (a, b) => b.gradePoint.compareTo(
-                                          a.gradePoint,
-                                        ),
-                                      );
-                                final fRules = grading.rules
-                                    .where((r) => r.grade == 'F')
-                                    .toList();
-                                return [...nonF, ...fRules];
-                              })()
-                              .map(
-                                (r) => DropdownMenuItem(
-                                  value: r.grade,
-                                  child: Text(
-                                    '${r.grade}  — ${r.grade == 'F' ? 'Below ${grading.rules.firstWhere((x) => x.gradePoint > 0, orElse: () => r).minScore}' : '≥ ${r.minScore}'}'
-                                    '  (GP ${r.gradePoint.toStringAsFixed(1)})',
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              )
-                              .toList(),
-                      onChanged: (v) => setState(() => _manualGrade = v),
-                      validator: (v) => v == null ? 'Select a grade' : null,
-                    )
-                  else
-                    TextFormField(
-                      controller: _scoreCtrl,
-                      keyboardType: TextInputType.number,
-                      decoration: InputDecoration(
-                        hintText: 'Score (0–100)',
-                        prefixIcon: const Icon(Icons.numbers),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      validator: (v) {
-                        if (v == null || v.isEmpty) return 'Enter a score';
-                        final s = int.tryParse(v);
-                        if (s == null || s < 0 || s > 100)
-                          return 'Score must be 0–100';
-                        return null;
-                      },
-                    ),
-                  const SizedBox(height: 14),
-                  TextFormField(
-                    controller: _unitCtrl,
-                    keyboardType: TextInputType.number,
-                    decoration: InputDecoration(
-                      hintText: 'Credit Unit (e.g 3)',
-                      prefixIcon: const Icon(Icons.school),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    validator: (v) {
-                      if (v == null || v.isEmpty) return 'Enter credit units';
-                      final u = int.tryParse(v);
-                      if (u == null || u <= 0) return 'Units must be 1 or more';
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 20),
+                  // ── MANUAL BATCH ENTRY BUTTON ──
                   SizedBox(
                     width: double.infinity,
-                    height: 52,
-                    child: ElevatedButton(
-                      onPressed: _addCourse,
+                    height: 50,
+                    child: ElevatedButton.icon(
+                      onPressed: _showManualBatchEntry,
+                      icon: const Icon(Icons.table_rows_outlined),
+                      label: const Text('Enter Courses Manually'),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blue,
+                        backgroundColor: Colors.blue.shade700,
                         foregroundColor: Colors.white,
+                        elevation: 2,
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                      ),
-                      child: const Text(
-                        'Add Course',
-                        style: TextStyle(fontSize: 16),
                       ),
                     ),
                   ),
@@ -4122,6 +4544,7 @@ class _HomeScreenState extends State<HomeScreen>
             ),
           ),
           const SizedBox(height: 16),
+
           // Tool buttons
           Row(
             children: [
