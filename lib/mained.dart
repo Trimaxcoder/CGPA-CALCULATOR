@@ -25,6 +25,7 @@ void main() => runApp(const MyApp());
 
 class Course {
   String id;
+  String? serverId;
   String name;
   String title; // course title from JSON, empty if manual
   int score;
@@ -48,8 +49,20 @@ class Course {
     this.semester,
   );
 
+  // Add a factory to build from the server JSON response:
+  factory Course.fromServerMap(Map<String, dynamic> m) => Course.withId(
+    m['clientId'] as String? ?? '', // restore Flutter clientId
+    m['name'] as String? ?? '',
+    m['title'] as String? ?? '',
+    (m['score'] as num).toInt(),
+    (m['unit'] as num).toInt(),
+    (m['year'] as num).toInt(),
+    (m['semester'] as num).toInt(),
+  )..serverId = m['_id'] as String?;
+
   Map<String, dynamic> toMap() => {
     'id': id,
+    'serverId': serverId,
     'name': name,
     'title': title,
     'score': score,
@@ -58,16 +71,21 @@ class Course {
     'semester': semester,
   };
 
-  factory Course.fromMap(Map<String, dynamic> m) => Course.withId(
-    m['id'] ??
-        '${DateTime.now().microsecondsSinceEpoch}_${(m['name'] ?? '').hashCode}',
-    m['name'] ?? '',
-    m['title'] ?? '',
-    m['score'] ?? 0,
-    m['unit'] ?? 1,
-    m['year'] ?? 1,
-    m['semester'] ?? 1,
-  );
+  // Update fromMap() to restore serverId:
+  factory Course.fromMap(Map<String, dynamic> m) {
+    final c = Course.withId(
+      m['id'] ??
+          '${DateTime.now().microsecondsSinceEpoch}_${(m['name'] ?? '').hashCode}',
+      m['name'] ?? '',
+      m['title'] ?? '',
+      m['score'] ?? 0,
+      m['unit'] ?? 1,
+      m['year'] ?? 1,
+      m['semester'] ?? 1,
+    );
+    c.serverId = m['serverId'] as String?;
+    return c;
+  }
 }
 
 class StudentProfile {
@@ -181,11 +199,24 @@ class _SplashScreenState extends State<SplashScreen>
     Future.delayed(const Duration(seconds: 2), () async {
       if (!mounted) return;
       final prefs = await SharedPreferences.getInstance();
-      final has = (prefs.getString('profile') ?? '').isNotEmpty;
+      final hasProf = (prefs.getString('profile') ?? '').isNotEmpty;
+
+      if (hasProf) {
+        // Try silent login with stored tokens
+        try {
+          await AuthService().getMe(); // validates token
+        } on UnauthorizedException {
+          // Token expired → attempt re-login with saved credentials
+          // (If you store password: attempt; otherwise just continue offline)
+        } catch (_) {
+          // Offline — proceed to HomeScreen with local data
+        }
+      }
+
       if (!mounted) return;
-      Navigator.of(
-        context,
-      ).pushReplacement(_fade_(has ? const HomeScreen() : const LoginScreen()));
+      Navigator.of(context).pushReplacement(
+        _fade_(hasProf ? const HomeScreen() : const LandingPage()),
+      );
     });
   }
 
@@ -208,7 +239,7 @@ class _SplashScreenState extends State<SplashScreen>
               _iconCircle(Icons.school, 110, 60),
               const SizedBox(height: 28),
               const Text(
-                'CGPA Calculator',
+                'Gradex',
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: 28,
@@ -240,6 +271,456 @@ class _SplashScreenState extends State<SplashScreen>
         ),
       ),
     ),
+  );
+}
+
+// ══════════════════════════════════════════════════════════
+//  LANDING PAGE
+// ══════════════════════════════════════════════════════════
+
+class LandingPage extends StatefulWidget {
+  const LandingPage({super.key});
+  @override
+  State<LandingPage> createState() => _LandingPageState();
+}
+
+class _LandingPageState extends State<LandingPage>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double> _fade;
+  late Animation<Offset> _slide;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    );
+    _fade = Tween<double>(begin: 0, end: 1)
+        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
+    _slide = Tween<Offset>(begin: const Offset(0, 0.08), end: Offset.zero)
+        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOutCubic));
+    _ctrl.forward();
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    body: _gradientBox(
+      child: SafeArea(
+        child: FadeTransition(
+          opacity: _fade,
+          child: SlideTransition(
+            position: _slide,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 28),
+              child: Column(
+                children: [
+                  const Spacer(flex: 2),
+
+                  // Logo + app name
+                  _iconCircle(Icons.school, 110, 60),
+                  const SizedBox(height: 28),
+                  const Text(
+                    'Gradex',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 30,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 0.8,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Feature pills
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    alignment: WrapAlignment.center,
+                    children: [
+                      _featurePill(Icons.track_changes_outlined, 'Track CGPA'),
+                      _featurePill(Icons.science_outlined, 'What-If Sim'),
+                      _featurePill(Icons.picture_as_pdf_outlined, 'PDF Export'),
+                      _featurePill(Icons.show_chart, 'GPA Trends'),
+                    ],
+                  ),
+
+                  const Spacer(flex: 3),
+
+                  // CTA buttons
+                  SizedBox(
+                    width: double.infinity,
+                    height: 54,
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.of(context).push(
+                        _fade_(const SignInScreen()),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        foregroundColor: Colors.blue.shade800,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                      child: const Text(
+                        'Sign In',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 54,
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.of(context).push(
+                        _fade_(const LoginScreen()),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.white,
+                        side: const BorderSide(color: Colors.white54, width: 1.5),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                      child: const Text(
+                        'Create Account',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 32),
+                  const Text(
+                    'Developed by TRIMAX',
+                    style: TextStyle(color: Colors.white38, fontSize: 13),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+
+  Widget _featurePill(IconData icon, String label) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+    decoration: BoxDecoration(
+      color: Colors.white.withOpacity(0.12),
+      borderRadius: BorderRadius.circular(20),
+      border: Border.all(color: Colors.white.withOpacity(0.2)),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, color: Colors.white70, size: 15),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: const TextStyle(color: Colors.white70, fontSize: 13),
+        ),
+      ],
+    ),
+  );
+}
+
+// ══════════════════════════════════════════════════════════
+//  SIGN IN SCREEN
+// ══════════════════════════════════════════════════════════
+
+class SignInScreen extends StatefulWidget {
+  const SignInScreen({super.key});
+  @override
+  State<SignInScreen> createState() => _SignInScreenState();
+}
+
+class _SignInScreenState extends State<SignInScreen> {
+  final _fk = GlobalKey<FormState>();
+  final _emailC = TextEditingController();
+  final _passC = TextEditingController();
+
+  bool _loading = false;
+  bool _obscure = true;
+  String? _errorMsg;
+
+  @override
+  void dispose() {
+    _emailC.dispose();
+    _passC.dispose();
+    super.dispose();
+  }
+
+  Future<void> _signIn() async {
+    if (!_fk.currentState!.validate()) return;
+    setState(() {
+      _loading = true;
+      _errorMsg = null;
+    });
+
+    try {
+      // Call your existing API service
+      await AuthService().login(
+        email: _emailC.text.trim(),
+        password: _passC.text.trim(),
+      );
+
+      // Pull profile from server and cache it locally
+      final userData = await AuthService().getMe();
+      if (userData['profile'] != null) {
+        final profile = StudentProfile.fromMap(
+          Map<String, dynamic>.from(userData['profile'] as Map),
+        );
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('profile', jsonEncode(profile.toMap()));
+      }
+
+      if (!mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+        _fade_(const HomeScreen()),
+        (_) => false,
+      );
+    } on UnauthorizedException {
+      setState(() => _errorMsg = 'Incorrect email or password.');
+    } on ApiException catch (e) {
+      setState(() => _errorMsg = e.message);
+    } catch (_) {
+      // Offline fallback — check if we have a locally saved profile
+      final prefs = await SharedPreferences.getInstance();
+      final saved = prefs.getString('profile') ?? '';
+      if (saved.isNotEmpty && mounted) {
+        Navigator.of(context).pushAndRemoveUntil(
+          _fade_(const HomeScreen()),
+          (_) => false,
+        );
+      } else {
+        setState(
+          () => _errorMsg = 'Could not connect. Check your internet connection.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    body: _gradientBox(
+      child: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(26, 24, 26, 40),
+          child: Form(
+            key: _fk,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Back button
+                IconButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white70),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+                const SizedBox(height: 32),
+
+                // Header
+                _iconCircle(Icons.lock_outline_rounded, 76, 38),
+                const SizedBox(height: 20),
+                const Text(
+                  'Welcome back',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 26,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  'Sign in to continue',
+                  style: TextStyle(color: Colors.white60, fontSize: 14),
+                ),
+                const SizedBox(height: 36),
+
+                // Email field
+                TextFormField(
+                  controller: _emailC,
+                  keyboardType: TextInputType.emailAddress,
+                  style: const TextStyle(color: Colors.white),
+                  validator: (v) {
+                    if (v == null || v.trim().isEmpty) return 'Email is required';
+                    if (!v.trim().contains('@')) return 'Enter a valid email';
+                    return null;
+                  },
+                  decoration: _dec('Email Address', Icons.email_outlined),
+                ),
+                const SizedBox(height: 16),
+
+                // Password field
+                TextFormField(
+                  controller: _passC,
+                  obscureText: _obscure,
+                  style: const TextStyle(color: Colors.white),
+                  validator: (v) {
+                    if (v == null || v.trim().isEmpty) return 'Password is required';
+                    if (v.trim().length < 4) return 'Password too short';
+                    return null;
+                  },
+                  decoration: _dec(
+                    'Password',
+                    Icons.lock_outline,
+                  ).copyWith(
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _obscure ? Icons.visibility_off : Icons.visibility,
+                        color: Colors.blue.shade300,
+                      ),
+                      onPressed: () => setState(() => _obscure = !_obscure),
+                    ),
+                  ),
+                ),
+
+                // Error message
+                if (_errorMsg != null) ...[
+                  const SizedBox(height: 14),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.red.withOpacity(0.4)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.error_outline, color: Colors.redAccent, size: 18),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _errorMsg!,
+                            style: const TextStyle(
+                              color: Colors.redAccent,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+
+                const SizedBox(height: 32),
+
+                // Sign In button
+                SizedBox(
+                  width: double.infinity,
+                  height: 54,
+                  child: ElevatedButton(
+                    onPressed: _loading ? null : _signIn,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: Colors.blue.shade800,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      disabledBackgroundColor: Colors.white38,
+                    ),
+                    child: _loading
+                        ? SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.5,
+                              color: Colors.blue.shade700,
+                            ),
+                          )
+                        : const Text(
+                            'Sign In',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                  ),
+                ),
+                const SizedBox(height: 28),
+
+                // Register link
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Text(
+                      "Don't have an account? ",
+                      style: TextStyle(color: Colors.white60, fontSize: 14),
+                    ),
+                    GestureDetector(
+                      onTap: () => Navigator.of(context).pushReplacement(
+                        _fade_(const LoginScreen()),
+                      ),
+                      child: Text(
+                        'Create one',
+                        style: TextStyle(
+                          color: Colors.blue.shade200,
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          decoration: TextDecoration.underline,
+                          decorationColor: Colors.blue.shade200,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+
+  InputDecoration _dec(String label, IconData icon) => InputDecoration(
+    labelText: label,
+    prefixIcon: Icon(icon, color: Colors.blue.shade300),
+    filled: true,
+    fillColor: Colors.white.withOpacity(0.08),
+    labelStyle: const TextStyle(color: Colors.white70),
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(14),
+      borderSide: const BorderSide(color: Colors.white24),
+    ),
+    enabledBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(14),
+      borderSide: const BorderSide(color: Colors.white24),
+    ),
+    focusedBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(14),
+      borderSide: BorderSide(color: Colors.blue.shade300, width: 2),
+    ),
+    errorBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(14),
+      borderSide: const BorderSide(color: Colors.redAccent),
+    ),
+    focusedErrorBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(14),
+      borderSide: const BorderSide(color: Colors.redAccent, width: 2),
+    ),
+    errorStyle: const TextStyle(color: Colors.redAccent),
   );
 }
 
@@ -283,16 +764,53 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _submit() async {
     if (!_fk.currentState!.validate()) return;
     setState(() => _loading = true);
+
+    final profileData = {
+      'name': _nameC.text.trim(),
+      'email': _emailC.text.trim(),
+      'matricNumber': _matricC.text.trim(),
+      'school': _schoolC.text.trim(),
+      'faculty': _facC.text.trim(),
+      'department': _deptC.text.trim(),
+    };
+
+    // ── Save locally first (instant, works offline) ──────────────────────────
     final profile = StudentProfile(
-      name: _nameC.text.trim(),
-      email: _emailC.text.trim(),
-      matricNumber: _matricC.text.trim(),
-      school: _schoolC.text.trim(),
-      faculty: _facC.text.trim(),
-      department: _deptC.text.trim(),
+      name: profileData['name']!,
+      email: profileData['email']!,
+      matricNumber: profileData['matricNumber']!,
+      school: profileData['school']!,
+      faculty: profileData['faculty']!,
+      department: profileData['department']!,
     );
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('profile', jsonEncode(profile.toMap()));
+
+    // ── Register on server (show error but don't block if offline) ───────────
+    try {
+      // Use matric number as password (user can change later in settings)
+      // OR prompt for a password field in your login form
+      await AuthService().register(
+        email: profileData['email']!,
+        password: _matricC.text.trim(), // default password = matric number
+        profile: profileData,
+      );
+    } on ApiException catch (e) {
+      // 409 = already registered, that's fine
+      if (e.statusCode != 409) {
+        debugPrint('Server register warning: ${e.message}');
+      }
+      // Try logging in if already exists
+      try {
+        await AuthService().login(
+          email: profileData['email']!,
+          password: _matricC.text.trim(),
+        );
+      } catch (_) {}
+    } catch (_) {
+      // Offline — app works locally, will sync on next launch
+    }
+
     if (!mounted) return;
     setState(() => _loading = false);
     Navigator.of(context).pushReplacement(
@@ -819,25 +1337,103 @@ class _HomeScreenState extends State<HomeScreen>
   Future<void> _loadData() async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getStringList('courses');
-    if (raw != null)
+    if (raw != null) {
       courses = raw.map((e) => Course.fromMap(jsonDecode(e))).toList();
+    }
     final pd = prefs.getString('profile');
     if (pd != null) profile = StudentProfile.fromMap(jsonDecode(pd));
     final gd = prefs.getString('grading');
     if (gd != null) grading = GradingModel.fromJson(gd);
+
+    // ── Always default to 5.0 scale if no rules saved ──
+    if (grading.rules.isEmpty) {
+      grading = GradingModel.defaultNigerian5();
+      await prefs.setString('grading', grading.toJson());
+    }
+
     setState(() {});
+    _syncWithServer();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_pageCtrl.hasClients) _pageCtrl.jumpToPage(currentPage);
     });
   }
 
+  Future<void> _syncWithServer() async {
+    try {
+      final localList = courses.map((c) => c.toMap()).toList();
+
+      final serverCourses = await CourseService().syncCourses(localList);
+
+      // Convert server response to Course objects
+      final merged = serverCourses.map((m) => Course.fromServerMap(m)).toList();
+      setState(() => courses = merged);
+      await _saveCourses();
+
+      // Also sync profile/grading
+      final userData = await AuthService().getMe();
+      if (userData['profile'] != null) {
+        profile = StudentProfile.fromMap(
+          Map<String, dynamic>.from(userData['profile'] as Map),
+        );
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('profile', jsonEncode(profile.toMap()));
+      }
+      if (userData['grading'] != null) {
+        final gData = Map<String, dynamic>.from(userData['grading'] as Map);
+        if (gData['rules'] != null) {
+          final tempGrading = GradingModel.fromJson(jsonEncode(gData));
+          // Only use server grading if it actually has rules
+          if (tempGrading.rules.isNotEmpty) {
+            grading = tempGrading;
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setString('grading', grading.toJson());
+          } else {
+            // Server has empty rules — keep/save the default 5.0 scale
+            if (grading.rules.isEmpty) {
+              grading = GradingModel.defaultNigerian5();
+            }
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setString('grading', grading.toJson());
+            // Also push default rules to server so it's saved there too
+            ProfileService()
+                .updateGrading(
+                  grading.rules
+                      .map(
+                        (r) => {
+                          'grade': r.grade,
+                          'minScore': r.minScore,
+                          'gradePoint': r.gradePoint,
+                        },
+                      )
+                      .toList(),
+                )
+                .catchError((e) => debugPrint('Grading sync failed: $e'));
+          }
+        }
+      }
+      setState(() {});
+    } on UnauthorizedException {
+      // Session expired — navigate to login
+      if (mounted) {
+        Navigator.of(
+          context,
+        ).pushAndRemoveUntil(_fade_(const LoginScreen()), (_) => false);
+      }
+    } catch (e) {
+      debugPrint('Sync skipped (offline?): $e');
+    }
+  }
+
   Future<void> _saveCourses() async {
+    // Always save locally first
     final prefs = await SharedPreferences.getInstance();
     await prefs.setStringList(
       'courses',
       courses.map((e) => jsonEncode(e.toMap())).toList(),
     );
   }
+  // Note: individual add/edit/delete methods call the API directly (see §7–9).
+  // _saveCourses() stays as local-only cache update.
 
   Future<void> _saveProfile() async {
     final prefs = await SharedPreferences.getInstance();
@@ -915,6 +1511,7 @@ class _HomeScreenState extends State<HomeScreen>
     } else {
       score = int.parse(_scoreCtrl.text.trim());
     }
+    final wasEditing = _editingCourse;
     setState(() {
       courses.add(Course(name, '', score, unit, _selYear, _selSem));
       _editingCourse = null;
@@ -922,6 +1519,54 @@ class _HomeScreenState extends State<HomeScreen>
     });
     _pageCtrl.jumpToPage(currentPage);
     _saveCourses();
+    if (wasEditing?.serverId != null) {
+      // It was an edit — update on server
+      CourseService()
+          .updateCourse(
+            id: wasEditing!.serverId!,
+            name: name,
+            title: '',
+            score: score,
+            unit: unit,
+            year: _selYear,
+            semester: _selSem,
+          )
+          .catchError((e) => debugPrint('Server update failed: $e'));
+    } else {
+      // It was a new course — add on server
+      CourseService()
+          .addCourse(
+            name: name,
+            title: '',
+            score: score,
+            unit: unit,
+            year: _selYear,
+            semester: _selSem,
+            clientId: courses.last.id,
+          )
+          .then((serverCourse) {
+            debugPrint('Course saved on server: ${serverCourse['_id']}');
+          })
+          .catchError((e) {
+            debugPrint('Server save failed (will sync later): $e');
+          });
+    }
+    CourseService()
+        .addCourse(
+          name: name,
+          title: '',
+          score: score,
+          unit: unit,
+          year: _selYear,
+          semester: _selSem,
+          clientId: courses.last.id,
+        )
+        .then((serverCourse) {
+          debugPrint('Course saved on server: ${serverCourse['_id']}');
+        })
+        .catchError((e) {
+          debugPrint('Server save failed (will sync later): $e');
+        });
     _nameCtrl.clear();
     _scoreCtrl.clear();
     _unitCtrl.clear();
@@ -1537,6 +2182,11 @@ class _HomeScreenState extends State<HomeScreen>
       _lastDeletedIndex = idx;
     });
     _saveCourses();
+    if (c.serverId != null) {
+      CourseService()
+          .deleteCourse(c.serverId!)
+          .catchError((e) => debugPrint('Server delete failed: $e'));
+    }
     if (!mounted) return;
     ScaffoldMessenger.of(context).clearSnackBars();
     ScaffoldMessenger.of(context).showSnackBar(
@@ -1583,10 +2233,17 @@ class _HomeScreenState extends State<HomeScreen>
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove('courses');
       if (_pageCtrl.hasClients) _pageCtrl.jumpToPage(0);
-      if (mounted)
+
+      // Also clear on server
+      CourseService().deleteAllCourses().catchError(
+        (e) => debugPrint('Server clear failed: $e'),
+      );
+
+      if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(const SnackBar(content: Text('All courses cleared')));
+      }
     }
   }
 
@@ -1598,6 +2255,11 @@ class _HomeScreenState extends State<HomeScreen>
       destructive: true,
     );
     if (ok) {
+      // Delete from server first
+      try {
+        await ProfileService().deleteAccount();
+      } catch (_) {}
+
       final prefs = await SharedPreferences.getInstance();
       await prefs.clear();
       if (!mounted) return;
@@ -2947,6 +3609,23 @@ class _HomeScreenState extends State<HomeScreen>
                           setState(() => grading = preset);
                           _saveGrading();
                           Navigator.pop(ctx);
+                          ProfileService()
+                              .updateGrading(
+                                grading.rules
+                                    .map(
+                                      (r) => {
+                                        'grade': r.grade,
+                                        'minScore': r.minScore,
+                                        'gradePoint': r.gradePoint,
+                                      },
+                                    )
+                                    .toList(),
+                              )
+                              .catchError(
+                                (e) => debugPrint(
+                                  'Grading server save failed: $e',
+                                ),
+                              );
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
                               content: Text('4.0 scale preset applied'),
@@ -3638,23 +4317,33 @@ class _HomeScreenState extends State<HomeScreen>
                 backgroundColor: Colors.blue,
                 foregroundColor: Colors.white,
               ),
-              onPressed: () {
+              onPressed: () async {
                 if (!fk.currentState!.validate()) return;
-                setState(
-                  () => profile = StudentProfile(
-                    name: nameC.text.trim(),
-                    email: emailC.text.trim(),
-                    matricNumber: matricC.text.trim(),
-                    school: schoolC.text.trim(),
-                    faculty: facC.text.trim(),
-                    department: deptC.text.trim(),
-                  ),
+                final updated = StudentProfile(
+                  name: nameC.text.trim(),
+                  email: emailC.text.trim(),
+                  matricNumber: matricC.text.trim(),
+                  school: schoolC.text.trim(),
+                  faculty: facC.text.trim(),
+                  department: deptC.text.trim(),
                 );
+                setState(() => profile = updated);
                 _saveProfile();
                 Navigator.pop(ctx);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Profile updated ✓')),
-                );
+
+                // Push to server in background
+                ProfileService()
+                    .updateProfile(updated.toMap())
+                    .then((_) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Profile updated ✓')),
+                      );
+                    })
+                    .catchError((e) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Saved locally. Server: $e')),
+                      );
+                    });
               },
               child: const Text('Save'),
             ),
@@ -3739,11 +4428,11 @@ class _HomeScreenState extends State<HomeScreen>
             child: LineChart(
               LineChartData(
                 minY: 0,
-                maxY: maxGP,
+                maxY: maxGP > 0 ? maxGP : 5,
                 gridData: FlGridData(
                   show: true,
                   drawVerticalLine: false,
-                  horizontalInterval: maxGP / 5,
+                  horizontalInterval: maxGP > 0 ? maxGP / 5 : 1,
                   getDrawingHorizontalLine: (v) => FlLine(
                     color: Colors.grey.withOpacity(0.2),
                     strokeWidth: 1,
@@ -3754,7 +4443,7 @@ class _HomeScreenState extends State<HomeScreen>
                     sideTitles: SideTitles(
                       showTitles: true,
                       reservedSize: 36,
-                      interval: maxGP / 5,
+                      interval: maxGP > 0 ? maxGP / 5 : 1,
                       getTitlesWidget: (v, _) => Text(
                         v.toStringAsFixed(1),
                         style: const TextStyle(fontSize: 10),
