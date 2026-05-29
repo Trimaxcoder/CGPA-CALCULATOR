@@ -1,9 +1,4 @@
 // lib/services/api_service.dart
-//
-// Drop this file into your Flutter project at lib/services/api_service.dart
-// Add to pubspec.yaml dependencies:
-//   http: ^1.2.1
-//   shared_preferences: ^2.2.3   (already in your project)
 
 import 'dart:convert';
 import 'dart:io';
@@ -15,13 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 // ─────────────────────────────────────────────────────────────────────────────
 
 class ApiConfig {
-  // Change this to your server IP/domain.
-  // Android emulator   → http://10.0.2.2:5000
-  // iOS simulator      → http://127.0.0.1:5000
-  // Physical device    → http://<your-PC-LAN-IP>:5000
-  // Production         → https://your-domain.com
   static const String baseUrl = 'https://gradexbackend.onrender.com/api';
-
   static const Duration timeout = Duration(seconds: 15);
 }
 
@@ -48,7 +37,7 @@ class UnauthorizedException extends ApiException {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class TokenStorage {
-  static const _accessKey = 'access_token';
+  static const _accessKey  = 'access_token';
   static const _refreshKey = 'refresh_token';
 
   static Future<void> saveTokens({
@@ -56,7 +45,7 @@ class TokenStorage {
     required String refreshToken,
   }) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_accessKey, accessToken);
+    await prefs.setString(_accessKey,  accessToken);
     await prefs.setString(_refreshKey, refreshToken);
   }
 
@@ -83,7 +72,7 @@ class TokenStorage {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  BASE HTTP CLIENT (handles auth headers + token refresh)
+//  BASE HTTP CLIENT
 // ─────────────────────────────────────────────────────────────────────────────
 
 class ApiClient {
@@ -94,7 +83,7 @@ class ApiClient {
   Future<Map<String, String>> _headers({bool requiresAuth = true}) async {
     final headers = <String, String>{
       'Content-Type': 'application/json',
-      'Accept': 'application/json',
+      'Accept':       'application/json',
     };
     if (requiresAuth) {
       final token = await TokenStorage.getAccessToken();
@@ -103,7 +92,6 @@ class ApiClient {
     return headers;
   }
 
-  /// Parses the response, throws on non-2xx, automatically refreshes on 401.
   Future<Map<String, dynamic>> _handleResponse(
     http.Response response, {
     Future<http.Response> Function()? retryRequest,
@@ -114,12 +102,11 @@ class ApiClient {
       return body;
     }
 
-    // 401 → attempt token refresh then retry once
     if (response.statusCode == 401 && retryRequest != null) {
       final refreshed = await _tryRefreshToken();
       if (refreshed) {
-        final retried = await retryRequest();
-        final retryBody = jsonDecode(retried.body) as Map<String, dynamic>;
+        final retried     = await retryRequest();
+        final retryBody   = jsonDecode(retried.body) as Map<String, dynamic>;
         if (retried.statusCode >= 200 && retried.statusCode < 300) {
           return retryBody;
         }
@@ -148,7 +135,7 @@ class ApiClient {
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
         await TokenStorage.saveTokens(
-          accessToken: data['accessToken'] as String,
+          accessToken:  data['accessToken']  as String,
           refreshToken: data['refreshToken'] as String,
         );
         return true;
@@ -157,15 +144,12 @@ class ApiClient {
     return false;
   }
 
-  // ── GET ───────────────────────────────────────────────────────────────────
   Future<Map<String, dynamic>> get(String path) async {
-    final uri = Uri.parse('${ApiConfig.baseUrl}$path');
+    final uri     = Uri.parse('${ApiConfig.baseUrl}$path');
     final headers = await _headers();
     late http.Response response;
     try {
-      response = await http
-          .get(uri, headers: headers)
-          .timeout(ApiConfig.timeout);
+      response = await http.get(uri, headers: headers).timeout(ApiConfig.timeout);
     } on SocketException {
       throw const ApiException('No internet connection.');
     } on HttpException {
@@ -180,13 +164,12 @@ class ApiClient {
     );
   }
 
-  // ── POST ──────────────────────────────────────────────────────────────────
   Future<Map<String, dynamic>> post(
     String path,
     Map<String, dynamic> body, {
     bool requiresAuth = true,
   }) async {
-    final uri = Uri.parse('${ApiConfig.baseUrl}$path');
+    final uri     = Uri.parse('${ApiConfig.baseUrl}$path');
     final headers = await _headers(requiresAuth: requiresAuth);
     late http.Response response;
     try {
@@ -211,12 +194,11 @@ class ApiClient {
     );
   }
 
-  // ── PUT ───────────────────────────────────────────────────────────────────
   Future<Map<String, dynamic>> put(
     String path,
     Map<String, dynamic> body,
   ) async {
-    final uri = Uri.parse('${ApiConfig.baseUrl}$path');
+    final uri     = Uri.parse('${ApiConfig.baseUrl}$path');
     final headers = await _headers();
     late http.Response response;
     try {
@@ -239,15 +221,12 @@ class ApiClient {
     );
   }
 
-  // ── DELETE ────────────────────────────────────────────────────────────────
   Future<Map<String, dynamic>> delete(String path) async {
-    final uri = Uri.parse('${ApiConfig.baseUrl}$path');
+    final uri     = Uri.parse('${ApiConfig.baseUrl}$path');
     final headers = await _headers();
     late http.Response response;
     try {
-      response = await http
-          .delete(uri, headers: headers)
-          .timeout(ApiConfig.timeout);
+      response = await http.delete(uri, headers: headers).timeout(ApiConfig.timeout);
     } on SocketException {
       throw const ApiException('No internet connection.');
     } on HttpException {
@@ -271,7 +250,6 @@ class AuthService {
   final _client = ApiClient();
 
   /// Register a new user.
-  /// [profile] matches your Flutter StudentProfile fields.
   Future<Map<String, dynamic>> register({
     required String email,
     required String password,
@@ -279,35 +257,35 @@ class AuthService {
     Map<String, dynamic>? grading,
   }) async {
     final data = await _client.post('/auth/register', {
-      'email': email,
+      'email':    email,
       'password': password,
-      'profile': profile,
+      'profile':  profile,
       if (grading != null) 'grading': grading,
     }, requiresAuth: false);
     await TokenStorage.saveTokens(
-      accessToken: data['accessToken'] as String,
+      accessToken:  data['accessToken']  as String,
       refreshToken: data['refreshToken'] as String,
     );
     return data['user'] as Map<String, dynamic>;
   }
 
-  /// Log in an existing user.
+  /// Log in with email and password.
   Future<Map<String, dynamic>> login({
     required String email,
     required String password,
   }) async {
     final data = await _client.post('/auth/login', {
-      'email': email,
+      'email':    email,
       'password': password,
     }, requiresAuth: false);
     await TokenStorage.saveTokens(
-      accessToken: data['accessToken'] as String,
+      accessToken:  data['accessToken']  as String,
       refreshToken: data['refreshToken'] as String,
     );
     return data['user'] as Map<String, dynamic>;
   }
 
-  /// Log out (invalidates refresh token on server).
+  /// Log out.
   Future<void> logout() async {
     try {
       await _client.post('/auth/logout', {});
@@ -323,6 +301,47 @@ class AuthService {
 
   /// True if the device has a stored access token.
   Future<bool> isLoggedIn() => TokenStorage.hasTokens();
+
+  // ── Forgot password ────────────────────────────────────────────────────────
+  /// Sends a password reset email to [email].
+  Future<void> forgotPassword({required String email}) async {
+    await _client.post(
+      '/auth/forgot-password',
+      {'email': email},
+      requiresAuth: false,
+    );
+  }
+
+  // ── Reset password ─────────────────────────────────────────────────────────
+  /// Resets the password using the [token] from the email link
+  /// and the user's chosen [newPassword].
+  Future<void> resetPassword({
+    required String token,
+    required String newPassword,
+  }) async {
+    await _client.post(
+      '/auth/reset-password',
+      {'token': token, 'newPassword': newPassword},
+      requiresAuth: false,
+    );
+  }
+
+  // ── Google Sign-In ─────────────────────────────────────────────────────────
+  /// Sends the Google [idToken] to your backend and saves the returned tokens.
+  Future<Map<String, dynamic>> loginWithGoogle({
+    required String idToken,
+  }) async {
+    final data = await _client.post(
+      '/auth/google',
+      {'idToken': idToken},
+      requiresAuth: false,
+    );
+    await TokenStorage.saveTokens(
+      accessToken:  data['accessToken']  as String,
+      refreshToken: data['refreshToken'] as String,
+    );
+    return data['user'] as Map<String, dynamic>;
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -357,7 +376,7 @@ class ProfileService {
   }) async {
     await _client.put('/profile/change-password', {
       'currentPassword': currentPassword,
-      'newPassword': newPassword,
+      'newPassword':     newPassword,
     });
   }
 
@@ -374,22 +393,19 @@ class ProfileService {
 class CourseService {
   final _client = ApiClient();
 
-  /// Fetch all courses, optionally filtered by year and/or semester.
   Future<List<Map<String, dynamic>>> getCourses({
     int? year,
     int? semester,
   }) async {
     var path = '/courses';
     final params = <String>[];
-    if (year != null) params.add('year=$year');
+    if (year     != null) params.add('year=$year');
     if (semester != null) params.add('semester=$semester');
     if (params.isNotEmpty) path += '?${params.join('&')}';
-
     final data = await _client.get(path);
     return List<Map<String, dynamic>>.from(data['courses'] as List);
   }
 
-  /// Add a single course. Returns the saved course map (with MongoDB _id).
   Future<Map<String, dynamic>> addCourse({
     required String name,
     String title = '',
@@ -400,18 +416,17 @@ class CourseService {
     String clientId = '',
   }) async {
     final data = await _client.post('/courses', {
-      'name': name,
-      'title': title,
-      'score': score,
-      'unit': unit,
-      'year': year,
+      'name':     name,
+      'title':    title,
+      'score':    score,
+      'unit':     unit,
+      'year':     year,
       'semester': semester,
       'clientId': clientId,
     });
     return data['course'] as Map<String, dynamic>;
   }
 
-  /// Update a course by its MongoDB _id.
   Future<Map<String, dynamic>> updateCourse({
     required String id,
     required String name,
@@ -422,29 +437,25 @@ class CourseService {
     required int semester,
   }) async {
     final data = await _client.put('/courses/$id', {
-      'name': name,
-      'title': title,
-      'score': score,
-      'unit': unit,
-      'year': year,
+      'name':     name,
+      'title':    title,
+      'score':    score,
+      'unit':     unit,
+      'year':     year,
       'semester': semester,
     });
     return data['course'] as Map<String, dynamic>;
   }
 
-  /// Delete a course by its MongoDB _id.
   Future<void> deleteCourse(String id) async {
     await _client.delete('/courses/$id');
   }
 
-  /// Delete ALL courses for the current user.
   Future<int> deleteAllCourses() async {
     final data = await _client.delete('/courses');
     return (data['deleted'] as int?) ?? 0;
   }
 
-  /// Sync local Flutter courses to the server.
-  /// Returns the authoritative merged list from the server.
   Future<List<Map<String, dynamic>>> syncCourses(
     List<Map<String, dynamic>> localCourses,
   ) async {

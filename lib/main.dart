@@ -12,6 +12,9 @@ import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import 'dart:ui' as ui;
 import 'package:flutter/rendering.dart';
+import 'package:local_auth/local_auth.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import 'services/biometric_service.dart';
 
 import 'grading_model.dart';
 import 'uniport_courses.dart';
@@ -394,25 +397,39 @@ class _SplashScreenState extends State<SplashScreen>
     ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOutBack));
     _ctrl.forward();
     Future.delayed(const Duration(seconds: 2), () async {
-      if (!mounted) return;
-      final prefs = await SharedPreferences.getInstance();
-      final hasProf = (prefs.getString('profile') ?? '').isNotEmpty;
+  if (!mounted) return;
 
-      if (hasProf) {
-        try {
-          await AuthService().getMe();
-        } on UnauthorizedException {
-          // token expired
-        } catch (_) {
-          // offline
-        }
-      }
+  final prefs = await SharedPreferences.getInstance();
+  final hasProfile = (prefs.getString('profile') ?? '').isNotEmpty;
+  final hasToken = (await TokenStorage.getAccessToken() ?? '').isNotEmpty;
 
-      if (!mounted) return;
-      Navigator.of(context).pushReplacement(
-        _fade_(hasProf ? const HomeScreen() : const LandingPage()),
-      );
-    });
+  // First time opening the app
+  if (!hasProfile && !hasToken) {
+    if (!mounted) return;
+    Navigator.of(context).pushReplacement(_fade_(const LandingPage()));
+    return;
+  }
+
+  // Returning user — verify token is still valid
+  bool tokenValid = false;
+  if (hasToken) {
+    try {
+      await AuthService().getMe();
+      tokenValid = true;
+    } on UnauthorizedException {
+      await TokenStorage.clearTokens(); // wipe expired tokens
+      tokenValid = false;
+    } catch (_) {
+      // offline — trust cached profile
+      tokenValid = hasProfile;
+    }
+  }
+
+  if (!mounted) return;
+  Navigator.of(context).pushReplacement(
+    _fade_(tokenValid ? const HomeScreen() : const SignInScreen()),
+  );
+});
   }
 
   @override
@@ -628,19 +645,46 @@ class _LandingPageState extends State<LandingPage>
   );
 
   Future<void> _handleGoogleSignIn(BuildContext context) async {
-    // TODO: Integrate google_sign_in package and your backend Google OAuth endpoint.
-    // Example flow:
-    //   final googleUser = await GoogleSignIn().signIn();
-    //   final googleAuth = await googleUser?.authentication;
-    //   final idToken = googleAuth?.idToken;
-    //   await AuthService().loginWithGoogle(idToken: idToken!);
-    //   Navigator.pushAndRemoveUntil(...HomeScreen...)
-    //
-    // For now, show an informational snackbar.
-    AppSnackBar.showInfo(
-      context,
-      'Google Sign-In: connect your backend OAuth endpoint.',
-    );
+    try {
+      final googleSignIn = GoogleSignIn(scopes: ['email', 'profile']);
+
+      await googleSignIn.signOut();
+
+      final googleUser = await googleSignIn.signIn();
+
+      if (googleUser == null) return;
+
+      final googleAuth = await googleUser.authentication;
+      final idToken = googleAuth.idToken;
+
+      if (idToken == null) {
+        AppSnackBar.showError(context, 'Google sign-in failed. Try again.');
+        return;
+      }
+
+      final userData = await AuthService().loginWithGoogle(idToken: idToken);
+
+      if (userData['profile'] != null) {
+        final profile = StudentProfile.fromMap(
+          Map<String, dynamic>.from(userData['profile'] as Map),
+        );
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('profile', jsonEncode(profile.toMap()));
+      }
+
+      if (!context.mounted) return;
+      Navigator.of(
+        context,
+      ).pushAndRemoveUntil(_fade_(const HomeScreen()), (_) => false);
+    } on ApiException catch (e) {
+      print("=== API ERROR: ${e.message}");
+      if (mounted) AppSnackBar.showError(context, e.message);
+    } catch (e, stack) {
+      print("=== GOOGLE ERROR: $e");
+      print("=== STACK: $stack");
+      if (mounted)
+        AppSnackBar.showError(context, 'Google sign-in failed. Try again.');
+    }
   }
 
   Widget _featurePill(IconData icon, String label) => Container(
@@ -756,8 +800,13 @@ class _GoogleLogoPainter extends CustomPainter {
 }
 
 // ══════════════════════════════════════════════════════════
-//  SIGN IN SCREEN
+//  SIGN IN SCREEN  (with biometric support)
 // ══════════════════════════════════════════════════════════
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  UPDATED SignInScreen
+//  Replace the entire _SignInScreenState class in your main.dart
+// ══════════════════════════════════════════════════════════════════════════════
 
 class SignInScreen extends StatefulWidget {
   const SignInScreen({super.key});
@@ -772,7 +821,25 @@ class _SignInScreenState extends State<SignInScreen> {
 
   bool _loading = false;
   bool _obscure = true;
+  bool _bioAvailable = false;
+  bool _bioEnabled = false;
   String? _errorMsg;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkBiometrics();
+  }
+
+  Future<void> _checkBiometrics() async {
+    final available = await BiometricService.isAvailable();
+    final enabled = await BiometricService.isEnabled();
+    if (mounted)
+      setState(() {
+        _bioAvailable = available;
+        _bioEnabled = enabled;
+      });
+  }
 
   @override
   void dispose() {
@@ -781,6 +848,7 @@ class _SignInScreenState extends State<SignInScreen> {
     super.dispose();
   }
 
+  // ── Email + password sign in ───────────────────────────────────────────────
   Future<void> _signIn() async {
     if (!_fk.currentState!.validate()) return;
     setState(() {
@@ -801,6 +869,21 @@ class _SignInScreenState extends State<SignInScreen> {
         );
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('profile', jsonEncode(profile.toMap()));
+      }
+
+      // Offer fingerprint enrolment after first successful login
+      if (_bioAvailable && !_bioEnabled && mounted) {
+        _promptEnableBiometrics(
+          email: _emailC.text.trim(),
+          password: _passC.text.trim(),
+        );
+      }
+
+      if (_bioAvailable && !_bioEnabled && mounted) {
+        await _promptEnableBiometrics(
+          email: _emailC.text.trim(),
+          password: _passC.text.trim(),
+        );
       }
 
       if (!mounted) return;
@@ -829,12 +912,153 @@ class _SignInScreenState extends State<SignInScreen> {
     }
   }
 
-  Future<void> _handleGoogleSignIn() async {
-    // TODO: wire up Google OAuth
-    AppSnackBar.showInfo(
-      context,
-      'Google Sign-In: connect your backend OAuth endpoint.',
+  // ── Fingerprint sign in ────────────────────────────────────────────────────
+  Future<void> _signInWithBiometrics() async {
+    final authenticated = await BiometricService.authenticate(
+      reason: 'Sign in to Gradex',
     );
+    if (!authenticated) return;
+
+    final creds = await BiometricService.getCredentials();
+    if (creds.email == null || creds.password == null) {
+      if (mounted) {
+        AppSnackBar.showError(
+          context,
+          'Saved credentials not found. Please sign in with your password.',
+        );
+      }
+      return;
+    }
+
+    setState(() {
+      _loading = true;
+      _errorMsg = null;
+    });
+    try {
+      await AuthService().login(email: creds.email!, password: creds.password!);
+
+      final userData = await AuthService().getMe();
+      if (userData['profile'] != null) {
+        final profile = StudentProfile.fromMap(
+          Map<String, dynamic>.from(userData['profile'] as Map),
+        );
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('profile', jsonEncode(profile.toMap()));
+      }
+
+      if (!mounted) return;
+      Navigator.of(
+        context,
+      ).pushAndRemoveUntil(_fade_(const HomeScreen()), (_) => false);
+    } catch (_) {
+      final prefs = await SharedPreferences.getInstance();
+      if ((prefs.getString('profile') ?? '').isNotEmpty && mounted) {
+        Navigator.of(
+          context,
+        ).pushAndRemoveUntil(_fade_(const HomeScreen()), (_) => false);
+      } else {
+        if (mounted) {
+          setState(
+            () => _errorMsg = 'Biometric sign in failed. Try your password.',
+          );
+        }
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  // ── Ask user to enable biometrics after login ──────────────────────────────
+
+  Future<void> _promptEnableBiometrics({
+    required String email,
+    required String password,
+  }) async {
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.fingerprint, color: Colors.blue, size: 28),
+            SizedBox(width: 10),
+            Flexible(child: Text('Enable Fingerprint Login')),
+          ],
+        ),
+        content: const Text(
+          'Would you like to use your fingerprint to sign in faster next time?',
+          style: TextStyle(fontSize: 14, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Not Now'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () async {
+              await BiometricService.saveCredentials(
+                email: email,
+                password: password,
+              );
+              Navigator.pop(ctx);
+              if (mounted) {
+                AppSnackBar.showSuccess(context, 'Fingerprint login enabled ✓');
+                setState(() => _bioEnabled = true);
+              }
+            },
+            child: const Text('Enable'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Google sign in ─────────────────────────────────────────────────────────
+  Future<void> _handleGoogleSignIn() async {
+    try {
+      final googleSignIn = GoogleSignIn(scopes: ['email', 'profile']);
+
+      await googleSignIn.signOut();
+      final googleUser = await googleSignIn.signIn();
+      if (googleUser == null) return; // user cancelled
+
+      final googleAuth = await googleUser.authentication;
+      final idToken = googleAuth.idToken;
+
+      if (idToken == null) {
+        if (mounted)
+          AppSnackBar.showError(context, 'Google sign-in failed. Try again.');
+        return;
+      }
+
+      setState(() => _loading = true);
+
+      final userData = await AuthService().loginWithGoogle(idToken: idToken);
+
+      if (userData['profile'] != null) {
+        final profile = StudentProfile.fromMap(
+          Map<String, dynamic>.from(userData['profile'] as Map),
+        );
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('profile', jsonEncode(profile.toMap()));
+      }
+
+      if (!mounted) return;
+      Navigator.of(
+        context,
+      ).pushAndRemoveUntil(_fade_(const HomeScreen()), (_) => false);
+    } on ApiException catch (e) {
+      if (mounted) AppSnackBar.showError(context, e.message);
+    } catch (e) {
+      if (mounted)
+        AppSnackBar.showError(context, 'Google sign-in failed. Try again.');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   @override
@@ -848,7 +1072,6 @@ class _SignInScreenState extends State<SignInScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Back
                 IconButton(
                   onPressed: () => Navigator.of(context).pop(),
                   icon: const Icon(
@@ -859,7 +1082,6 @@ class _SignInScreenState extends State<SignInScreen> {
                   constraints: const BoxConstraints(),
                 ),
                 const SizedBox(height: 32),
-
                 _iconCircle(Icons.lock_outline_rounded, 76, 38),
                 const SizedBox(height: 20),
                 const Text(
@@ -914,7 +1136,7 @@ class _SignInScreenState extends State<SignInScreen> {
                   ),
                 ),
 
-                // Forgot Password
+                // Forgot password
                 Align(
                   alignment: Alignment.centerRight,
                   child: TextButton(
@@ -932,12 +1154,10 @@ class _SignInScreenState extends State<SignInScreen> {
                   ),
                 ),
 
-                // Error
                 if (_errorMsg != null) ...[
                   const SizedBox(height: 6),
                   _errorBox(_errorMsg!),
                 ],
-
                 const SizedBox(height: 20),
 
                 // Sign In button
@@ -972,13 +1192,47 @@ class _SignInScreenState extends State<SignInScreen> {
                           ),
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 14),
 
-                // Divider
+                // Fingerprint button — only shown when device supports it
+                // and user has previously enabled it
+                if (_bioAvailable && _bioEnabled) ...[
+                  SizedBox(
+                    width: double.infinity,
+                    height: 54,
+                    child: OutlinedButton.icon(
+                      onPressed: _loading ? null : _signInWithBiometrics,
+                      icon: const Icon(
+                        Icons.fingerprint,
+                        size: 26,
+                        color: Colors.white,
+                      ),
+                      label: const Text(
+                        'Sign in with Fingerprint',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(
+                          color: Colors.white54,
+                          width: 1.5,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                ],
+
                 _orDivider(),
                 const SizedBox(height: 16),
 
-                // Continue with Google
+                // Google button
                 SizedBox(
                   width: double.infinity,
                   height: 54,
@@ -1051,9 +1305,13 @@ class _SignInScreenState extends State<SignInScreen> {
   );
 }
 
+//// ══════════════════════════════════════════════════════════
+//  FORGOT PASSWORD SCREEN  (with biometric shortcut)
 // ══════════════════════════════════════════════════════════
-//  FORGOT PASSWORD SCREEN
-// ══════════════════════════════════════════════════════════
+
+//  UPDATED ForgotPasswordScreen
+//  Replace the entire _ForgotPasswordScreenState class in your main.dart
+// ══════════════════════════════════════════════════════════════════════════════
 
 class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({super.key});
@@ -1077,15 +1335,17 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     if (!_fk.currentState!.validate()) return;
     setState(() => _loading = true);
     try {
-      // TODO: Call AuthService().forgotPassword(email: _emailC.text.trim());
-      // Simulating a network delay for now:
-      await Future.delayed(const Duration(seconds: 2));
-      setState(() => _sent = true);
-    } catch (e) {
-      AppSnackBar.showError(
-        context,
-        'Could not send reset email. Check your connection.',
-      );
+      await AuthService().forgotPassword(email: _emailC.text.trim());
+      if (mounted) setState(() => _sent = true);
+    } on ApiException catch (e) {
+      if (mounted) AppSnackBar.showError(context, e.message);
+    } catch (_) {
+      if (mounted) {
+        AppSnackBar.showError(
+          context,
+          'Could not connect. Check your internet and try again.',
+        );
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -1141,7 +1401,6 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                   constraints: const BoxConstraints(),
                 ),
                 const SizedBox(height: 32),
-
                 _iconCircle(Icons.lock_reset_outlined, 76, 38),
                 const SizedBox(height: 20),
                 const Text(
@@ -1209,7 +1468,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                     ),
                   ),
                 ] else ...[
-                  // Success state
+                  // ── Success state ─────────────────────────────────────────
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(24),
@@ -1415,6 +1674,52 @@ class _RegisterScreenState extends State<RegisterScreen> {
         pageBuilder: (_, __, ___) => _PreloaderScreen(),
       ),
     );
+  }
+
+  Future<void> _handleGoogleSignIn() async {
+    try {
+      final googleSignIn = GoogleSignIn(scopes: ['email', 'profile']);
+
+      await googleSignIn.signOut();
+      final googleUser = await googleSignIn.signIn();
+      if (googleUser == null) return; // user cancelled
+
+      final googleAuth = await googleUser.authentication;
+      final idToken = googleAuth.idToken;
+
+      if (idToken == null) {
+        if (mounted)
+          AppSnackBar.showError(context, 'Google sign-in failed. Try again.');
+        return;
+      }
+
+      setState(() => _loading = true);
+
+      final userData = await AuthService().loginWithGoogle(idToken: idToken);
+
+      if (userData['profile'] != null) {
+        final profile = StudentProfile.fromMap(
+          Map<String, dynamic>.from(userData['profile'] as Map),
+        );
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('profile', jsonEncode(profile.toMap()));
+      }
+
+      if (!mounted) return;
+      Navigator.of(
+        context,
+      ).pushAndRemoveUntil(_fade_(const HomeScreen()), (_) => false);
+    } on ApiException catch (e) {
+      print("=== API ERROR: ${e.message}");
+      if (mounted) AppSnackBar.showError(context, e.message);
+    } catch (e, stack) {
+      print("=== GOOGLE ERROR: $e");
+      print("=== STACK: $stack");
+      if (mounted)
+        AppSnackBar.showError(context, 'Google sign-in failed. Try again.');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   // ── Keep LoginScreen as alias so existing code compiles ──
@@ -1635,12 +1940,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 SizedBox(
                   width: double.infinity,
                   height: 54,
-                  child: _GoogleButton(
-                    onPressed: () => AppSnackBar.showInfo(
-                      context,
-                      'Google Sign-In: connect your backend OAuth endpoint.',
-                    ),
-                  ),
+                  child: _GoogleButton(onPressed: _handleGoogleSignIn),
                 ),
                 const SizedBox(height: 28),
 
@@ -4957,6 +5257,7 @@ class _HomeScreenState extends State<HomeScreen>
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('authToken');
     await prefs.remove('refreshToken');
+    await prefs.remove('savedEmail');
 
     if (!mounted) return;
     Navigator.of(
