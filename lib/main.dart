@@ -397,39 +397,39 @@ class _SplashScreenState extends State<SplashScreen>
     ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOutBack));
     _ctrl.forward();
     Future.delayed(const Duration(seconds: 2), () async {
-  if (!mounted) return;
+      if (!mounted) return;
 
-  final prefs = await SharedPreferences.getInstance();
-  final hasProfile = (prefs.getString('profile') ?? '').isNotEmpty;
-  final hasToken = (await TokenStorage.getAccessToken() ?? '').isNotEmpty;
+      final prefs = await SharedPreferences.getInstance();
+      final hasProfile = (prefs.getString('profile') ?? '').isNotEmpty;
+      final hasToken = (await TokenStorage.getAccessToken() ?? '').isNotEmpty;
 
-  // First time opening the app
-  if (!hasProfile && !hasToken) {
-    if (!mounted) return;
-    Navigator.of(context).pushReplacement(_fade_(const LandingPage()));
-    return;
-  }
+      // First time opening the app
+      if (!hasProfile && !hasToken) {
+        if (!mounted) return;
+        Navigator.of(context).pushReplacement(_fade_(const LandingPage()));
+        return;
+      }
 
-  // Returning user — verify token is still valid
-  bool tokenValid = false;
-  if (hasToken) {
-    try {
-      await AuthService().getMe();
-      tokenValid = true;
-    } on UnauthorizedException {
-      await TokenStorage.clearTokens(); // wipe expired tokens
-      tokenValid = false;
-    } catch (_) {
-      // offline — trust cached profile
-      tokenValid = hasProfile;
-    }
-  }
+      // Returning user — verify token is still valid
+      bool tokenValid = false;
+      if (hasToken) {
+        try {
+          await AuthService().getMe();
+          tokenValid = true;
+        } on UnauthorizedException {
+          await TokenStorage.clearTokens(); // wipe expired tokens
+          tokenValid = false;
+        } catch (_) {
+          // offline — trust cached profile
+          tokenValid = hasProfile;
+        }
+      }
 
-  if (!mounted) return;
-  Navigator.of(context).pushReplacement(
-    _fade_(tokenValid ? const HomeScreen() : const SignInScreen()),
-  );
-});
+      if (!mounted) return;
+      Navigator.of(context).pushReplacement(
+        _fade_(tokenValid ? const HomeScreen() : const SignInScreen()),
+      );
+    });
   }
 
   @override
@@ -646,7 +646,11 @@ class _LandingPageState extends State<LandingPage>
 
   Future<void> _handleGoogleSignIn(BuildContext context) async {
     try {
-      final googleSignIn = GoogleSignIn(scopes: ['email', 'profile']);
+      final googleSignIn = GoogleSignIn(
+        scopes: ['email', 'profile'],
+        clientId:
+            '36781799836-r0fa4p6ogpj2u45k670vvh5p5fqrc4vb.apps.googleusercontent.com',
+      );
 
       await googleSignIn.signOut();
 
@@ -1020,7 +1024,11 @@ class _SignInScreenState extends State<SignInScreen> {
   // ── Google sign in ─────────────────────────────────────────────────────────
   Future<void> _handleGoogleSignIn() async {
     try {
-      final googleSignIn = GoogleSignIn(scopes: ['email', 'profile']);
+      final googleSignIn = GoogleSignIn(
+        scopes: ['email', 'profile'],
+        clientId:
+            '36781799836-r0fa4p6ogpj2u45k670vvh5p5fqrc4vb.apps.googleusercontent.com',
+      );
 
       await googleSignIn.signOut();
       final googleUser = await googleSignIn.signIn();
@@ -1678,7 +1686,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   Future<void> _handleGoogleSignIn() async {
     try {
-      final googleSignIn = GoogleSignIn(scopes: ['email', 'profile']);
+      final googleSignIn = GoogleSignIn(
+        scopes: ['email', 'profile'],
+        clientId:
+            '36781799836-r0fa4p6ogpj2u45k670vvh5p5fqrc4vb.apps.googleusercontent.com',
+      );
 
       await googleSignIn.signOut();
       final googleUser = await googleSignIn.signIn();
