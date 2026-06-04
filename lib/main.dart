@@ -402,6 +402,9 @@ class _SplashScreenState extends State<SplashScreen>
 
       if (kIsWeb) {
         final token = _getResetTokenFromUrl();
+        print("=== RESET TOKEN: $token");
+        print("=== URL path: ${Uri.base.path}");
+        print("=== URL query: ${Uri.base.query}");
         if (token != null) {
           Navigator.of(
             context,
