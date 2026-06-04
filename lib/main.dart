@@ -13,6 +13,7 @@ import 'dart:io';
 import 'dart:ui' as ui;
 import 'package:flutter/rendering.dart';
 import 'package:local_auth/local_auth.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:google_sign_in/google_sign_in.dart';
 import 'services/biometric_service.dart';
 
@@ -399,6 +400,16 @@ class _SplashScreenState extends State<SplashScreen>
     Future.delayed(const Duration(seconds: 2), () async {
       if (!mounted) return;
 
+      if (kIsWeb) {
+        final token = _getResetTokenFromUrl();
+        if (token != null) {
+          Navigator.of(
+            context,
+          ).pushReplacement(_fade_(ResetPasswordScreen(token: token)));
+          return;
+        }
+      }
+
       final prefs = await SharedPreferences.getInstance();
       final hasProfile = (prefs.getString('profile') ?? '').isNotEmpty;
       final hasToken = (await TokenStorage.getAccessToken() ?? '').isNotEmpty;
@@ -436,6 +447,18 @@ class _SplashScreenState extends State<SplashScreen>
   void dispose() {
     _ctrl.dispose();
     super.dispose();
+  }
+
+  String? _getResetTokenFromUrl() {
+    try {
+      // ignore: undefined_prefixed_name
+      final token = Uri.base.queryParameters['token'];
+      final path = Uri.base.path;
+      if (path == '/reset-password' && token != null && token.isNotEmpty) {
+        return token;
+      }
+    } catch (_) {}
+    return null;
   }
 
   @override
@@ -652,7 +675,7 @@ class _LandingPageState extends State<LandingPage>
             '36781799836-r0fa4p6ogpj2u45k670vvh5p5fqrc4vb.apps.googleusercontent.com',
       );
 
-      await googleSignIn.signOut();
+      if (!kIsWeb) await googleSignIn.signOut();
 
       final googleUser = await googleSignIn.signIn();
 
@@ -941,6 +964,11 @@ class _SignInScreenState extends State<SignInScreen> {
     try {
       await AuthService().login(email: creds.email!, password: creds.password!);
 
+      final token = await TokenStorage.getAccessToken();
+      final refresh = await TokenStorage.getRefreshToken();
+      print("=== BIO LOGIN token: ${token != null}");
+      print("=== BIO LOGIN refresh: ${refresh != null}");
+
       final userData = await AuthService().getMe();
       if (userData['profile'] != null) {
         final profile = StudentProfile.fromMap(
@@ -954,7 +982,7 @@ class _SignInScreenState extends State<SignInScreen> {
       Navigator.of(
         context,
       ).pushAndRemoveUntil(_fade_(const HomeScreen()), (_) => false);
-    } catch (_) {
+    } catch (e) {
       final prefs = await SharedPreferences.getInstance();
       if ((prefs.getString('profile') ?? '').isNotEmpty && mounted) {
         Navigator.of(
@@ -1030,7 +1058,8 @@ class _SignInScreenState extends State<SignInScreen> {
             '36781799836-r0fa4p6ogpj2u45k670vvh5p5fqrc4vb.apps.googleusercontent.com',
       );
 
-      await googleSignIn.signOut();
+      if (!kIsWeb) await googleSignIn.signOut();
+
       final googleUser = await googleSignIn.signIn();
       if (googleUser == null) return; // user cancelled
 
@@ -1314,12 +1343,8 @@ class _SignInScreenState extends State<SignInScreen> {
 }
 
 //// ══════════════════════════════════════════════════════════
-//  FORGOT PASSWORD SCREEN  (with biometric shortcut)
+//  FORGOT PASSWORD SCREEN
 // ══════════════════════════════════════════════════════════
-
-//  UPDATED ForgotPasswordScreen
-//  Replace the entire _ForgotPasswordScreenState class in your main.dart
-// ══════════════════════════════════════════════════════════════════════════════
 
 class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({super.key});
@@ -1576,6 +1601,296 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                     ),
                   ),
                 ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+class ResetPasswordScreen extends StatefulWidget {
+  final String token;
+  const ResetPasswordScreen({super.key, required this.token});
+  @override
+  State<ResetPasswordScreen> createState() => _ResetPasswordScreenState();
+}
+
+class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
+  final _fk = GlobalKey<FormState>();
+  final _passC = TextEditingController();
+  final _confirmC = TextEditingController();
+  bool _loading = false;
+  bool _success = false;
+  bool _obscurePass = true;
+  bool _obscureConfirm = true;
+
+  @override
+  void dispose() {
+    _passC.dispose();
+    _confirmC.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (!_fk.currentState!.validate()) return;
+    setState(() => _loading = true);
+    try {
+      await AuthService().resetPassword(
+        token: widget.token,
+        newPassword: _passC.text.trim(),
+      );
+      if (mounted) setState(() => _success = true);
+    } on ApiException catch (e) {
+      if (mounted) AppSnackBar.showError(context, e.message);
+    } catch (_) {
+      if (mounted) {
+        AppSnackBar.showError(
+          context,
+          'Could not connect. Check your internet and try again.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  InputDecoration _dec(String label, IconData icon) => InputDecoration(
+    labelText: label,
+    prefixIcon: Icon(icon, color: Colors.blue.shade300),
+    filled: true,
+    fillColor: Colors.white.withOpacity(0.08),
+    labelStyle: const TextStyle(color: Colors.white70),
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(14),
+      borderSide: const BorderSide(color: Colors.white24),
+    ),
+    enabledBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(14),
+      borderSide: const BorderSide(color: Colors.white24),
+    ),
+    focusedBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(14),
+      borderSide: BorderSide(color: Colors.blue.shade300, width: 2),
+    ),
+    errorBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(14),
+      borderSide: const BorderSide(color: Colors.redAccent),
+    ),
+    focusedErrorBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(14),
+      borderSide: const BorderSide(color: Colors.redAccent, width: 2),
+    ),
+    errorStyle: const TextStyle(color: Colors.redAccent),
+  );
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    body: _gradientBox(
+      child: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(26, 24, 26, 40),
+          child: Form(
+            key: _fk,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                IconButton(
+                  onPressed: () => Navigator.of(
+                    context,
+                  ).pushReplacement(_fade_(const SignInScreen())),
+                  icon: const Icon(
+                    Icons.arrow_back_ios_new,
+                    color: Colors.white70,
+                  ),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+                const SizedBox(height: 32),
+                _iconCircle(Icons.lock_outline_rounded, 76, 38),
+                const SizedBox(height: 20),
+                const Text(
+                  'Reset Password',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 26,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Enter your new password below.',
+                  style: TextStyle(
+                    color: Colors.white60,
+                    fontSize: 14,
+                    height: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 36),
+
+                if (!_success) ...[
+                  // New password
+                  TextFormField(
+                    controller: _passC,
+                    obscureText: _obscurePass,
+                    style: const TextStyle(color: Colors.white),
+                    validator: (v) {
+                      if (v == null || v.trim().isEmpty)
+                        return 'Password is required';
+                      if (v.trim().length < 6)
+                        return 'Password must be at least 6 characters';
+                      return null;
+                    },
+                    decoration: _dec('New Password', Icons.lock_outline)
+                        .copyWith(
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _obscurePass
+                                  ? Icons.visibility_off
+                                  : Icons.visibility,
+                              color: Colors.blue.shade300,
+                            ),
+                            onPressed: () =>
+                                setState(() => _obscurePass = !_obscurePass),
+                          ),
+                        ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Confirm password
+                  TextFormField(
+                    controller: _confirmC,
+                    obscureText: _obscureConfirm,
+                    style: const TextStyle(color: Colors.white),
+                    validator: (v) {
+                      if (v == null || v.trim().isEmpty)
+                        return 'Please confirm your password';
+                      if (v.trim() != _passC.text.trim())
+                        return 'Passwords do not match';
+                      return null;
+                    },
+                    decoration: _dec('Confirm Password', Icons.lock_outline)
+                        .copyWith(
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _obscureConfirm
+                                  ? Icons.visibility_off
+                                  : Icons.visibility,
+                              color: Colors.blue.shade300,
+                            ),
+                            onPressed: () => setState(
+                              () => _obscureConfirm = !_obscureConfirm,
+                            ),
+                          ),
+                        ),
+                  ),
+                  const SizedBox(height: 32),
+
+                  SizedBox(
+                    width: double.infinity,
+                    height: 54,
+                    child: ElevatedButton(
+                      onPressed: _loading ? null : _submit,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        foregroundColor: Colors.blue.shade800,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        disabledBackgroundColor: Colors.white38,
+                      ),
+                      child: _loading
+                          ? SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.5,
+                                color: Colors.blue.shade700,
+                              ),
+                            )
+                          : const Text(
+                              'Reset Password',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                    ),
+                  ),
+                ] else ...[
+                  // Success state
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: Colors.white24),
+                    ),
+                    child: Column(
+                      children: [
+                        Container(
+                          width: 72,
+                          height: 72,
+                          decoration: BoxDecoration(
+                            color: Colors.green.withOpacity(0.2),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.check_circle_outline,
+                            color: Colors.greenAccent,
+                            size: 40,
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        const Text(
+                          'Password Reset!',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        const Text(
+                          'Your password has been successfully reset. You can now sign in with your new password.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: 14,
+                            height: 1.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 54,
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.of(context).pushAndRemoveUntil(
+                        _fade_(const SignInScreen()),
+                        (_) => false,
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        foregroundColor: Colors.blue.shade800,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                      child: const Text(
+                        'Sign In',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -2375,6 +2690,13 @@ class _HomeScreenState extends State<HomeScreen>
     }
 
     setState(() {});
+
+    int attempts = 0;
+    while (!(await TokenStorage.hasTokens()) && attempts < 10) {
+      await Future.delayed(const Duration(milliseconds: 200));
+      attempts++;
+    }
+
     _syncWithServer();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_pageCtrl.hasClients) _pageCtrl.jumpToPage(currentPage);
@@ -2382,6 +2704,13 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Future<void> _syncWithServer() async {
+    // Don't sync if no token — avoids redirect on fresh biometric login
+    final hasToken = await TokenStorage.hasTokens();
+    if (!hasToken) {
+      print("=== SYNC skipped - no token yet");
+      return;
+    }
+
     try {
       final localList = courses.map((c) => c.toMap()).toList();
       final serverCourses = await CourseService().syncCourses(localList);
@@ -2428,10 +2757,11 @@ class _HomeScreenState extends State<HomeScreen>
       }
       setState(() {});
     } on UnauthorizedException {
+      await TokenStorage.clearTokens();
       if (mounted) {
         Navigator.of(
           context,
-        ).pushAndRemoveUntil(_fade_(const LoginScreen()), (_) => false);
+        ).pushAndRemoveUntil(_fade_(const SignInScreen()), (_) => false);
       }
     } catch (e) {
       debugPrint('Sync skipped (offline?): $e');
@@ -2528,7 +2858,7 @@ class _HomeScreenState extends State<HomeScreen>
       _editingCourse = null;
       currentPage = _pageIndex;
     });
-    _pageCtrl.jumpToPage(currentPage);
+    if (_pageCtrl.hasClients) _pageCtrl.jumpToPage(currentPage);
     _saveCourses();
     if (wasEditing?.serverId != null) {
       CourseService()
@@ -2957,9 +3287,14 @@ class _HomeScreenState extends State<HomeScreen>
                                         .map((c) => c.code)
                                         .toList();
                                     if (missing.isNotEmpty) {
-                                      AppSnackBar.showError(
+                                      ScaffoldMessenger.of(
                                         context,
-                                        'Select grade for: ${missing.join(', ')}',
+                                      ).showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            'Select grade for: ${missing.join(', ')}',
+                                          ),
+                                        ),
                                       );
                                       return;
                                     }
@@ -2970,7 +3305,8 @@ class _HomeScreenState extends State<HomeScreen>
                                   final existingKeys = courses
                                       .map((c) => '${c.name}_${c.unit}')
                                       .toSet();
-                                  int added = 0;
+                                  final newCourses = <Course>[];
+
                                   for (final cd in picked) {
                                     final key = '${cd.code}_${cd.unit}';
                                     if (existingKeys.contains(key)) continue;
@@ -2991,29 +3327,58 @@ class _HomeScreenState extends State<HomeScreen>
                                         controllers[cd.code]!.text.trim(),
                                       );
                                     }
-                                    courses.add(
-                                      Course(
-                                        cd.code,
-                                        cd.title,
-                                        score,
-                                        cd.unit,
-                                        _selYear,
-                                        _selSem,
-                                      ),
+                                    final course = Course(
+                                      cd.code,
+                                      cd.title,
+                                      score,
+                                      cd.unit,
+                                      _selYear,
+                                      _selSem,
                                     );
+                                    courses.add(course);
+                                    newCourses.add(course);
                                     existingKeys.add(key);
-                                    added++;
                                   }
+
                                   setState(() => currentPage = _pageIndex);
-                                  _pageCtrl.jumpToPage(currentPage);
+                                  if (_pageCtrl.hasClients)
+                                    _pageCtrl.jumpToPage(currentPage);
                                   _saveCourses();
+
+                                  // Save each new course to server
+                                  for (final course in newCourses) {
+                                    CourseService()
+                                        .addCourse(
+                                          name: course.name,
+                                          title: course.title,
+                                          score: course.score,
+                                          unit: course.unit,
+                                          year: course.year,
+                                          semester: course.semester,
+                                          clientId: course.id,
+                                        )
+                                        .then(
+                                          (s) => print(
+                                            "=== PICKER COURSE SAVED: ${s['_id']}",
+                                          ),
+                                        )
+                                        .catchError(
+                                          (e) => print(
+                                            "=== PICKER COURSE FAILED: $e",
+                                          ),
+                                        );
+                                  }
+
                                   Navigator.pop(ctx);
+                                  final added = newCourses.length;
                                   final skipped = picked.length - added;
                                   final msg = added == 0
                                       ? 'All courses already saved — no duplicates added'
                                       : '$added course${added > 1 ? 's' : ''} added ✓'
                                             '${skipped > 0 ? ' ($skipped duplicate${skipped > 1 ? 's' : ''} skipped)' : ''}';
-                                  AppSnackBar.showSuccess(context, msg);
+                                  ScaffoldMessenger.of(
+                                    context,
+                                  ).showSnackBar(SnackBar(content: Text(msg)));
                                 },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: _saved ? Colors.grey : Colors.blue,
@@ -3118,26 +3483,336 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-  // ── edit / delete ────────────────────────────────────────
+  // ── edit  ────────────────────────────────────────
+
   void _editCourse(Course c) {
-    if (_editingCourse != null) {
-      setState(() => courses.add(_editingCourse!));
-    }
-    _nameCtrl.text = c.name;
-    _scoreCtrl.text = c.score.toString();
-    _unitCtrl.text = c.unit.toString();
-    _selYear = c.year;
-    _selSem = c.semester;
-    _useGradeInput = false;
-    _manualGrade = null;
-    setState(() {
-      _editingCourse = c;
-      courses.removeWhere((x) => x.id == c.id);
-      currentPage = _pageIndex;
-    });
-    _saveCourses();
-    _pageCtrl.jumpToPage(currentPage);
-    _tabCtrl.animateTo(0);
+    final nameCtrl = TextEditingController(text: c.name);
+    final scoreCtrl = TextEditingController(text: c.score.toString());
+    final unitCtrl = TextEditingController(text: c.unit.toString());
+    int selYear = c.year;
+    int selSem = c.semester;
+    bool useGrade = false;
+    String? manualGrade;
+    final fk = GlobalKey<FormState>();
+    final gradeLetters = grading.rules.map((r) => r.grade).toList();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+        child: Container(
+          decoration: BoxDecoration(
+            color: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: StatefulBuilder(
+            builder: (ctx2, setSheet) => SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+              child: Form(
+                key: fk,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _sheetHandle(),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        const Icon(Icons.edit, color: Colors.orange, size: 20),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Edit Course',
+                          style: TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.bold,
+                            color: isDarkMode ? Colors.white : Colors.black87,
+                          ),
+                        ),
+                        const Spacer(),
+                        _inputModeToggle(
+                          useGrade: useGrade,
+                          onChanged: (v) => setSheet(() => useGrade = v),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Course name
+                    TextFormField(
+                      controller: nameCtrl,
+                      textCapitalization: TextCapitalization.characters,
+                      style: TextStyle(
+                        color: isDarkMode ? Colors.white : Colors.black87,
+                      ),
+                      decoration: InputDecoration(
+                        labelText: 'Course Code',
+                        labelStyle: TextStyle(
+                          color: isDarkMode ? Colors.white70 : Colors.black54,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(
+                            color: isDarkMode
+                                ? Colors.white24
+                                : Colors.grey.shade400,
+                          ),
+                        ),
+                      ),
+                      validator: (v) =>
+                          (v == null || v.trim().isEmpty) ? 'Required' : null,
+                    ),
+                    const SizedBox(height: 14),
+
+                    // Score or Grade
+                    useGrade
+                        ? _gradeDropdownFormField(
+                            value: manualGrade,
+                            grades: gradeLetters,
+                            fillColor: isDarkMode
+                                ? const Color(0xFF2A2A2A)
+                                : Colors.grey.shade50,
+                            labelColor: isDarkMode
+                                ? Colors.white70
+                                : Colors.black54,
+                            textColor: isDarkMode
+                                ? Colors.white
+                                : Colors.black87,
+                            onChanged: (v) => setSheet(() => manualGrade = v),
+                          )
+                        : TextFormField(
+                            controller: scoreCtrl,
+                            keyboardType: TextInputType.number,
+                            style: TextStyle(
+                              color: isDarkMode ? Colors.white : Colors.black87,
+                            ),
+                            decoration: InputDecoration(
+                              labelText: 'Score (0–100)',
+                              labelStyle: TextStyle(
+                                color: isDarkMode
+                                    ? Colors.white70
+                                    : Colors.black54,
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(
+                                  color: isDarkMode
+                                      ? Colors.white24
+                                      : Colors.grey.shade400,
+                                ),
+                              ),
+                            ),
+                            validator: (v) {
+                              final s = int.tryParse(v ?? '');
+                              if (s == null || s < 0 || s > 100)
+                                return 'Enter 0–100';
+                              return null;
+                            },
+                          ),
+                    const SizedBox(height: 14),
+
+                    // Unit
+                    TextFormField(
+                      controller: unitCtrl,
+                      keyboardType: TextInputType.number,
+                      style: TextStyle(
+                        color: isDarkMode ? Colors.white : Colors.black87,
+                      ),
+                      decoration: InputDecoration(
+                        labelText: 'Credit Units',
+                        labelStyle: TextStyle(
+                          color: isDarkMode ? Colors.white70 : Colors.black54,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(
+                            color: isDarkMode
+                                ? Colors.white24
+                                : Colors.grey.shade400,
+                          ),
+                        ),
+                      ),
+                      validator: (v) {
+                        final u = int.tryParse(v ?? '');
+                        if (u == null || u < 1) return 'Enter valid units';
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 14),
+
+                    // Year & Semester
+                    Row(
+                      children: [
+                        Expanded(
+                          child: DropdownButtonFormField<int>(
+                            value: selYear,
+                            dropdownColor: isDarkMode
+                                ? const Color(0xFF2A2A2A)
+                                : Colors.white,
+                            style: TextStyle(
+                              color: isDarkMode ? Colors.white : Colors.black87,
+                            ),
+                            decoration: InputDecoration(
+                              labelText: 'Year',
+                              labelStyle: TextStyle(
+                                color: isDarkMode
+                                    ? Colors.white70
+                                    : Colors.black54,
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(
+                                  color: isDarkMode
+                                      ? Colors.white24
+                                      : Colors.grey.shade400,
+                                ),
+                              ),
+                            ),
+                            items: List.generate(7, (i) => i + 1)
+                                .map(
+                                  (e) => DropdownMenuItem(
+                                    value: e,
+                                    child: Text('Year $e'),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: (v) => setSheet(() => selYear = v!),
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: DropdownButtonFormField<int>(
+                            value: selSem,
+                            dropdownColor: isDarkMode
+                                ? const Color(0xFF2A2A2A)
+                                : Colors.white,
+                            style: TextStyle(
+                              color: isDarkMode ? Colors.white : Colors.black87,
+                            ),
+                            decoration: InputDecoration(
+                              labelText: 'Semester',
+                              labelStyle: TextStyle(
+                                color: isDarkMode
+                                    ? Colors.white70
+                                    : Colors.black54,
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(
+                                  color: isDarkMode
+                                      ? Colors.white24
+                                      : Colors.grey.shade400,
+                                ),
+                              ),
+                            ),
+                            items: [1, 2]
+                                .map(
+                                  (e) => DropdownMenuItem(
+                                    value: e,
+                                    child: Text('Sem $e'),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: (v) => setSheet(() => selSem = v!),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+
+                    // Save button
+                    SizedBox(
+                      width: double.infinity,
+                      height: 50,
+                      child: ElevatedButton(
+                        onPressed: () {
+                          if (useGrade && manualGrade == null) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Select a grade')),
+                            );
+                            return;
+                          }
+                          if (!fk.currentState!.validate()) return;
+
+                          final name = nameCtrl.text.trim().toUpperCase();
+                          final unit = int.parse(unitCtrl.text.trim());
+                          final int score;
+                          if (useGrade) {
+                            final rule = grading.rules.firstWhere(
+                              (r) => r.grade == manualGrade,
+                              orElse: () => GradeRule(
+                                grade: 'F',
+                                minScore: 0,
+                                gradePoint: 0,
+                              ),
+                            );
+                            score = rule.minScore;
+                          } else {
+                            score = int.parse(scoreCtrl.text.trim());
+                          }
+
+                          // Update locally
+                          setState(() {
+                            final idx = courses.indexWhere((x) => x.id == c.id);
+                            if (idx != -1) {
+                              courses[idx] = Course(
+                                name,
+                                c.title,
+                                score,
+                                unit,
+                                selYear,
+                                selSem,
+                              )..serverId = c.serverId;
+                            }
+                          });
+                          _saveCourses();
+
+                          // Update on server
+                          if (c.serverId != null) {
+                            CourseService()
+                                .updateCourse(
+                                  id: c.serverId!,
+                                  name: name,
+                                  title: c.title,
+                                  score: score,
+                                  unit: unit,
+                                  year: selYear,
+                                  semester: selSem,
+                                )
+                                .catchError(
+                                  (e) => debugPrint('Update failed: $e'),
+                                );
+                          }
+
+                          Navigator.pop(ctx);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('$name updated ✓')),
+                          );
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.orange,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                        child: const Text(
+                          'Save Changes',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   void _cancelEdit() {
@@ -3623,7 +4298,7 @@ class _HomeScreenState extends State<HomeScreen>
                 }
 
                 setState(() => currentPage = _pageIndex);
-                _pageCtrl.jumpToPage(currentPage);
+                if (_pageCtrl.hasClients) _pageCtrl.jumpToPage(currentPage);
                 _saveCourses();
                 Navigator.pop(ctx);
 
@@ -5239,10 +5914,14 @@ class _HomeScreenState extends State<HomeScreen>
         backgroundColor: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Sign Out'),
-        content: const Text(
+        title: Text(
+          'Sign Out',
+          style: TextStyle(color: isDarkMode ? Colors.white : Colors.black87),
+        ),
+        content: Text(
           'Are you sure you want to sign out? '
           'Your data will remain saved locally.',
+          style: TextStyle(color: isDarkMode ? Colors.white70 : Colors.black54),
         ),
         actions: [
           TextButton(
@@ -5265,7 +5944,6 @@ class _HomeScreenState extends State<HomeScreen>
     try {
       await AuthService().logout();
     } catch (_) {}
-    // Clear only auth tokens, keep profile & courses for offline use
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('authToken');
     await prefs.remove('refreshToken');
@@ -5306,9 +5984,10 @@ class _HomeScreenState extends State<HomeScreen>
               const SizedBox(height: 2),
               Text(
                 value.isNotEmpty ? value : '—',
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w600,
+                  color: isDarkMode ? Colors.white : Colors.black87, // ← fixed
                 ),
               ),
             ],

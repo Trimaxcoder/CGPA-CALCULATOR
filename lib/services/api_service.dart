@@ -122,6 +122,7 @@ class ApiClient {
   Future<bool> _tryRefreshToken() async {
     try {
       final refreshToken = await TokenStorage.getRefreshToken();
+      print("=== REFRESH token exists: ${refreshToken != null}");
       if (refreshToken == null) return false;
 
       final response = await http
@@ -131,6 +132,8 @@ class ApiClient {
             body: jsonEncode({'refreshToken': refreshToken}),
           )
           .timeout(ApiConfig.timeout);
+        print("=== REFRESH status: ${response.statusCode}");
+        print("=== REFRESH body: ${response.body}");
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;

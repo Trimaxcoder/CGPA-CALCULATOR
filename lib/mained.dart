@@ -297,10 +297,14 @@ class _LandingPageState extends State<LandingPage>
       vsync: this,
       duration: const Duration(milliseconds: 900),
     );
-    _fade = Tween<double>(begin: 0, end: 1)
-        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
-    _slide = Tween<Offset>(begin: const Offset(0, 0.08), end: Offset.zero)
-        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOutCubic));
+    _fade = Tween<double>(
+      begin: 0,
+      end: 1,
+    ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
+    _slide = Tween<Offset>(
+      begin: const Offset(0, 0.08),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOutCubic));
     _ctrl.forward();
   }
 
@@ -358,9 +362,9 @@ class _LandingPageState extends State<LandingPage>
                     width: double.infinity,
                     height: 54,
                     child: ElevatedButton(
-                      onPressed: () => Navigator.of(context).push(
-                        _fade_(const SignInScreen()),
-                      ),
+                      onPressed: () => Navigator.of(
+                        context,
+                      ).push(_fade_(const SignInScreen())),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.white,
                         foregroundColor: Colors.blue.shade800,
@@ -383,12 +387,15 @@ class _LandingPageState extends State<LandingPage>
                     width: double.infinity,
                     height: 54,
                     child: OutlinedButton(
-                      onPressed: () => Navigator.of(context).push(
-                        _fade_(const LoginScreen()),
-                      ),
+                      onPressed: () => Navigator.of(
+                        context,
+                      ).push(_fade_(const LoginScreen())),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: Colors.white,
-                        side: const BorderSide(color: Colors.white54, width: 1.5),
+                        side: const BorderSide(
+                          color: Colors.white54,
+                          width: 1.5,
+                        ),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(16),
                         ),
@@ -490,10 +497,9 @@ class _SignInScreenState extends State<SignInScreen> {
       }
 
       if (!mounted) return;
-      Navigator.of(context).pushAndRemoveUntil(
-        _fade_(const HomeScreen()),
-        (_) => false,
-      );
+      Navigator.of(
+        context,
+      ).pushAndRemoveUntil(_fade_(const HomeScreen()), (_) => false);
     } on UnauthorizedException {
       setState(() => _errorMsg = 'Incorrect email or password.');
     } on ApiException catch (e) {
@@ -503,13 +509,13 @@ class _SignInScreenState extends State<SignInScreen> {
       final prefs = await SharedPreferences.getInstance();
       final saved = prefs.getString('profile') ?? '';
       if (saved.isNotEmpty && mounted) {
-        Navigator.of(context).pushAndRemoveUntil(
-          _fade_(const HomeScreen()),
-          (_) => false,
-        );
+        Navigator.of(
+          context,
+        ).pushAndRemoveUntil(_fade_(const HomeScreen()), (_) => false);
       } else {
         setState(
-          () => _errorMsg = 'Could not connect. Check your internet connection.',
+          () =>
+              _errorMsg = 'Could not connect. Check your internet connection.',
         );
       }
     } finally {
@@ -531,7 +537,10 @@ class _SignInScreenState extends State<SignInScreen> {
                 // Back button
                 IconButton(
                   onPressed: () => Navigator.of(context).pop(),
-                  icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white70),
+                  icon: const Icon(
+                    Icons.arrow_back_ios_new,
+                    color: Colors.white70,
+                  ),
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
                 ),
@@ -561,7 +570,8 @@ class _SignInScreenState extends State<SignInScreen> {
                   keyboardType: TextInputType.emailAddress,
                   style: const TextStyle(color: Colors.white),
                   validator: (v) {
-                    if (v == null || v.trim().isEmpty) return 'Email is required';
+                    if (v == null || v.trim().isEmpty)
+                      return 'Email is required';
                     if (!v.trim().contains('@')) return 'Enter a valid email';
                     return null;
                   },
@@ -575,14 +585,12 @@ class _SignInScreenState extends State<SignInScreen> {
                   obscureText: _obscure,
                   style: const TextStyle(color: Colors.white),
                   validator: (v) {
-                    if (v == null || v.trim().isEmpty) return 'Password is required';
+                    if (v == null || v.trim().isEmpty)
+                      return 'Password is required';
                     if (v.trim().length < 4) return 'Password too short';
                     return null;
                   },
-                  decoration: _dec(
-                    'Password',
-                    Icons.lock_outline,
-                  ).copyWith(
+                  decoration: _dec('Password', Icons.lock_outline).copyWith(
                     suffixIcon: IconButton(
                       icon: Icon(
                         _obscure ? Icons.visibility_off : Icons.visibility,
@@ -609,7 +617,11 @@ class _SignInScreenState extends State<SignInScreen> {
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.error_outline, color: Colors.redAccent, size: 18),
+                        const Icon(
+                          Icons.error_outline,
+                          color: Colors.redAccent,
+                          size: 18,
+                        ),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
@@ -670,9 +682,9 @@ class _SignInScreenState extends State<SignInScreen> {
                       style: TextStyle(color: Colors.white60, fontSize: 14),
                     ),
                     GestureDetector(
-                      onTap: () => Navigator.of(context).pushReplacement(
-                        _fade_(const LoginScreen()),
-                      ),
+                      onTap: () => Navigator.of(
+                        context,
+                      ).pushReplacement(_fade_(const LoginScreen())),
                       child: Text(
                         'Create one',
                         style: TextStyle(
@@ -1511,16 +1523,32 @@ class _HomeScreenState extends State<HomeScreen>
     } else {
       score = int.parse(_scoreCtrl.text.trim());
     }
+
     final wasEditing = _editingCourse;
+
     setState(() {
-      courses.add(Course(name, '', score, unit, _selYear, _selSem));
+      if (wasEditing != null) {
+        // Replace the existing course
+        final idx = courses.indexWhere((c) => c.id == wasEditing.id);
+        if (idx != -1) {
+          courses[idx] = Course(name, '', score, unit, _selYear, _selSem)
+            ..serverId = wasEditing.serverId;
+        }
+      } else {
+        courses.add(Course(name, '', score, unit, _selYear, _selSem));
+      }
       _editingCourse = null;
       currentPage = _pageIndex;
     });
-    _pageCtrl.jumpToPage(currentPage);
+
+    if (_pageCtrl.hasClients) _pageCtrl.jumpToPage(currentPage);
     _saveCourses();
+
+    print("=== wasEditing: $wasEditing");
+    print("=== wasEditing serverId: ${wasEditing?.serverId}");
+
     if (wasEditing?.serverId != null) {
-      // It was an edit — update on server
+      // Edit — update on server
       CourseService()
           .updateCourse(
             id: wasEditing!.serverId!,
@@ -1533,7 +1561,7 @@ class _HomeScreenState extends State<HomeScreen>
           )
           .catchError((e) => debugPrint('Server update failed: $e'));
     } else {
-      // It was a new course — add on server
+      // New course — add on server
       CourseService()
           .addCourse(
             name: name,
@@ -1545,28 +1573,13 @@ class _HomeScreenState extends State<HomeScreen>
             clientId: courses.last.id,
           )
           .then((serverCourse) {
-            debugPrint('Course saved on server: ${serverCourse['_id']}');
+            print("=== COURSE SAVED: ${serverCourse['_id']}");
           })
           .catchError((e) {
-            debugPrint('Server save failed (will sync later): $e');
+            print("=== COURSE SAVE FAILED: $e");
           });
     }
-    CourseService()
-        .addCourse(
-          name: name,
-          title: '',
-          score: score,
-          unit: unit,
-          year: _selYear,
-          semester: _selSem,
-          clientId: courses.last.id,
-        )
-        .then((serverCourse) {
-          debugPrint('Course saved on server: ${serverCourse['_id']}');
-        })
-        .catchError((e) {
-          debugPrint('Server save failed (will sync later): $e');
-        });
+
     _nameCtrl.clear();
     _scoreCtrl.clear();
     _unitCtrl.clear();
@@ -1985,7 +1998,8 @@ class _HomeScreenState extends State<HomeScreen>
                                   final existingKeys = courses
                                       .map((c) => '${c.name}_${c.unit}')
                                       .toSet();
-                                  int added = 0;
+                                  final newCourses = <Course>[];
+
                                   for (final cd in picked) {
                                     final key = '${cd.code}_${cd.unit}';
                                     if (existingKeys.contains(key)) continue;
@@ -2006,27 +2020,53 @@ class _HomeScreenState extends State<HomeScreen>
                                         controllers[cd.code]!.text.trim(),
                                       );
                                     }
-                                    courses.add(
-                                      Course(
-                                        cd.code,
-                                        cd.title,
-                                        score,
-                                        cd.unit,
-                                        _selYear,
-                                        _selSem,
-                                      ),
+                                    final course = Course(
+                                      cd.code,
+                                      cd.title,
+                                      score,
+                                      cd.unit,
+                                      _selYear,
+                                      _selSem,
                                     );
+                                    courses.add(course);
+                                    newCourses.add(course);
                                     existingKeys.add(key);
-                                    added++;
                                   }
+
                                   setState(() => currentPage = _pageIndex);
-                                  _pageCtrl.jumpToPage(currentPage);
+                                  if (_pageCtrl.hasClients) _pageCtrl.jumpToPage(currentPage);
                                   _saveCourses();
+
+                                  // Save each new course to server
+                                  for (final course in newCourses) {
+                                    CourseService()
+                                        .addCourse(
+                                          name: course.name,
+                                          title: course.title,
+                                          score: course.score,
+                                          unit: course.unit,
+                                          year: course.year,
+                                          semester: course.semester,
+                                          clientId: course.id,
+                                        )
+                                        .then(
+                                          (s) => print(
+                                            "=== PICKER COURSE SAVED: ${s['_id']}",
+                                          ),
+                                        )
+                                        .catchError(
+                                          (e) => print(
+                                            "=== PICKER COURSE FAILED: $e",
+                                          ),
+                                        );
+                                  }
+
                                   Navigator.pop(ctx);
+                                  final added = newCourses.length;
                                   final skipped = picked.length - added;
                                   final msg = added == 0
                                       ? 'All courses already saved — no duplicates added'
-                                      : '${added} course${added > 1 ? 's' : ''} added ✓'
+                                      : '$added course${added > 1 ? 's' : ''} added ✓'
                                             '${skipped > 0 ? ' ($skipped duplicate${skipped > 1 ? 's' : ''} skipped)' : ''}';
                                   ScaffoldMessenger.of(
                                     context,
@@ -2154,7 +2194,7 @@ class _HomeScreenState extends State<HomeScreen>
       currentPage = _pageIndex;
     });
     _saveCourses();
-    _pageCtrl.jumpToPage(currentPage);
+    if (_pageCtrl.hasClients) _pageCtrl.jumpToPage(currentPage);
     _tabCtrl.animateTo(0);
   }
 
@@ -2531,7 +2571,7 @@ class _HomeScreenState extends State<HomeScreen>
                 }
 
                 setState(() => currentPage = _pageIndex);
-                _pageCtrl.jumpToPage(currentPage);
+                if (_pageCtrl.hasClients) _pageCtrl.jumpToPage(currentPage);
                 _saveCourses();
                 Navigator.pop(ctx);
 
