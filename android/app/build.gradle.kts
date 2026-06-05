@@ -7,7 +7,7 @@ plugins {
 
 android {
     namespace = "com.example.gradex"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
@@ -15,11 +15,9 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-   
-        kotlinOptions {
-    jvmTarget = "17"
-}
-
+    kotlinOptions {
+        jvmTarget = "17"
+    }
 
     defaultConfig {
         applicationId = "com.example.gradex"
@@ -27,12 +25,13 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
-        minSdk = flutter.minSdkVersion
     }
 
     buildTypes {
         release {
             signingConfig = signingConfigs.getByName("debug")
+            isMinifyEnabled = false
+            isShrinkResources = false
         }
     }
 }

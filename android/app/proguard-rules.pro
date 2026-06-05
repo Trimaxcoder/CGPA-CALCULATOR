@@ -1,0 +1,4 @@
+-keep class com.google.mlkit.** { *; }
+-dontwarn com.google.mlkit.**
+-keep class com.google_mlkit_** { *; }
+-dontwarn com.google_mlkit_**
