@@ -12,6 +12,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 class ApiConfig {
   static const String baseUrl = 'https://gradexbackend.onrender.com/api';
   static const Duration timeout = Duration(seconds: 15);
+  static const String anthropicApiKey = 'your-anthropic-api-key-here';
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

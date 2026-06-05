@@ -15,6 +15,10 @@ import 'package:flutter/rendering.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
+import 'package:google_mlkit_document_scanner/google_mlkit_document_scanner.dart';
+import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'services/biometric_service.dart';
 
 import 'grading_model.dart';
@@ -2835,6 +2839,750 @@ class _HomeScreenState extends State<HomeScreen>
               (c) => c.name.toLowerCase().contains(searchQuery.toLowerCase()),
             )
             .toList();
+
+  Future<void> _scanResultSheet() async {
+    try {
+      final documentScanner = DocumentScanner(
+        options: DocumentScannerOptions(
+          documentFormat: DocumentFormat.jpeg,
+          mode: ScannerMode.full,
+          isGalleryImport: true,
+          pageLimit: 1,
+        ),
+      );
+
+      final result = await documentScanner.scanDocument();
+      if (result.images.isEmpty) return;
+
+      // Show loading
+      if (mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (ctx) => const Center(
+            child: Card(
+              child: Padding(
+                padding: EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CircularProgressIndicator(),
+                    SizedBox(height: 16),
+                    Text('Reading result sheet...'),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      }
+
+      final inputImage = InputImage.fromFilePath(result.images.first);
+      final recognizer = TextRecognizer();
+      final ocrResult = await recognizer.processImage(inputImage);
+      await recognizer.close();
+
+      print("=== OCR TEXT: ${ocrResult.text}");
+
+      print("=== OCR TEXT: ${ocrResult.text}");
+      final extracted = _parseCoursesFromText(ocrResult.text);
+      print("=== EXTRACTED COUNT: ${extracted.length}");
+
+      if (mounted) Navigator.pop(context);
+
+      if (extracted.isEmpty) {
+        if (mounted) {
+          AppSnackBar.showError(
+            context,
+            'Could not extract courses. Try a clearer scan.',
+          );
+        }
+        return;
+      }
+
+      if (mounted) _showExtractedCoursesPreview(extracted);
+    } catch (e) {
+      if (mounted) Navigator.pop(context);
+      if (mounted) {
+        AppSnackBar.showError(context, 'Scan failed. Try again.');
+      }
+      debugPrint('Scan error: $e');
+    }
+  }
+
+  List<Map<String, dynamic>> _parseCoursesFromText(String text) {
+    final lines = text
+        .split('\n')
+        .map((l) => l.trim())
+        .where((l) => l.isNotEmpty)
+        .toList();
+
+    final codePattern = RegExp(r'\|?([A-Z]{2,4})\s+(\d{3})[\.\-]?(\d?)\s*$');
+    final semPattern = RegExp(
+      r'(\d+)(?:st|nd|rd|th)\s+semester',
+      caseSensitive: false,
+    );
+    final yearPattern = RegExp(r'year\s+(\w+)', caseSensitive: false);
+    final gradePattern = RegExp(r'^[A-F][+-]?$');
+
+    int wordToInt(String w) {
+      const map = {
+        'one': 1,
+        'two': 2,
+        'three': 3,
+        'four': 4,
+        'five': 5,
+        'six': 6,
+        'seven': 7,
+      };
+      return map[w.toLowerCase()] ?? (int.tryParse(w) ?? 1);
+    }
+
+    int currentYear = _selYear;
+    int currentSem = _selSem;
+    final codeLinesWithContext = <Map<String, dynamic>>[];
+    final seenCodes = <String>{};
+
+    // First pass — collect all course codes with position and semester/year
+    for (int i = 0; i < lines.length; i++) {
+      final line = lines[i];
+
+      final yearMatch = yearPattern.firstMatch(line);
+      if (yearMatch != null) currentYear = wordToInt(yearMatch.group(1)!);
+
+      final semMatch = semPattern.firstMatch(line);
+      if (semMatch != null)
+        currentSem = int.tryParse(semMatch.group(1)!) ?? currentSem;
+
+      final codeMatch = codePattern.firstMatch(line);
+      if (codeMatch == null) continue;
+      if (line.contains('Total') || line.contains('Code')) continue;
+
+      final prefix = codeMatch.group(1)!;
+      final number = codeMatch.group(2)!;
+      final suffix = codeMatch.group(3) ?? '';
+      final code = '$prefix$number';
+
+      if (seenCodes.contains(code)) continue;
+      seenCodes.add(code);
+
+      int detectedSem = currentSem;
+      if (suffix == '1') detectedSem = 1;
+      if (suffix == '2') detectedSem = 2;
+
+      codeLinesWithContext.add({
+        'name': code,
+        'year': currentYear,
+        'semester': detectedSem,
+        'lineIndex': i,
+      });
+    }
+
+    // Collect all scores and units from entire text
+    final allScores = <int>[];
+    final allUnits = <int>[];
+    final allGrades = <String>[];
+    bool afterMark = false;
+    bool afterCU = false;
+
+    for (final line in lines) {
+      if (line == 'Mark') {
+        afterMark = true;
+        afterCU = false;
+        continue;
+      }
+      if (line == 'CU') {
+        afterCU = true;
+        afterMark = false;
+        continue;
+      }
+      if (line == 'Grade') continue;
+      if (line == '2024/2025' || line == '2023/2024') {
+        afterCU = false;
+        afterMark = false;
+        continue;
+      }
+
+      if (afterMark) {
+        final val = int.tryParse(line);
+        if (val != null && val >= 0 && val <= 100) {
+          allScores.add(val);
+        } else if (gradePattern.hasMatch(line)) {
+          allGrades.add(line);
+        } else if (val == null) {
+          afterMark = false;
+        }
+      }
+
+      if (afterCU) {
+        final val = int.tryParse(line);
+        if (val != null && val >= 1 && val <= 6) {
+          allUnits.add(val);
+        } else if (val == null) {
+          afterCU = false;
+        }
+      }
+    }
+
+    print("=== CODES: ${codeLinesWithContext.map((c) => c['name']).toList()}");
+    print("=== UNITS: $allUnits");
+    print("=== SCORES: $allScores");
+    print("=== GRADES: $allGrades");
+
+    // Build result — assign scores/units by index, fallback to empty
+    final result = <Map<String, dynamic>>[];
+    for (int i = 0; i < codeLinesWithContext.length; i++) {
+      final c = codeLinesWithContext[i];
+      final score = i < allScores.length ? allScores[i] : null;
+      final unit = i < allUnits.length ? allUnits[i] : null;
+      final grade = i < allGrades.length ? allGrades[i] : null;
+
+      result.add({
+        'name': c['name'],
+        'year': c['year'],
+        'semester': c['semester'],
+        'score': score,
+        'unit': unit,
+        'grade': grade,
+      });
+    }
+
+    return result;
+  }
+
+  void _showExtractedCoursesPreview(List<Map<String, dynamic>> extracted) {
+    final gradeLetters = ['A', 'B', 'C', 'D', 'E', 'F'];
+
+    // Build item state list
+    final items = extracted
+        .map(
+          (c) => {
+            'name': TextEditingController(text: c['name'] as String? ?? ''),
+            'score': TextEditingController(
+              text: c['score'] != null ? c['score'].toString() : '',
+            ),
+            'unit': TextEditingController(
+              text: c['unit'] != null ? c['unit'].toString() : '',
+            ),
+            'year': c['year'] as int,
+            'semester': c['semester'] as int,
+            'included': true,
+            'useGrade': c['grade'] != null,
+            'grade': c['grade'] as String?,
+          },
+        )
+        .toList();
+
+    final fk = GlobalKey<FormState>();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+        child: Container(
+          height: MediaQuery.of(ctx).size.height * 0.88,
+          decoration: BoxDecoration(
+            color: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: StatefulBuilder(
+            builder: (ctx2, setSheet) => Column(
+              children: [
+                _sheetHandle(),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.document_scanner, color: Colors.blue),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'Extracted Courses (${items.length})',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: isDarkMode ? Colors.white : Colors.black87,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Text(
+                    'Review, edit or uncheck courses before saving',
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: Form(
+                    key: fk,
+                    child: ListView.builder(
+                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+                      itemCount: items.length,
+                      itemBuilder: (_, i) {
+                        final item = items[i];
+                        final included = item['included'] as bool;
+                        final useGrade = item['useGrade'] as bool;
+                        final year = item['year'] as int;
+                        final sem = item['semester'] as int;
+
+                        return Card(
+                          margin: const EdgeInsets.only(bottom: 10),
+                          color: isDarkMode
+                              ? const Color(0xFF2A2A2A)
+                              : Colors.grey.shade50,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            side: BorderSide(
+                              color: included
+                                  ? Colors.blue.withOpacity(0.4)
+                                  : Colors.grey.withOpacity(0.3),
+                              width: 1.5,
+                            ),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(12),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // Header row
+                                Row(
+                                  children: [
+                                    // Live blue label
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 3,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: Colors.blue.withOpacity(0.15),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: Text(
+                                        'Year $year • Sem $sem',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: Colors.blue.shade700,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                    const Spacer(),
+                                    // Year dropdown
+                                    DropdownButton<int>(
+                                      value: year,
+                                      isDense: true,
+                                      underline: const SizedBox(),
+                                      dropdownColor: isDarkMode
+                                          ? const Color(0xFF2A2A2A)
+                                          : Colors.white,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: isDarkMode
+                                            ? Colors.white70
+                                            : Colors.black54,
+                                      ),
+                                      items: List.generate(7, (j) => j + 1)
+                                          .map(
+                                            (y) => DropdownMenuItem(
+                                              value: y,
+                                              child: Text('Y$y'),
+                                            ),
+                                          )
+                                          .toList(),
+                                      onChanged: included
+                                          ? (v) => setSheet(
+                                              () => items[i]['year'] = v!,
+                                            )
+                                          : null,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    // Semester dropdown
+                                    DropdownButton<int>(
+                                      value: sem,
+                                      isDense: true,
+                                      underline: const SizedBox(),
+                                      dropdownColor: isDarkMode
+                                          ? const Color(0xFF2A2A2A)
+                                          : Colors.white,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: isDarkMode
+                                            ? Colors.white70
+                                            : Colors.black54,
+                                      ),
+                                      items: [1, 2]
+                                          .map(
+                                            (s) => DropdownMenuItem(
+                                              value: s,
+                                              child: Text('S$s'),
+                                            ),
+                                          )
+                                          .toList(),
+                                      onChanged: included
+                                          ? (v) => setSheet(
+                                              () => items[i]['semester'] = v!,
+                                            )
+                                          : null,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    // Include checkbox
+                                    Checkbox(
+                                      value: included,
+                                      activeColor: Colors.blue,
+                                      onChanged: (v) => setSheet(
+                                        () => items[i]['included'] = v!,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                // Input fields
+                                Opacity(
+                                  opacity: included ? 1.0 : 0.4,
+                                  child: Row(
+                                    children: [
+                                      // Course code
+                                      Expanded(
+                                        flex: 3,
+                                        child: TextFormField(
+                                          controller:
+                                              item['name']
+                                                  as TextEditingController,
+                                          enabled: included,
+                                          textCapitalization:
+                                              TextCapitalization.characters,
+                                          style: TextStyle(
+                                            color: isDarkMode
+                                                ? Colors.white
+                                                : Colors.black87,
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                          decoration: InputDecoration(
+                                            labelText: 'Code',
+                                            labelStyle: TextStyle(
+                                              fontSize: 11,
+                                              color: isDarkMode
+                                                  ? Colors.white54
+                                                  : Colors.black45,
+                                            ),
+                                            isDense: true,
+                                            border: OutlineInputBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                            ),
+                                          ),
+                                          validator: (v) =>
+                                              included &&
+                                                  (v == null ||
+                                                      v.trim().isEmpty)
+                                              ? 'Required'
+                                              : null,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      // Score or Grade
+                                      Expanded(
+                                        flex: 3,
+                                        child: useGrade
+                                            ? DropdownButtonFormField<String>(
+                                                value: item['grade'] as String?,
+                                                dropdownColor: isDarkMode
+                                                    ? const Color(0xFF2A2A2A)
+                                                    : Colors.white,
+                                                style: TextStyle(
+                                                  color: isDarkMode
+                                                      ? Colors.white
+                                                      : Colors.black87,
+                                                  fontSize: 13,
+                                                ),
+                                                decoration: InputDecoration(
+                                                  labelText: 'Grade',
+                                                  labelStyle: TextStyle(
+                                                    fontSize: 11,
+                                                    color: isDarkMode
+                                                        ? Colors.white54
+                                                        : Colors.black45,
+                                                  ),
+                                                  isDense: true,
+                                                  border: OutlineInputBorder(
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          8,
+                                                        ),
+                                                  ),
+                                                  suffixIcon: GestureDetector(
+                                                    onTap: () => setSheet(
+                                                      () =>
+                                                          items[i]['useGrade'] =
+                                                              false,
+                                                    ),
+                                                    child: Icon(
+                                                      Icons.swap_horiz,
+                                                      size: 16,
+                                                      color:
+                                                          Colors.blue.shade300,
+                                                    ),
+                                                  ),
+                                                ),
+                                                items: gradeLetters
+                                                    .map(
+                                                      (g) => DropdownMenuItem(
+                                                        value: g,
+                                                        child: Text(g),
+                                                      ),
+                                                    )
+                                                    .toList(),
+                                                onChanged: included
+                                                    ? (v) => setSheet(
+                                                        () =>
+                                                            items[i]['grade'] =
+                                                                v,
+                                                      )
+                                                    : null,
+                                                validator: (v) =>
+                                                    included &&
+                                                        useGrade &&
+                                                        v == null
+                                                    ? 'Select'
+                                                    : null,
+                                              )
+                                            : TextFormField(
+                                                controller:
+                                                    item['score']
+                                                        as TextEditingController,
+                                                enabled: included,
+                                                keyboardType:
+                                                    TextInputType.number,
+                                                style: TextStyle(
+                                                  color: isDarkMode
+                                                      ? Colors.white
+                                                      : Colors.black87,
+                                                  fontSize: 13,
+                                                ),
+                                                decoration: InputDecoration(
+                                                  labelText: 'Score',
+                                                  labelStyle: TextStyle(
+                                                    fontSize: 11,
+                                                    color: isDarkMode
+                                                        ? Colors.white54
+                                                        : Colors.black45,
+                                                  ),
+                                                  isDense: true,
+                                                  border: OutlineInputBorder(
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          8,
+                                                        ),
+                                                  ),
+                                                  suffixIcon: GestureDetector(
+                                                    onTap: () => setSheet(
+                                                      () =>
+                                                          items[i]['useGrade'] =
+                                                              true,
+                                                    ),
+                                                    child: Icon(
+                                                      Icons.swap_horiz,
+                                                      size: 16,
+                                                      color:
+                                                          Colors.blue.shade300,
+                                                    ),
+                                                  ),
+                                                ),
+                                                validator: (v) {
+                                                  if (!included || useGrade)
+                                                    return null;
+                                                  final s = int.tryParse(
+                                                    v ?? '',
+                                                  );
+                                                  if (s == null ||
+                                                      s < 0 ||
+                                                      s > 100)
+                                                    return '0-100';
+                                                  return null;
+                                                },
+                                              ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      // Unit
+                                      Expanded(
+                                        flex: 2,
+                                        child: TextFormField(
+                                          controller:
+                                              item['unit']
+                                                  as TextEditingController,
+                                          enabled: included,
+                                          keyboardType: TextInputType.number,
+                                          style: TextStyle(
+                                            color: isDarkMode
+                                                ? Colors.white
+                                                : Colors.black87,
+                                            fontSize: 13,
+                                          ),
+                                          decoration: InputDecoration(
+                                            labelText: 'Units',
+                                            labelStyle: TextStyle(
+                                              fontSize: 11,
+                                              color: isDarkMode
+                                                  ? Colors.white54
+                                                  : Colors.black45,
+                                            ),
+                                            isDense: true,
+                                            border: OutlineInputBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                            ),
+                                          ),
+                                          validator: (v) {
+                                            if (!included) return null;
+                                            final u = int.tryParse(v ?? '');
+                                            if (u == null || u < 1)
+                                              return '1-6';
+                                            return null;
+                                          },
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+                SafeArea(
+                  top: false,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                    child: Column(
+                      children: [
+                        Text(
+                          '${items.where((i) => i['included'] as bool).length} of ${items.length} courses selected',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey.shade500,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 50,
+                          child: ElevatedButton.icon(
+                            onPressed: () {
+                              if (!fk.currentState!.validate()) return;
+                              final newCourses = <Course>[];
+                              for (int i = 0; i < items.length; i++) {
+                                final item = items[i];
+                                if (!(item['included'] as bool)) continue;
+
+                                final name =
+                                    (item['name'] as TextEditingController).text
+                                        .trim()
+                                        .toUpperCase();
+                                final unit =
+                                    int.tryParse(
+                                      (item['unit'] as TextEditingController)
+                                          .text
+                                          .trim(),
+                                    ) ??
+                                    2;
+                                final yr = item['year'] as int;
+                                final sem = item['semester'] as int;
+
+                                int score;
+                                if (item['useGrade'] as bool) {
+                                  final grade = item['grade'] as String? ?? 'F';
+                                  final rule = grading.rules.firstWhere(
+                                    (r) => r.grade == grade,
+                                    orElse: () => GradeRule(
+                                      grade: 'F',
+                                      minScore: 0,
+                                      gradePoint: 0,
+                                    ),
+                                  );
+                                  score = rule.minScore;
+                                } else {
+                                  score =
+                                      int.tryParse(
+                                        (item['score'] as TextEditingController)
+                                            .text
+                                            .trim(),
+                                      ) ??
+                                      0;
+                                }
+
+                                final course = Course(
+                                  name,
+                                  '',
+                                  score,
+                                  unit,
+                                  yr,
+                                  sem,
+                                );
+                                courses.add(course);
+                                newCourses.add(course);
+                              }
+
+                              setState(() {});
+                              _saveCourses();
+
+                              for (final course in newCourses) {
+                                CourseService()
+                                    .addCourse(
+                                      name: course.name,
+                                      title: course.title,
+                                      score: course.score,
+                                      unit: course.unit,
+                                      year: course.year,
+                                      semester: course.semester,
+                                      clientId: course.id,
+                                    )
+                                    .catchError(
+                                      (e) =>
+                                          debugPrint('Server save failed: $e'),
+                                    );
+                              }
+
+                              Navigator.pop(ctx);
+                              AppSnackBar.showSuccess(
+                                context,
+                                '${newCourses.length} course${newCourses.length > 1 ? 's' : ''} added ✓',
+                              );
+                            },
+                            icon: const Icon(Icons.save),
+                            label: const Text(
+                              'Save Selected Courses',
+                              style: TextStyle(fontSize: 15),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.blue,
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 
   // ══════════════════════════════════════════════════════════
   //  ADD COURSE
@@ -7026,6 +7774,44 @@ class _HomeScreenState extends State<HomeScreen>
                       ),
                     ),
                   ),
+
+                  const SizedBox(height: 12),
+
+                  Row(
+                    children: [
+                      Expanded(child: Divider(color: Colors.grey.shade300)),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        child: Text(
+                          'or scan result sheet',
+                          style: TextStyle(
+                            color: Colors.grey.shade500,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                      Expanded(child: Divider(color: Colors.grey.shade300)),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: ElevatedButton.icon(
+                      onPressed: _scanResultSheet,
+                      icon: const Icon(Icons.document_scanner),
+                      label: const Text('Scan Result Sheet'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green.shade700,
+                        foregroundColor: Colors.white,
+                        elevation: 2,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -7170,6 +7956,7 @@ class _HomeScreenState extends State<HomeScreen>
               ),
               child: Row(
                 children: [
+                  // CGPA value
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -7188,34 +7975,44 @@ class _HomeScreenState extends State<HomeScreen>
                     ],
                   ),
                   const SizedBox(width: 10),
-                  if (!_cgpaHidden)
-                    Flexible(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 5,
-                        ),
-                        decoration: BoxDecoration(
-                          color: degreeColor(cgpa, maxGP).withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                            color: degreeColor(cgpa, maxGP).withOpacity(0.5),
+
+                  // Degree class badge — fixed width so it never shifts the hide button
+                  SizedBox(
+                    width: 160,
+                    child: _cgpaHidden
+                        ? const SizedBox()
+                        : Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 5,
+                            ),
+                            decoration: BoxDecoration(
+                              color: degreeColor(cgpa, maxGP).withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: degreeColor(
+                                  cgpa,
+                                  maxGP,
+                                ).withOpacity(0.5),
+                              ),
+                            ),
+                            child: Text(
+                              getDegreeClass(cgpa, maxGP),
+                              textAlign: TextAlign.center,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: degreeColor(cgpa, maxGP),
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                              ),
+                            ),
                           ),
-                        ),
-                        child: Text(
-                          getDegreeClass(cgpa, maxGP),
-                          textAlign: TextAlign.center,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: degreeColor(cgpa, maxGP),
-                            fontWeight: FontWeight.bold,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                    ),
+                  ),
+
                   const Spacer(),
+
+                  // Hide button — always fixed at the right
                   IconButton(
                     icon: Icon(
                       _cgpaHidden ? Icons.visibility_off : Icons.visibility,
