@@ -16,6 +16,7 @@ import 'package:local_auth/local_auth.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:image_picker/image_picker.dart';
+import 'dart:async';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:google_mlkit_document_scanner/google_mlkit_document_scanner.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
@@ -2620,6 +2621,8 @@ class _HomeScreenState extends State<HomeScreen>
 
   bool isDarkMode = false;
   bool _cgpaHidden = false;
+  Timer? _syncTimer;
+  final Set<String> _deletedServerIds = {};
 
   Future<void> _loadPrefs() async {
     final prefs = await SharedPreferences.getInstance();
@@ -2667,6 +2670,10 @@ class _HomeScreenState extends State<HomeScreen>
       });
     _loadData();
     _loadPrefs();
+
+    _syncTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      _syncWithServer();
+    });
   }
 
   @override
@@ -2677,6 +2684,7 @@ class _HomeScreenState extends State<HomeScreen>
     _searchCtrl.dispose();
     _pageCtrl.dispose();
     _tabCtrl.dispose();
+    _syncTimer?.cancel();
     super.dispose();
   }
 
@@ -2714,15 +2722,26 @@ class _HomeScreenState extends State<HomeScreen>
     // Don't sync if no token — avoids redirect on fresh biometric login
     final hasToken = await TokenStorage.hasTokens();
     if (!hasToken) {
-      print("=== SYNC skipped - no token yet");
       return;
     }
 
     try {
-      final localList = courses.map((c) => c.toMap()).toList();
-      final serverCourses = await CourseService().syncCourses(localList);
+      final localList = courses
+    .where((c) => !_deletedServerIds.contains(c.serverId))
+    .map((c) => c.toMap())
+    .toList();
+      print("=== SYNC deletedIds: $_deletedServerIds");
+      final serverCourses = await CourseService().syncCourses(
+        localList,
+        deletedServerIds: _deletedServerIds.toList(),
+      );
+      print("=== SYNC server returned: ${serverCourses.length} courses");
       final merged = serverCourses.map((m) => Course.fromServerMap(m)).toList();
-      setState(() => courses = merged);
+
+      setState(() {
+        courses = merged;
+        _deletedServerIds.clear();
+      });
       await _saveCourses();
 
       final userData = await AuthService().getMe();
@@ -2841,6 +2860,7 @@ class _HomeScreenState extends State<HomeScreen>
             .toList();
 
   Future<void> _scanResultSheet() async {
+    if (kIsWeb) return;
     try {
       final documentScanner = DocumentScanner(
         options: DocumentScannerOptions(
@@ -4591,9 +4611,13 @@ class _HomeScreenState extends State<HomeScreen>
     });
     _saveCourses();
     if (c.serverId != null) {
+      _deletedServerIds.add(c.serverId!);
       CourseService()
           .deleteCourse(c.serverId!)
-          .catchError((e) => debugPrint('Server delete failed: $e'));
+          .then((_) => print("=== DELETE SUCCESS"))
+          .catchError((e) => print("=== DELETE FAILED: $e"));
+    } else {
+      print("=== NO serverId — skipping server delete");
     }
     AppSnackBar.showUndo(context, '${c.name} deleted', _undoDelete);
   }
@@ -7775,43 +7799,45 @@ class _HomeScreenState extends State<HomeScreen>
                     ),
                   ),
 
-                  const SizedBox(height: 12),
+                  if (!kIsWeb) ...[
+                    const SizedBox(height: 12),
 
-                  Row(
-                    children: [
-                      Expanded(child: Divider(color: Colors.grey.shade300)),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 10),
-                        child: Text(
-                          'or scan result sheet',
-                          style: TextStyle(
-                            color: Colors.grey.shade500,
-                            fontSize: 12,
+                    Row(
+                      children: [
+                        Expanded(child: Divider(color: Colors.grey.shade300)),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                          child: Text(
+                            'or scan result sheet',
+                            style: TextStyle(
+                              color: Colors.grey.shade500,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                        Expanded(child: Divider(color: Colors.grey.shade300)),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+
+                    SizedBox(
+                      width: double.infinity,
+                      height: 50,
+                      child: ElevatedButton.icon(
+                        onPressed: _scanResultSheet,
+                        icon: const Icon(Icons.document_scanner),
+                        label: const Text('Scan Result Sheet'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green.shade700,
+                          foregroundColor: Colors.white,
+                          elevation: 2,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
                           ),
                         ),
                       ),
-                      Expanded(child: Divider(color: Colors.grey.shade300)),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-
-                  SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: ElevatedButton.icon(
-                      onPressed: _scanResultSheet,
-                      icon: const Icon(Icons.document_scanner),
-                      label: const Text('Scan Result Sheet'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green.shade700,
-                        foregroundColor: Colors.white,
-                        elevation: 2,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
                     ),
-                  ),
+                  ],
                 ],
               ),
             ),

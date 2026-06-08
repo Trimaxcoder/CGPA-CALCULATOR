@@ -460,10 +460,14 @@ class CourseService {
     return (data['deleted'] as int?) ?? 0;
   }
 
-  Future<List<Map<String, dynamic>>> syncCourses(
-    List<Map<String, dynamic>> localCourses,
-  ) async {
-    final data = await _client.post('/courses/sync', {'courses': localCourses});
-    return List<Map<String, dynamic>>.from(data['courses'] as List);
-  }
+ Future<List<Map<String, dynamic>>> syncCourses(
+  List<Map<String, dynamic>> localCourses, {
+  List<String> deletedServerIds = const [],
+}) async {
+  final data = await _client.post('/courses/sync', {
+    'courses': localCourses,
+    'deletedServerIds': deletedServerIds,
+  });
+  return List<Map<String, dynamic>>.from(data['courses'] as List);
+}
 }
