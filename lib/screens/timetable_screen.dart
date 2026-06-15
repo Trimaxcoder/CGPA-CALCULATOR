@@ -1,15 +1,1323 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-// Placeholder — full implementation coming next
-class TimetableScreen extends StatelessWidget {
+import '../providers/theme_notifier.dart';
+import '../models/timetable_entry.dart';
+import '../services/timetable_service.dart';
+import 'super_admin_screen.dart';
+
+class TimetableScreen extends StatefulWidget {
   const TimetableScreen({super.key});
 
   @override
+  State<TimetableScreen> createState() => _TimetableScreenState();
+}
+
+class _TimetableScreenState extends State<TimetableScreen>
+    with SingleTickerProviderStateMixin {
+  late TabController _tabCtrl;
+
+  List<LectureEntry>  _lectures = [];
+  List<LectureEntry>  _exams    = [];
+  List<PersonalEntry> _personal = [];
+
+  bool _loading = true;
+  bool _isAdmin = false;
+  bool _isSuperAdmin = false;
+
+  String _school = '', _faculty = '', _department = '', _level = '';
+
+  final _svc = TimetableService();
+
+  static const _days = [
+    'Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday',
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _tabCtrl = TabController(length: 3, vsync: this);
+    _loadAll();
+  }
+
+  @override
+  void dispose() {
+    _tabCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadAll() async {
+    setState(() => _loading = true);
+    await _loadProfile();
+    await Future.wait([_loadLectures(), _loadExams(), _loadPersonal()]);
+    await _checkAdminStatus();
+    if (mounted) setState(() => _loading = false);
+  }
+
+  Future<void> _loadProfile() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString('profile');
+      if (raw != null) {
+        final decoded = jsonDecode(raw) as Map<String, dynamic>;
+        _school     = decoded['school']     ?? '';
+        _faculty    = decoded['faculty']    ?? '';
+        _department = decoded['department'] ?? '';
+        _level      = decoded['level']      ?? '';
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _loadLectures() async {
+    try {
+      final list = await _svc.getLectures();
+      _lectures = list.map(LectureEntry.fromMap).toList();
+    } catch (_) {}
+  }
+
+  Future<void> _loadExams() async {
+    try {
+      final list = await _svc.getExams();
+      _exams = list.map(LectureEntry.fromMap).toList();
+    } catch (_) {}
+  }
+
+  Future<void> _loadPersonal() async {
+    try {
+      final list = await _svc.getPersonal();
+      _personal = list.map(PersonalEntry.fromMap).toList();
+    } catch (_) {}
+  }
+
+  Future<void> _checkAdminStatus() async {
+    try {
+      final res = await _svc.getAdminStatus();
+      if (mounted) setState(() {
+      _isAdmin      = res['isAdmin']      ?? false;
+      _isSuperAdmin = res['isSuperAdmin'] ?? false; // ← add this
+    });
+    } catch (_) {}
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return const Scaffold(
-      body: Center(
-        child: Text('Timetable coming soon'),
+    final isDark = context.watch<ThemeNotifier>().isDarkMode;
+    final navBg  = isDark ? const Color(0xFF1E293B) : Colors.white;
+    final navFg  = isDark ? Colors.white : Colors.black87;
+
+    return Scaffold(
+      backgroundColor: isDark ? const Color(0xFF0A0A0A) : const Color(0xFFF2F4F8),
+      appBar: AppBar(
+        elevation: 0,
+        centerTitle: true,
+        automaticallyImplyLeading: false,
+        backgroundColor: navBg,
+        foregroundColor: navFg,
+        title: Text('Timetable',
+            style: TextStyle(color: navFg, fontWeight: FontWeight.bold)),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.refresh_rounded, color: navFg),
+            onPressed: _loadAll,
+          ),
+          if (!_isAdmin)
+            TextButton(
+              onPressed: () => _showAdminRequestSheet(isDark),
+              child: Text('Be Admin',
+                  style: TextStyle(
+                      color: isDark ? Colors.indigo.shade300 : Colors.blue,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12)),
+            ),
+              if (_isSuperAdmin) // ← add this block
+    IconButton(
+      icon: Icon(Icons.admin_panel_settings_rounded, color: Colors.purple),
+      onPressed: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const SuperAdminScreen()),
+      ),
+    ),
+        ],
+        bottom: TabBar(
+          controller: _tabCtrl,
+          labelColor: isDark ? Colors.indigo.shade300 : Colors.blue.shade700,
+          unselectedLabelColor: isDark ? Colors.white38 : Colors.black45,
+          indicatorColor: isDark ? Colors.indigo.shade300 : Colors.blue.shade700,
+          tabs: const [
+            Tab(icon: Icon(Icons.cast_for_education_rounded, size: 20), text: 'Lecture'),
+            Tab(icon: Icon(Icons.menu_book_rounded, size: 20), text: 'Personal'),
+            Tab(icon: Icon(Icons.event_note_rounded, size: 20), text: 'Exam'),
+          ],
+        ),
+      ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : TabBarView(
+              controller: _tabCtrl,
+              children: [
+                _buildLectureTab(isDark),
+                _buildPersonalTab(isDark),
+                _buildExamTab(isDark),
+              ],
+            ),
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════
+  //  LECTURE TAB
+  // ══════════════════════════════════════════════════════════
+  Widget _buildLectureTab(bool isDark) {
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      floatingActionButton: _isAdmin
+          ? FloatingActionButton.extended(
+              onPressed: () => _showAddLectureSheet(isDark),
+              icon: const Icon(Icons.add),
+              label: const Text('Add Class'),
+              backgroundColor: Colors.blue.shade700,
+            )
+          : null,
+      body: _lectures.isEmpty
+          ? _emptyState(
+              icon: Icons.cast_for_education_outlined,
+              title: 'No Lectures Yet',
+              subtitle: _isAdmin
+                  ? 'Tap "Add Class" to add your first lecture'
+                  : 'Your course rep hasn\'t added any lectures yet',
+              isDark: isDark,
+            )
+          : RefreshIndicator(
+              onRefresh: _loadLectures,
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+                children: _days.map((day) {
+                  final dayEntries = _lectures.where((e) => e.day == day).toList();
+                  if (dayEntries.isEmpty) return const SizedBox.shrink();
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _dayHeader(day, isDark),
+                      ...dayEntries.map((e) => _lectureCard(e, isDark)),
+                      const SizedBox(height: 8),
+                    ],
+                  );
+                }).toList(),
+              ),
+            ),
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════
+  //  PERSONAL TAB
+  // ══════════════════════════════════════════════════════════
+  Widget _buildPersonalTab(bool isDark) {
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => _showAddPersonalSheet(isDark),
+        icon: const Icon(Icons.add),
+        label: const Text('Add Study'),
+        backgroundColor: Colors.indigo.shade600,
+      ),
+      body: _personal.isEmpty
+          ? _emptyState(
+              icon: Icons.menu_book_outlined,
+              title: 'No Study Sessions Yet',
+              subtitle: 'Tap "Add Study" to create your personal timetable',
+              isDark: isDark,
+            )
+          : RefreshIndicator(
+              onRefresh: _loadPersonal,
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+                children: _days.map((day) {
+                  final dayEntries = _personal.where((e) => e.day == day).toList();
+                  if (dayEntries.isEmpty) return const SizedBox.shrink();
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _dayHeader(day, isDark),
+                      ...dayEntries.map((e) => _personalCard(e, isDark)),
+                      const SizedBox(height: 8),
+                    ],
+                  );
+                }).toList(),
+              ),
+            ),
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════
+  //  EXAM TAB
+  // ══════════════════════════════════════════════════════════
+  Widget _buildExamTab(bool isDark) {
+    final sorted = [..._exams]..sort((a, b) {
+        if (a.date == null && b.date == null) return 0;
+        if (a.date == null) return 1;
+        if (b.date == null) return -1;
+        return a.date!.compareTo(b.date!);
+      });
+
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      floatingActionButton: _isAdmin
+          ? FloatingActionButton.extended(
+              onPressed: () => _showAddExamSheet(isDark),
+              icon: const Icon(Icons.add),
+              label: const Text('Add Exam'),
+              backgroundColor: Colors.red.shade700,
+            )
+          : null,
+      body: sorted.isEmpty
+          ? _emptyState(
+              icon: Icons.event_note_outlined,
+              title: 'No Exams Scheduled',
+              subtitle: _isAdmin
+                  ? 'Tap "Add Exam" to schedule an exam'
+                  : 'No exam timetable has been published yet',
+              isDark: isDark,
+            )
+          : RefreshIndicator(
+              onRefresh: _loadExams,
+              child: ListView.builder(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+                itemCount: sorted.length,
+                itemBuilder: (_, i) => _examCard(sorted[i], isDark),
+              ),
+            ),
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════
+  //  CARDS
+  // ══════════════════════════════════════════════════════════
+  Widget _dayHeader(String day, bool isDark) => Padding(
+        padding: const EdgeInsets.only(bottom: 8, top: 4),
+        child: Text(
+          day.toUpperCase(),
+          style: TextStyle(
+            fontWeight: FontWeight.w800,
+            fontSize: 11,
+            letterSpacing: 1.2,
+            color: isDark ? Colors.indigo.shade300 : Colors.blue.shade700,
+          ),
+        ),
+      );
+
+  Widget _lectureCard(LectureEntry e, bool isDark) {
+    final typeColor = e.classType == 'test'
+        ? Colors.red
+        : e.classType == 'impromptu'
+            ? Colors.orange
+            : e.classType == 'meeting'
+                ? Colors.purple
+                : Colors.blue;
+
+    final typeIcon = e.classType == 'test'
+        ? Icons.quiz_rounded
+        : e.classType == 'impromptu'
+            ? Icons.bolt_rounded
+            : e.classType == 'meeting'
+                ? Icons.groups_rounded
+                : Icons.school_rounded;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E293B) : Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: e.isImportant
+            ? Border.all(color: typeColor.withOpacity(0.5), width: 1.5)
+            : null,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(isDark ? 0.3 : 0.06),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        leading: Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            color: typeColor.withOpacity(0.12),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(typeIcon, color: typeColor, size: 22),
+        ),
+        title: Row(
+          children: [
+            Expanded(
+              child: Text(e.courseCode,
+                  style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15,
+                      color: isDark ? Colors.white : Colors.black87)),
+            ),
+            if (e.isImportant)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: typeColor.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  e.classType.toUpperCase(),
+                  style: TextStyle(
+                      color: typeColor, fontSize: 9, fontWeight: FontWeight.w800),
+                ),
+              ),
+          ],
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (e.courseTitle.isNotEmpty)
+              Text(e.courseTitle,
+                  style: TextStyle(
+                      fontSize: 12,
+                      color: isDark ? Colors.white60 : Colors.black54)),
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                Icon(Icons.access_time_rounded,
+                    size: 13,
+                    color: isDark ? Colors.white38 : Colors.black38),
+                const SizedBox(width: 4),
+                Text('${e.startTime} – ${e.endTime}',
+                    style: TextStyle(
+                        fontSize: 12,
+                        color: isDark ? Colors.white54 : Colors.black54)),
+                if (e.venue.isNotEmpty) ...[
+                  const SizedBox(width: 10),
+                  Icon(Icons.location_on_outlined,
+                      size: 13,
+                      color: isDark ? Colors.white38 : Colors.black38),
+                  const SizedBox(width: 2),
+                  Expanded(
+                    child: Text(e.venue,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            fontSize: 12,
+                            color: isDark ? Colors.white54 : Colors.black54)),
+                  ),
+                ],
+              ],
+            ),
+          ],
+        ),
+        trailing: _isAdmin
+            ? PopupMenuButton<String>(
+                icon: Icon(Icons.more_vert,
+                    color: isDark ? Colors.white38 : Colors.black38),
+                itemBuilder: (_) => [
+                  const PopupMenuItem(value: 'edit', child: Text('Edit')),
+                  const PopupMenuItem(
+                      value: 'delete',
+                      child: Text('Delete',
+                          style: TextStyle(color: Colors.red))),
+                ],
+                onSelected: (val) async {
+                  if (val == 'delete') {
+                    await _svc.deleteLecture(e.id);
+                    await _loadLectures();
+                    setState(() {});
+                  } else {
+                    _showAddLectureSheet(isDark, editing: e);
+                  }
+                },
+              )
+            : null,
       ),
     );
   }
+
+  Widget _personalCard(PersonalEntry e, bool isDark) {
+    final color = _hexColor(e.color);
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E293B) : Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border(left: BorderSide(color: color, width: 4)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(isDark ? 0.3 : 0.06),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        title: Text(e.title,
+            style: TextStyle(
+                fontWeight: FontWeight.w700,
+                color: isDark ? Colors.white : Colors.black87)),
+        subtitle: Row(
+          children: [
+            Icon(Icons.access_time_rounded,
+                size: 13,
+                color: isDark ? Colors.white38 : Colors.black38),
+            const SizedBox(width: 4),
+            Text('${e.startTime} – ${e.endTime}',
+                style: TextStyle(
+                    fontSize: 12,
+                    color: isDark ? Colors.white54 : Colors.black54)),
+          ],
+        ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              icon: Icon(
+                e.isBookmarked
+                    ? Icons.bookmark_rounded
+                    : Icons.bookmark_outline,
+                color: e.isBookmarked ? Colors.amber : Colors.grey,
+                size: 22,
+              ),
+              onPressed: () async {
+                await _svc.toggleBookmark(e.id);
+                await _loadPersonal();
+                setState(() {});
+              },
+            ),
+            PopupMenuButton<String>(
+              icon: Icon(Icons.more_vert,
+                  color: isDark ? Colors.white38 : Colors.black38),
+              itemBuilder: (_) => [
+                const PopupMenuItem(value: 'edit', child: Text('Edit')),
+                const PopupMenuItem(
+                    value: 'delete',
+                    child: Text('Delete',
+                        style: TextStyle(color: Colors.red))),
+              ],
+              onSelected: (val) async {
+                if (val == 'delete') {
+                  await _svc.deletePersonal(e.id);
+                  await _loadPersonal();
+                  setState(() {});
+                } else {
+                  _showAddPersonalSheet(isDark, editing: e);
+                }
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _examCard(LectureEntry e, bool isDark) {
+    final daysLeft = e.date != null
+        ? e.date!.difference(DateTime.now()).inDays
+        : null;
+    final urgent = daysLeft != null && daysLeft <= 7;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E293B) : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+            color: urgent
+                ? Colors.red.withOpacity(0.5)
+                : Colors.red.withOpacity(0.2)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(isDark ? 0.3 : 0.06),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            Container(
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(
+                color: Colors.red.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(Icons.event_note_rounded,
+                  color: Colors.red, size: 28),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(e.courseCode,
+                      style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 16,
+                          color: isDark ? Colors.white : Colors.black87)),
+                  if (e.courseTitle.isNotEmpty)
+                    Text(e.courseTitle,
+                        style: TextStyle(
+                            fontSize: 12,
+                            color: isDark ? Colors.white60 : Colors.black54)),
+                  const SizedBox(height: 6),
+                  if (e.date != null)
+                    Text(
+                      '${e.date!.day}/${e.date!.month}/${e.date!.year}  •  ${e.startTime} – ${e.endTime}',
+                      style: TextStyle(
+                          fontSize: 13,
+                          color: isDark ? Colors.white70 : Colors.black54),
+                    ),
+                  if (e.venue.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text('📍 ${e.venue}',
+                          style: TextStyle(
+                              fontSize: 12,
+                              color:
+                                  isDark ? Colors.white54 : Colors.black45)),
+                    ),
+                ],
+              ),
+            ),
+            if (daysLeft != null)
+              Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    daysLeft <= 0 ? 'Today!' : '$daysLeft',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w900,
+                      fontSize: daysLeft <= 0 ? 13 : 22,
+                      color: daysLeft <= 3
+                          ? Colors.red
+                          : daysLeft <= 7
+                              ? Colors.orange
+                              : Colors.grey,
+                    ),
+                  ),
+                  if (daysLeft > 0)
+                    Text('days',
+                        style: TextStyle(
+                            fontSize: 10,
+                            color: isDark ? Colors.white38 : Colors.black38)),
+                ],
+              ),
+            if (_isAdmin) ...[
+              const SizedBox(width: 4),
+              PopupMenuButton<String>(
+                icon: Icon(Icons.more_vert,
+                    color: isDark ? Colors.white38 : Colors.black38),
+                itemBuilder: (_) => [
+                  const PopupMenuItem(value: 'edit', child: Text('Edit')),
+                  const PopupMenuItem(
+                      value: 'delete',
+                      child: Text('Delete',
+                          style: TextStyle(color: Colors.red))),
+                ],
+                onSelected: (val) async {
+                  if (val == 'delete') {
+                    await _svc.deleteExam(e.id);
+                    await _loadExams();
+                    setState(() {});
+                  } else {
+                    _showAddExamSheet(isDark, editing: e);
+                  }
+                },
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _emptyState({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required bool isDark,
+  }) =>
+      Center(
+        child: Padding(
+          padding: const EdgeInsets.all(40),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon,
+                  size: 64,
+                  color: isDark ? Colors.white24 : Colors.black26),
+              const SizedBox(height: 16),
+              Text(title,
+                  style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: isDark ? Colors.white70 : Colors.black87)),
+              const SizedBox(height: 8),
+              Text(subtitle,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                      fontSize: 13,
+                      color: isDark ? Colors.white38 : Colors.black45)),
+            ],
+          ),
+        ),
+      );
+
+  Color _hexColor(String hex) {
+    try {
+      return Color(int.parse(hex.replaceFirst('#', '0xFF')));
+    } catch (_) {
+      return Colors.indigo;
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════
+  //  BOTTOM SHEETS
+  // ══════════════════════════════════════════════════════════
+  void _showAddLectureSheet(bool isDark, {LectureEntry? editing}) {
+    final codeCtrl  = TextEditingController(text: editing?.courseCode ?? '');
+    final titleCtrl = TextEditingController(text: editing?.courseTitle ?? '');
+    final venueCtrl = TextEditingController(text: editing?.venue ?? '');
+    final noteCtrl  = TextEditingController(text: editing?.note ?? '');
+    String day         = editing?.day ?? _days[0];
+    String startTime   = editing?.startTime ?? '08:00';
+    String endTime     = editing?.endTime ?? '10:00';
+    String classType   = editing?.classType ?? 'normal';
+    bool   isImportant = editing?.isImportant ?? false;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setS) => Padding(
+          padding: EdgeInsets.only(
+              left: 20,
+              right: 20,
+              top: 20,
+              bottom: MediaQuery.of(ctx).viewInsets.bottom + 24),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _sheetHandle(isDark),
+                const SizedBox(height: 16),
+                Text(editing == null ? 'Add Lecture' : 'Edit Lecture',
+                    style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? Colors.white : Colors.black87)),
+                const SizedBox(height: 16),
+                _sheetField('Course Code *', codeCtrl, isDark),
+                const SizedBox(height: 12),
+                _sheetField('Course Title', titleCtrl, isDark),
+                const SizedBox(height: 12),
+                _sheetField('Venue', venueCtrl, isDark),
+                const SizedBox(height: 12),
+                _dropdownField('Day', _days, day, isDark,
+                    (v) => setS(() => day = v!)),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                        child: _timePicker(
+                            ctx, 'Start', startTime, isDark,
+                            (t) => setS(() => startTime = t))),
+                    const SizedBox(width: 12),
+                    Expanded(
+                        child: _timePicker(
+                            ctx, 'End', endTime, isDark,
+                            (t) => setS(() => endTime = t))),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                _dropdownField(
+                    'Class Type',
+                    ['normal', 'impromptu', 'test', 'meeting', 'other'],
+                    classType,
+                    isDark,
+                    (v) => setS(() {
+                          classType = v!;
+                          if (v != 'normal') isImportant = true;
+                        })),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Text('Mark as Important',
+                        style: TextStyle(
+                            color:
+                                isDark ? Colors.white70 : Colors.black54)),
+                    const Spacer(),
+                    Switch(
+                      value: isImportant,
+                      onChanged: (v) => setS(() => isImportant = v),
+                      activeColor: Colors.blue,
+                    ),
+                  ],
+                ),
+                _sheetField('Note (optional)', noteCtrl, isDark),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blue.shade700,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                    ),
+                    onPressed: () async {
+                      if (codeCtrl.text.trim().isEmpty) return;
+                      final body = {
+                        'courseCode':  codeCtrl.text.trim(),
+                        'courseTitle': titleCtrl.text.trim(),
+                        'venue':       venueCtrl.text.trim(),
+                        'day':         day,
+                        'startTime':   startTime,
+                        'endTime':     endTime,
+                        'classType':   classType,
+                        'isImportant': isImportant,
+                        'note':        noteCtrl.text.trim(),
+                        'school':      _school,
+                        'faculty':     _faculty,
+                        'department':  _department,
+                        'level':       _level,
+                      };
+                      try {
+                        if (editing == null) {
+                          await _svc.addLecture(body);
+                        } else {
+                          await _svc.updateLecture(editing.id, body);
+                        }
+                        await _loadLectures();
+                        setState(() {});
+                        if (ctx.mounted) Navigator.pop(ctx);
+                      } catch (e) {
+                        if (ctx.mounted)
+                          ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Error: $e')));
+                      }
+                    },
+                    child: Text(
+                        editing == null ? 'Add Lecture' : 'Save Changes'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showAddPersonalSheet(bool isDark, {PersonalEntry? editing}) {
+    final titleCtrl = TextEditingController(text: editing?.title ?? '');
+    final noteCtrl  = TextEditingController(text: editing?.note ?? '');
+    String day       = editing?.day ?? _days[0];
+    String startTime = editing?.startTime ?? '08:00';
+    String endTime   = editing?.endTime ?? '10:00';
+    String color     = editing?.color ?? '#4F46E5';
+
+    final colors = [
+      '#4F46E5','#7C3AED','#DB2777','#DC2626',
+      '#D97706','#059669','#0891B2','#1D4ED8',
+    ];
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setS) => Padding(
+          padding: EdgeInsets.only(
+              left: 20,
+              right: 20,
+              top: 20,
+              bottom: MediaQuery.of(ctx).viewInsets.bottom + 24),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _sheetHandle(isDark),
+                const SizedBox(height: 16),
+                Text(editing == null ? 'Add Study Session' : 'Edit Session',
+                    style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? Colors.white : Colors.black87)),
+                const SizedBox(height: 16),
+                _sheetField('Title (e.g. Read MTH301) *', titleCtrl, isDark),
+                const SizedBox(height: 12),
+                _dropdownField('Day', _days, day, isDark,
+                    (v) => setS(() => day = v!)),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                        child: _timePicker(
+                            ctx, 'Start', startTime, isDark,
+                            (t) => setS(() => startTime = t))),
+                    const SizedBox(width: 12),
+                    Expanded(
+                        child: _timePicker(
+                            ctx, 'End', endTime, isDark,
+                            (t) => setS(() => endTime = t))),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Text('Color',
+                    style: TextStyle(
+                        fontSize: 13,
+                        color: isDark ? Colors.white54 : Colors.black54)),
+                const SizedBox(height: 8),
+                Row(
+                  children: colors.map((c) {
+                    final selected = c == color;
+                    return GestureDetector(
+                      onTap: () => setS(() => color = c),
+                      child: Container(
+                        margin: const EdgeInsets.only(right: 8),
+                        width: 30,
+                        height: 30,
+                        decoration: BoxDecoration(
+                          color: _hexColor(c),
+                          shape: BoxShape.circle,
+                          border: selected
+                              ? Border.all(color: Colors.white, width: 3)
+                              : null,
+                          boxShadow: selected
+                              ? [
+                                  BoxShadow(
+                                      color: _hexColor(c).withOpacity(0.5),
+                                      blurRadius: 8)
+                                ]
+                              : null,
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 12),
+                _sheetField('Note (optional)', noteCtrl, isDark),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.indigo.shade600,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                    ),
+                    onPressed: () async {
+                      if (titleCtrl.text.trim().isEmpty) return;
+                      final body = {
+                        'title':     titleCtrl.text.trim(),
+                        'day':       day,
+                        'startTime': startTime,
+                        'endTime':   endTime,
+                        'color':     color,
+                        'note':      noteCtrl.text.trim(),
+                      };
+                      try {
+                        if (editing == null) {
+                          await _svc.addPersonal(body);
+                        } else {
+                          await _svc.updatePersonal(editing.id, body);
+                        }
+                        await _loadPersonal();
+                        setState(() {});
+                        if (ctx.mounted) Navigator.pop(ctx);
+                      } catch (e) {
+                        if (ctx.mounted)
+                          ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Error: $e')));
+                      }
+                    },
+                    child: Text(
+                        editing == null ? 'Add Session' : 'Save Changes'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showAddExamSheet(bool isDark, {LectureEntry? editing}) {
+    final codeCtrl  = TextEditingController(text: editing?.courseCode ?? '');
+    final titleCtrl = TextEditingController(text: editing?.courseTitle ?? '');
+    final venueCtrl = TextEditingController(text: editing?.venue ?? '');
+    final noteCtrl  = TextEditingController(text: editing?.note ?? '');
+    String startTime  = editing?.startTime ?? '09:00';
+    String endTime    = editing?.endTime ?? '11:00';
+    DateTime? examDate = editing?.date;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setS) => Padding(
+          padding: EdgeInsets.only(
+              left: 20,
+              right: 20,
+              top: 20,
+              bottom: MediaQuery.of(ctx).viewInsets.bottom + 24),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _sheetHandle(isDark),
+                const SizedBox(height: 16),
+                Text(editing == null ? 'Add Exam' : 'Edit Exam',
+                    style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? Colors.white : Colors.black87)),
+                const SizedBox(height: 16),
+                _sheetField('Course Code *', codeCtrl, isDark),
+                const SizedBox(height: 12),
+                _sheetField('Course Title', titleCtrl, isDark),
+                const SizedBox(height: 12),
+                _sheetField('Venue', venueCtrl, isDark),
+                const SizedBox(height: 12),
+                GestureDetector(
+                  onTap: () async {
+                    final picked = await showDatePicker(
+                      context: ctx,
+                      initialDate: examDate ?? DateTime.now(),
+                      firstDate: DateTime.now(),
+                      lastDate:
+                          DateTime.now().add(const Duration(days: 365)),
+                    );
+                    if (picked != null) setS(() => examDate = picked);
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 14),
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? const Color(0xFF0F172A)
+                          : Colors.grey.shade50,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                          color:
+                              isDark ? Colors.white24 : Colors.black12),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.calendar_today_rounded,
+                            size: 18,
+                            color:
+                                isDark ? Colors.white54 : Colors.black45),
+                        const SizedBox(width: 10),
+                        Text(
+                          examDate != null
+                              ? '${examDate!.day}/${examDate!.month}/${examDate!.year}'
+                              : 'Pick Exam Date *',
+                          style: TextStyle(
+                              color: isDark
+                                  ? Colors.white70
+                                  : Colors.black54),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                        child: _timePicker(
+                            ctx, 'Start', startTime, isDark,
+                            (t) => setS(() => startTime = t))),
+                    const SizedBox(width: 12),
+                    Expanded(
+                        child: _timePicker(
+                            ctx, 'End', endTime, isDark,
+                            (t) => setS(() => endTime = t))),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                _sheetField('Note (optional)', noteCtrl, isDark),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red.shade700,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                    ),
+                    onPressed: () async {
+                      if (codeCtrl.text.trim().isEmpty || examDate == null)
+                        return;
+                      final body = {
+                        'courseCode':  codeCtrl.text.trim(),
+                        'courseTitle': titleCtrl.text.trim(),
+                        'venue':       venueCtrl.text.trim(),
+                        'date':        examDate!.toIso8601String(),
+                        'startTime':   startTime,
+                        'endTime':     endTime,
+                        'note':        noteCtrl.text.trim(),
+                        'school':      _school,
+                        'faculty':     _faculty,
+                        'department':  _department,
+                        'level':       _level,
+                      };
+                      try {
+                        if (editing == null) {
+                          await _svc.addExam(body);
+                        } else {
+                          await _svc.updateExam(editing.id, body);
+                        }
+                        await _loadExams();
+                        setState(() {});
+                        if (ctx.mounted) Navigator.pop(ctx);
+                      } catch (e) {
+                        if (ctx.mounted)
+                          ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Error: $e')));
+                      }
+                    },
+                    child:
+                        Text(editing == null ? 'Add Exam' : 'Save Changes'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showAdminRequestSheet(bool isDark) {
+    final reasonCtrl = TextEditingController();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(
+            left: 20,
+            right: 20,
+            top: 20,
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _sheetHandle(isDark),
+            const SizedBox(height: 16),
+            Text('Request Admin Access',
+                style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? Colors.white : Colors.black87)),
+            const SizedBox(height: 8),
+            Text(
+              'Your school/faculty/department/level from your profile will be used. '
+              'Tell us why you should be a course rep admin.',
+              style: TextStyle(
+                  fontSize: 13,
+                  color: isDark ? Colors.white54 : Colors.black45),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: reasonCtrl,
+              maxLines: 3,
+              style:
+                  TextStyle(color: isDark ? Colors.white : Colors.black87),
+              decoration: InputDecoration(
+                hintText:
+                    'e.g. I am the elected course rep for 300L CSC...',
+                hintStyle: TextStyle(
+                    color: isDark ? Colors.white38 : Colors.black38),
+                filled: true,
+                fillColor: isDark
+                    ? const Color(0xFF0F172A)
+                    : Colors.grey.shade50,
+                border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue.shade700,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
+                onPressed: () async {
+                  if (reasonCtrl.text.trim().isEmpty) return;
+                  try {
+                    await _svc.requestAdmin({
+                      'reason':  reasonCtrl.text.trim(),
+                    });
+                    if (ctx.mounted) {
+                      Navigator.pop(ctx);
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                          content: Text(
+                              '✅ Request submitted! You\'ll be notified when reviewed.')));
+                    }
+                  } catch (e) {
+                    if (ctx.mounted)
+                      ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Error: $e')));
+                  }
+                },
+                child: const Text('Submit Request'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Sheet helpers ────────────────────────────────────────────────────────
+  Widget _sheetHandle(bool isDark) => Center(
+        child: Container(
+          width: 40,
+          height: 4,
+          decoration: BoxDecoration(
+            color: isDark ? Colors.white24 : Colors.black12,
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+      );
+
+  Widget _sheetField(
+          String label, TextEditingController ctrl, bool isDark) =>
+      TextField(
+        controller: ctrl,
+        style:
+            TextStyle(color: isDark ? Colors.white : Colors.black87),
+        decoration: InputDecoration(
+          labelText: label,
+          labelStyle: TextStyle(
+              color: isDark ? Colors.white54 : Colors.black54),
+          filled: true,
+          fillColor:
+              isDark ? const Color(0xFF0F172A) : Colors.grey.shade50,
+          border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12)),
+        ),
+      );
+
+  Widget _dropdownField(
+    String label,
+    List<String> items,
+    String value,
+    bool isDark,
+    ValueChanged<String?> onChanged,
+  ) =>
+      DropdownButtonFormField<String>(
+        value: value,
+        onChanged: onChanged,
+        dropdownColor:
+            isDark ? const Color(0xFF1E293B) : Colors.white,
+        style: TextStyle(
+            color: isDark ? Colors.white : Colors.black87),
+        decoration: InputDecoration(
+          labelText: label,
+          labelStyle: TextStyle(
+              color: isDark ? Colors.white54 : Colors.black54),
+          filled: true,
+          fillColor:
+              isDark ? const Color(0xFF0F172A) : Colors.grey.shade50,
+          border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12)),
+        ),
+        items: items
+            .map((d) => DropdownMenuItem(
+                value: d,
+                child: Text(d[0].toUpperCase() + d.substring(1))))
+            .toList(),
+      );
+
+  Widget _timePicker(
+    BuildContext ctx,
+    String label,
+    String current,
+    bool isDark,
+    ValueChanged<String> onPicked,
+  ) =>
+      GestureDetector(
+        onTap: () async {
+          final parts = current.split(':');
+          final initial = TimeOfDay(
+              hour: int.tryParse(parts[0]) ?? 8,
+              minute: int.tryParse(parts[1]) ?? 0);
+          final picked =
+              await showTimePicker(context: ctx, initialTime: initial);
+          if (picked != null) {
+            onPicked(
+                '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}');
+          }
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          decoration: BoxDecoration(
+            color:
+                isDark ? const Color(0xFF0F172A) : Colors.grey.shade50,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+                color: isDark ? Colors.white24 : Colors.black12),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.access_time_rounded,
+                  size: 18,
+                  color: isDark ? Colors.white54 : Colors.black45),
+              const SizedBox(width: 8),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label,
+                      style: TextStyle(
+                          fontSize: 10,
+                          color:
+                              isDark ? Colors.white38 : Colors.black38)),
+                  Text(current,
+                      style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color:
+                              isDark ? Colors.white : Colors.black87)),
+                ],
+              ),
+            ],
+          ),
+        ),
+      );
 }

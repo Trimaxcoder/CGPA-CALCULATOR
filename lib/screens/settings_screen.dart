@@ -5,16 +5,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../providers/theme_notifier.dart';
 
-
 import '../models/studentProfile_model.dart';
 import '../services/api_service.dart';
 import '../screens/landing_page.dart';
 import '../widgets/combo_field.dart';
 import '../widgets/snackBar.dart';
 import '../widgets/ui_helpers.dart';
-import '../uniport_courses.dart'; 
-import '../services/api_service.dart';      
-
+import '../uniport_courses.dart';
+import '../services/api_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -36,9 +34,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final prefs = await SharedPreferences.getInstance();
     final pd = prefs.getString('profile');
     if (pd != null) {
-      setState(() => profile = StudentProfile.fromMap(
-            Map<String, dynamic>.from(jsonDecode(pd)),
-          ));
+      setState(
+        () => profile = StudentProfile.fromMap(
+          Map<String, dynamic>.from(jsonDecode(pd)),
+        ),
+      );
     }
     // Pull fresh from server
     try {
@@ -64,13 +64,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final isDark = themeNotifier.isDarkMode;
 
     return Scaffold(
-      backgroundColor:
-          isDark ? const Color(0xFF121212) : const Color(0xFFF2F4F8),
+      backgroundColor: isDark
+          ? const Color(0xFF121212)
+          : const Color(0xFFF2F4F8),
       appBar: AppBar(
         title: const Text('Settings'),
         automaticallyImplyLeading: false,
-        backgroundColor:
-            isDark ? const Color(0xFF1A1A2E) : Colors.blue.shade700,
+        backgroundColor: isDark
+            ? const Color(0xFF1A1A2E)
+            : Colors.blue.shade700,
         foregroundColor: Colors.white,
         elevation: 0,
       ),
@@ -84,13 +86,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SizedBox(height: 8),
           _buildCard(isDark, [
             _switchTile(
-              icon: isDark
-                  ? Icons.dark_mode_rounded
-                  : Icons.light_mode_rounded,
+              icon: isDark ? Icons.dark_mode_rounded : Icons.light_mode_rounded,
               iconColor: isDark ? Colors.indigo.shade300 : Colors.amber,
               title: 'Dark Mode',
-              subtitle:
-                  isDark ? 'Using dark theme' : 'Using light theme',
+              subtitle: isDark ? 'Using dark theme' : 'Using light theme',
               value: isDark,
               onChanged: (_) => themeNotifier.toggleTheme(),
               isDark: isDark,
@@ -152,8 +151,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   // ── Profile Card ─────────────────────────────────────────────────────────
   Widget _buildProfileCard(bool isDark) {
-    final initial =
-        profile.name.isNotEmpty ? profile.name[0].toUpperCase() : '?';
+    final initial = profile.name.isNotEmpty
+        ? profile.name[0].toUpperCase()
+        : '?';
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 20),
@@ -203,8 +203,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           if (profile.department.isNotEmpty) ...[
             const SizedBox(height: 10),
             Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
               decoration: BoxDecoration(
                 color: Colors.white.withOpacity(0.15),
                 borderRadius: BorderRadius.circular(20),
@@ -224,12 +223,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
             children: [
               Expanded(
                 child: _profileInfoBox(
-                    Icons.account_balance, 'School', profile.school),
+                  Icons.account_balance,
+                  'School',
+                  profile.school,
+                ),
               ),
               const SizedBox(width: 10),
               Expanded(
                 child: _profileInfoBox(
-                    Icons.badge_outlined, 'Matric', profile.matricNumber),
+                  Icons.badge_outlined,
+                  'Matric',
+                  profile.matricNumber,
+                ),
               ),
             ],
           ),
@@ -237,13 +242,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Row(
             children: [
               Expanded(
-                child: _profileInfoBox(Icons.account_balance_outlined,
-                    'Faculty', profile.faculty),
+                child: _profileInfoBox(
+                  Icons.account_balance_outlined,
+                  'Faculty',
+                  profile.faculty,
+                ),
               ),
               const SizedBox(width: 10),
               Expanded(
-                child: _profileInfoBox(Icons.school_outlined, 'Department',
-                    profile.department),
+                child: _profileInfoBox(
+                  Icons.school_outlined,
+                  'Department',
+                  profile.department,
+                ),
               ),
             ],
           ),
@@ -254,8 +265,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Widget _profileInfoBox(IconData icon, String label, String value) =>
       Container(
-        padding:
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
           color: Colors.white.withOpacity(0.12),
           borderRadius: BorderRadius.circular(12),
@@ -268,9 +278,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(label,
-                      style: const TextStyle(
-                          fontSize: 9, color: Colors.white60)),
+                  Text(
+                    label,
+                    style: const TextStyle(fontSize: 9, color: Colors.white60),
+                  ),
                   Text(
                     value.isNotEmpty ? value : '—',
                     style: const TextStyle(
@@ -287,7 +298,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
       );
 
-  // ── Edit Profile (same logic as HomeScreen) ───────────────────────────────
   void _showEditProfile(bool isDark) {
     final fk = GlobalKey<FormState>();
     final nameC = TextEditingController(text: profile.name);
@@ -296,6 +306,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final schoolC = TextEditingController(text: profile.school);
     final facC = TextEditingController(text: profile.faculty);
     final deptC = TextEditingController(text: profile.department);
+    String selectedLevel = profile.level.isNotEmpty ? profile.level : '100';
 
     final textColor = isDark ? Colors.white : Colors.black87;
     final labelColor = isDark ? Colors.white70 : Colors.black54;
@@ -391,6 +402,39 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               : null,
                     ),
                   ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    value: selectedLevel,
+                    onChanged: (v) => setD(() => selectedLevel = v!),
+                    style: TextStyle(color: textColor),
+                    dropdownColor:
+                        isDark ? const Color(0xFF2A2A2A) : Colors.white,
+                    decoration: InputDecoration(
+                      labelText: 'Level',
+                      prefixIcon: const Icon(
+                          Icons.stairs_outlined,
+                          color: Colors.blue),
+                      filled: true,
+                      fillColor: fillColor,
+                      labelStyle: TextStyle(color: labelColor),
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                      enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(
+                              color: isDark
+                                  ? Colors.white24
+                                  : Colors.black12)),
+                      focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(
+                              color: Colors.blue.shade300, width: 2)),
+                    ),
+                    items: ['100', '200', '300', '400', '500', '600', '700']
+                        .map((l) => DropdownMenuItem(
+                            value: l, child: Text('$l Level')))
+                        .toList(),
+                  ),
                 ],
               ),
             ),
@@ -408,12 +452,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onPressed: () async {
                 if (!fk.currentState!.validate()) return;
                 final updated = StudentProfile(
-                  name: nameC.text.trim(),
-                  email: emailC.text.trim(),
+                  name:         nameC.text.trim(),
+                  email:        emailC.text.trim(),
                   matricNumber: matricC.text.trim(),
-                  school: schoolC.text.trim(),
-                  faculty: facC.text.trim(),
-                  department: deptC.text.trim(),
+                  school:       schoolC.text.trim(),
+                  faculty:      facC.text.trim(),
+                  department:   deptC.text.trim(),
+                  level:        selectedLevel,
                 );
                 setState(() => profile = updated);
                 await _saveProfile();
@@ -439,19 +484,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor:
-            isDark ? const Color(0xFF1E1E1E) : Colors.white,
+        backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
         surfaceTintColor: Colors.transparent,
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20)),
-        title: Text('Sign Out',
-            style: TextStyle(
-                color: isDark ? Colors.white : Colors.black87)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          'Sign Out',
+          style: TextStyle(color: isDark ? Colors.white : Colors.black87),
+        ),
         content: Text(
           'Are you sure you want to sign out? '
           'Your data will remain saved locally.',
-          style: TextStyle(
-              color: isDark ? Colors.white70 : Colors.black54),
+          style: TextStyle(color: isDark ? Colors.white70 : Colors.black54),
         ),
         actions: [
           TextButton(
@@ -481,8 +524,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await prefs.remove('savedEmail');
 
     if (!mounted) return;
-    Navigator.of(context)
-        .pushAndRemoveUntil(fadeRoute(const LandingPage()), (_) => false);
+    Navigator.of(
+      context,
+    ).pushAndRemoveUntil(fadeRoute(const LandingPage()), (_) => false);
   }
 
   // ── Delete Account ────────────────────────────────────────────────────────
@@ -491,18 +535,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor:
-            isDark ? const Color(0xFF1E1E1E) : Colors.white,
+        backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
         surfaceTintColor: Colors.transparent,
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20)),
-        title: const Text('Delete Account',
-            style: TextStyle(color: Colors.red)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text(
+          'Delete Account',
+          style: TextStyle(color: Colors.red),
+        ),
         content: Text(
           'This will permanently delete your account and all data. '
           'This cannot be undone.',
-          style: TextStyle(
-              color: isDark ? Colors.white70 : Colors.black54),
+          style: TextStyle(color: isDark ? Colors.white70 : Colors.black54),
         ),
         actions: [
           TextButton(
@@ -530,8 +573,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await prefs.clear();
 
     if (!mounted) return;
-    Navigator.of(context)
-        .pushAndRemoveUntil(fadeRoute(const LandingPage()), (_) => false);
+    Navigator.of(
+      context,
+    ).pushAndRemoveUntil(fadeRoute(const LandingPage()), (_) => false);
   }
 
   // ── _editField ────────────────────────────────────────────────────────────
@@ -543,63 +587,55 @@ class _SettingsScreenState extends State<SettingsScreen> {
     Color labelColor,
     Color fillColor,
     String? Function(String?) validator,
-  ) =>
-      TextFormField(
-        controller: ctrl,
-        style: TextStyle(color: textColor),
-        validator: validator,
-        decoration: InputDecoration(
-          labelText: label,
-          labelStyle: TextStyle(color: labelColor),
-          prefixIcon: Icon(icon, color: Colors.blue, size: 20),
-          filled: true,
-          fillColor: fillColor,
-          border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12)),
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        ),
-      );
+  ) => TextFormField(
+    controller: ctrl,
+    style: TextStyle(color: textColor),
+    validator: validator,
+    decoration: InputDecoration(
+      labelText: label,
+      labelStyle: TextStyle(color: labelColor),
+      prefixIcon: Icon(icon, color: Colors.blue, size: 20),
+      filled: true,
+      fillColor: fillColor,
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+    ),
+  );
 
   // ── UI helpers ─────────────────────────────────────────────────────────
   Widget _sectionLabel(String title, bool isDark) => Padding(
-        padding: const EdgeInsets.only(left: 4),
-        child: Text(
-          title.toUpperCase(),
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 1.2,
-            color: isDark
-                ? Colors.indigo.shade300
-                : Colors.blue.shade700,
-          ),
-        ),
-      );
+    padding: const EdgeInsets.only(left: 4),
+    child: Text(
+      title.toUpperCase(),
+      style: TextStyle(
+        fontSize: 11,
+        fontWeight: FontWeight.w700,
+        letterSpacing: 1.2,
+        color: isDark ? Colors.indigo.shade300 : Colors.blue.shade700,
+      ),
+    ),
+  );
 
   Widget _buildCard(bool isDark, List<Widget> children) => Container(
-        decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color:
-                  Colors.black.withOpacity(isDark ? 0.3 : 0.05),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
+    decoration: BoxDecoration(
+      color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
+          blurRadius: 10,
+          offset: const Offset(0, 4),
         ),
-        child: Column(children: children),
-      );
+      ],
+    ),
+    child: Column(children: children),
+  );
 
   Widget _divider(bool isDark) => Divider(
-        height: 1,
-        indent: 52,
-        color: isDark
-            ? Colors.white10
-            : Colors.black.withOpacity(0.06),
-      );
+    height: 1,
+    indent: 52,
+    color: isDark ? Colors.white10 : Colors.black.withOpacity(0.06),
+  );
 
   Widget _switchTile({
     required IconData icon,
@@ -609,42 +645,39 @@ class _SettingsScreenState extends State<SettingsScreen> {
     required bool value,
     required ValueChanged<bool> onChanged,
     required bool isDark,
-  }) =>
-      Padding(
-        padding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Row(
-          children: [
-            _iconBox(icon, iconColor),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title,
-                      style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14,
-                          color: isDark
-                              ? Colors.white
-                              : Colors.black87)),
-                  const SizedBox(height: 2),
-                  Text(subtitle,
-                      style: TextStyle(
-                          fontSize: 12,
-                          color: isDark
-                              ? Colors.white54
-                              : Colors.black45)),
-                ],
+  }) => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+    child: Row(
+      children: [
+        _iconBox(icon, iconColor),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                  color: isDark ? Colors.white : Colors.black87,
+                ),
               ),
-            ),
-            Switch(
-                value: value,
-                onChanged: onChanged,
-                activeColor: Colors.blue),
-          ],
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: isDark ? Colors.white54 : Colors.black45,
+                ),
+              ),
+            ],
+          ),
         ),
-      );
+        Switch(value: value, onChanged: onChanged, activeColor: Colors.blue),
+      ],
+    ),
+  );
 
   Widget _actionTile({
     required IconData icon,
@@ -654,60 +687,57 @@ class _SettingsScreenState extends State<SettingsScreen> {
     required VoidCallback? onTap,
     required bool isDark,
     Color? textColor,
-  }) =>
-      InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-              horizontal: 16, vertical: 14),
-          child: Row(
-            children: [
-              _iconBox(icon, iconColor),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 14,
-                        color: textColor ??
-                            (isDark
-                                ? Colors.white
-                                : Colors.black87),
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(subtitle,
-                        style: TextStyle(
-                            fontSize: 12,
-                            color: isDark
-                                ? Colors.white54
-                                : Colors.black45)),
-                  ],
+  }) => InkWell(
+    onTap: onTap,
+    borderRadius: BorderRadius.circular(16),
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      child: Row(
+        children: [
+          _iconBox(icon, iconColor),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                    color:
+                        textColor ?? (isDark ? Colors.white : Colors.black87),
+                  ),
                 ),
-              ),
-              if (onTap != null)
-                Icon(Icons.chevron_right_rounded,
-                    size: 20,
-                    color: isDark
-                        ? Colors.white30
-                        : Colors.black26),
-            ],
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: isDark ? Colors.white54 : Colors.black45,
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-      );
+          if (onTap != null)
+            Icon(
+              Icons.chevron_right_rounded,
+              size: 20,
+              color: isDark ? Colors.white30 : Colors.black26,
+            ),
+        ],
+      ),
+    ),
+  );
 
   Widget _iconBox(IconData icon, Color color) => Container(
-        width: 36,
-        height: 36,
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.12),
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Icon(icon, color: color, size: 18),
-      );
+    width: 36,
+    height: 36,
+    decoration: BoxDecoration(
+      color: color.withOpacity(0.12),
+      borderRadius: BorderRadius.circular(10),
+    ),
+    child: Icon(icon, color: color, size: 18),
+  );
 }

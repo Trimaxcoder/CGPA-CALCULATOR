@@ -80,6 +80,19 @@ class TimetableService {
     return await _client.get('/admin/status');
   }
 
+  // ── Super Admin ───────────────────────────────────────────────────────────
+Future<List<Map<String, dynamic>>> getPendingRequests() async {
+  final data = await _client.get('/admin/pending');
+  return List<Map<String, dynamic>>.from(data['requests']);
+}
+
+Future<void> reviewRequest(String id, String status, {String reviewNote = ''}) async {
+  await _client.put('/admin/review/$id', {
+    'status':     status,
+    'reviewNote': reviewNote,
+  });
+}
+
   // ── Notifications token ───────────────────────────────────────────────────
   Future<void> saveNotificationToken({
     required String token,

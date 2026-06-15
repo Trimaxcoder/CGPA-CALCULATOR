@@ -37,6 +37,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _schoolC = TextEditingController();
   final _facC = TextEditingController();
   final _deptC = TextEditingController();
+  String _selectedLevel = '100';
+  static const _levels = ['100', '200', '300', '400', '500', '600', '700'];
   final _passC = TextEditingController();
   final _confirmPassC = TextEditingController();
 
@@ -73,6 +75,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       'school': _schoolC.text.trim(),
       'faculty': _facC.text.trim(),
       'department': _deptC.text.trim(),
+      'level': _selectedLevel,
     };
 
     final profile = StudentProfile(
@@ -82,6 +85,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       school: profileData['school']!,
       faculty: profileData['faculty']!,
       department: profileData['department']!,
+       level: profileData['level']!,
     );
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('profile', jsonEncode(profile.toMap()));
@@ -333,6 +337,22 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       : null,
                 ),
                 const SizedBox(height: 14),
+                const SizedBox(height: 14),
+DropdownButtonFormField<String>(
+  value: _selectedLevel,
+  onChanged: (v) => setState(() => _selectedLevel = v!),
+  style: const TextStyle(color: Colors.white),
+  dropdownColor: Colors.blue.shade900,
+  decoration: _dec('Level', Icons.stairs_outlined),
+  items: _levels
+      .map((l) => DropdownMenuItem(
+            value: l,
+            child: Text('$l Level'),
+          ))
+      .toList(),
+  validator: (v) =>
+      (v == null || v.isEmpty) ? 'Select your level' : null,
+),
                 ComboField(
                   controller: _deptC,
                   label: 'Department',
