@@ -10,7 +10,7 @@ import 'dart:convert';
 import 'package:flutter/rendering.dart';
 
 import 'dart:async';
-
+import 'main_shell.dart';
 import '../widgets/ui_helpers.dart';
 import '../models/studentProfile_model.dart';
 import '../uniport_courses.dart';
@@ -154,7 +154,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       if (!mounted) return;
       Navigator.of(
         context,
-      ).pushAndRemoveUntil(fadeRoute(const HomeScreen()), (_) => false);
+      ).pushAndRemoveUntil(fadeRoute(const MainShell()), (_) => false);
     } on ApiException catch (e) {
       print("=== API ERROR: ${e.message}");
       if (mounted) AppSnackBar.showError(context, e.message);

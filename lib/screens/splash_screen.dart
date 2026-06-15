@@ -11,6 +11,8 @@ import 'signinscreen.dart';
 import 'resetpasswordscreen.dart';
 import 'landing_page.dart';
 import 'homescreen.dart';
+import 'main_shell.dart';
+import '../services/notification_service.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -81,9 +83,13 @@ class _SplashScreenState extends State<SplashScreen>
         }
       }
 
+       if (tokenValid) {
+        await NotificationService.init();
+      }
+
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
-        fadeRoute(tokenValid ? const HomeScreen() : const SignInScreen()),
+        fadeRoute(tokenValid ? const MainShell() : const SignInScreen()),
       );
     });
   }

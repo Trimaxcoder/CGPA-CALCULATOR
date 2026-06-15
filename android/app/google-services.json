@@ -1,44 +1,26 @@
 {
   "project_info": {
-    "project_number": "36781799836",
-    "project_id": "gradex-497715",
-    "storage_bucket": "gradex-497715.firebasestorage.app"
+    "project_number": "672646882187",
+    "project_id": "cgpa-calculator-8e6ae",
+    "storage_bucket": "cgpa-calculator-8e6ae.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:36781799836:android:dee17ccf6c2fd0e0aab059",
+        "mobilesdk_app_id": "1:672646882187:android:ff6cf4d02fd80e663f058e",
         "android_client_info": {
           "package_name": "com.example.gradex"
         }
       },
-      "oauth_client": [
-        {
-          "client_id": "36781799836-r0fa4p6ogpj2u45k670vvh5p5fqrc4vb.apps.googleusercontent.com",
-          "client_type": 1,
-          "android_info": {
-            "package_name": "com.example.gradex",
-            "certificate_hash": "53a3dcdc121318ed77580ce88911785846a4c09a"
-          }
-        },
-        {
-          "client_id": "36781799836-2vi1s0vj9r5sai75ujebr7q534uek74n.apps.googleusercontent.com",
-          "client_type": 3
-        }
-      ],
+      "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyAyWY6iJbKRQRhtn_GLM8jJYVh1OpG6s5A"
+          "current_key": "AIzaSyA7yzE7Xkl6IusQeRJ7QevWZJmskMT2_NI"
         }
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": [
-            {
-              "client_id": "36781799836-2vi1s0vj9r5sai75ujebr7q534uek74n.apps.googleusercontent.com",
-              "client_type": 3
-            }
-          ]
+          "other_platform_oauth_client": []
         }
       }
     }

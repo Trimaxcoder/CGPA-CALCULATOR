@@ -10,7 +10,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'dart:convert';
 
 
-
+import 'main_shell.dart';
 import '../widgets/ui_helpers.dart';
 import '../models/studentProfile_model.dart';
 import '../services/api_service.dart';
@@ -102,7 +102,7 @@ class _SignInScreenState extends State<SignInScreen> {
       if (!mounted) return;
       Navigator.of(
         context,
-      ).pushAndRemoveUntil(fadeRoute(const HomeScreen()), (_) => false);
+      ).pushAndRemoveUntil(fadeRoute(const MainShell()), (_) => false);
     } on UnauthorizedException {
       setState(() => _errorMsg = 'Incorrect email or password.');
     } on ApiException catch (e) {

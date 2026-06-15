@@ -19,7 +19,8 @@ import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart
 import 'package:google_mlkit_document_scanner/google_mlkit_document_scanner.dart';
 
 
-
+import 'package:provider/provider.dart';
+import '../providers/theme_notifier.dart';
 import '../models/grading_model.dart';
 import '../uniport_courses.dart';
 import '../services/api_service.dart';
@@ -32,24 +33,6 @@ import '../screens/signinscreen.dart';
 import '../screens/registerscreen.dart';
 import '../widgets/ui_helpers.dart';
 import '../widgets/snackBar.dart';
-
-
-void main() => runApp(const MyApp());
-
-// ══════════════════════════════════════════════════════════
-//  APP ROOT
-// ══════════════════════════════════════════════════════════
-
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
-  @override
-  Widget build(BuildContext context) => MaterialApp(
-    debugShowCheckedModeBanner: false,
-    theme: ThemeData(useMaterial3: false),
-    home: const SplashScreen(),
-  );
-}
-
 
 
 
@@ -2112,161 +2095,6 @@ class _HomeScreenState extends State<HomeScreen>
     }
   }
 
-  void _deleteAccount() async {
-    // Step 1: typed confirmation dialog
-    final confirmed = await _showDeleteAccountDialog();
-    if (!confirmed) return;
-
-    try {
-      await ProfileService().deleteAccount();
-    } catch (_) {}
-
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.clear();
-    if (!mounted) return;
-    Navigator.of(
-      context,
-    ).pushAndRemoveUntil(fadeRoute(const LoginScreen()), (_) => false);
-  }
-
-  Future<bool> _showDeleteAccountDialog() async {
-    final confirmCtrl = TextEditingController();
-    final result = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setD) {
-          final bgColor = isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
-          final textColor = isDarkMode ? Colors.white : Colors.black87;
-          final typed = confirmCtrl.text.trim().toUpperCase();
-          final ready = typed == 'DELETE';
-
-          return AlertDialog(
-            backgroundColor: bgColor,
-            surfaceTintColor: Colors.transparent,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
-            ),
-            title: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.red.withOpacity(0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.delete_forever, color: Colors.red),
-                ),
-                const SizedBox(width: 12),
-                Flexible(
-                  child: Text(
-                    'Delete Account',
-                    style: TextStyle(color: Colors.red.shade700, fontSize: 18),
-                  ),
-                ),
-              ],
-            ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'This action is permanent and cannot be undone. '
-                  'All your courses, grades, and profile data will be deleted.',
-                  style: TextStyle(color: textColor, fontSize: 13, height: 1.5),
-                ),
-                const SizedBox(height: 20),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.red.withOpacity(0.07),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Colors.red.withOpacity(0.3)),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.warning_amber_rounded,
-                        color: Colors.red.shade400,
-                        size: 18,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'Type DELETE to confirm',
-                          style: TextStyle(
-                            color: Colors.red.shade400,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 14),
-                TextField(
-                  controller: confirmCtrl,
-                  textCapitalization: TextCapitalization.characters,
-                  style: TextStyle(color: textColor, letterSpacing: 2),
-                  onChanged: (_) => setD(() {}),
-                  decoration: InputDecoration(
-                    hintText: 'Type DELETE here',
-                    hintStyle: TextStyle(
-                      color: isDarkMode
-                          ? Colors.grey.shade600
-                          : Colors.grey.shade400,
-                      letterSpacing: 0,
-                    ),
-                    filled: true,
-                    fillColor: isDarkMode
-                        ? const Color(0xFF2A2A2A)
-                        : Colors.grey.shade50,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(
-                        color: ready ? Colors.red : Colors.grey.shade300,
-                      ),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: Colors.red, width: 2),
-                    ),
-                    isDense: true,
-                  ),
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: Text(
-                  'Cancel',
-                  style: TextStyle(color: Colors.grey.shade600),
-                ),
-              ),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: ready ? Colors.red : Colors.grey.shade300,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-                onPressed: ready ? () => Navigator.pop(ctx, true) : null,
-                child: const Text(
-                  'Delete Account',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-    confirmCtrl.dispose();
-    return result ?? false;
-  }
 
   Future<bool> _confirm(
     String title,
@@ -4018,399 +3846,7 @@ class _HomeScreenState extends State<HomeScreen>
     }
   }
 
-  // ══════════════════════════════════════════════════════════
-  //  PROFILE TAB
-  // ══════════════════════════════════════════════════════════
 
-  Widget _buildProfile() => SingleChildScrollView(
-    padding: const EdgeInsets.fromLTRB(20, 20, 20, 40),
-    child: Column(
-      children: [
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 20),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [Colors.blue.shade700, Colors.indigo.shade900],
-            ),
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Column(
-            children: [
-              CircleAvatar(
-                radius: 46,
-                backgroundColor: Colors.white.withOpacity(0.2),
-                child: Text(
-                  profile.name.isNotEmpty ? profile.name[0].toUpperCase() : '?',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 38,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 14),
-              Text(
-                profile.name,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                profile.email,
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.white70, fontSize: 13),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 20),
-        _infoTile(Icons.account_balance, 'School', profile.school),
-        _infoTile(Icons.badge_outlined, 'Matric Number', profile.matricNumber),
-        _infoTile(Icons.school_outlined, 'Department', profile.department),
-        _infoTile(Icons.account_balance_outlined, 'Faculty', profile.faculty),
-        const SizedBox(height: 28),
-        SizedBox(
-          width: double.infinity,
-          height: 50,
-          child: ElevatedButton.icon(
-            onPressed: _showEditProfile,
-            icon: const Icon(Icons.edit),
-            label: const Text('Edit Profile'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blue,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(height: 12),
-        SizedBox(
-          width: double.infinity,
-          height: 50,
-          child: OutlinedButton.icon(
-            onPressed: _deleteAccount,
-            icon: const Icon(Icons.delete_forever, color: Colors.red),
-            label: const Text(
-              'Delete Account',
-              style: TextStyle(color: Colors.red),
-            ),
-            style: OutlinedButton.styleFrom(
-              side: const BorderSide(color: Colors.red),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(height: 12),
-
-        // ── Sign Out button ──────────────────────────────────
-        SizedBox(
-          width: double.infinity,
-          height: 50,
-          child: OutlinedButton.icon(
-            onPressed: _signOut,
-            icon: const Icon(Icons.logout, color: Colors.orange),
-            label: const Text(
-              'Sign Out',
-              style: TextStyle(color: Colors.orange),
-            ),
-            style: OutlinedButton.styleFrom(
-              side: const BorderSide(color: Colors.orange),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
-              ),
-            ),
-          ),
-        ),
-      ],
-    ),
-  );
-
-  Future<void> _signOut() async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
-        surfaceTintColor: Colors.transparent,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text(
-          'Sign Out',
-          style: TextStyle(color: isDarkMode ? Colors.white : Colors.black87),
-        ),
-        content: Text(
-          'Are you sure you want to sign out? '
-          'Your data will remain saved locally.',
-          style: TextStyle(color: isDarkMode ? Colors.white70 : Colors.black54),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.orange,
-              foregroundColor: Colors.white,
-            ),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Sign Out'),
-          ),
-        ],
-      ),
-    );
-    if (ok != true) return;
-
-    try {
-      await AuthService().logout();
-    } catch (_) {}
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('authToken');
-    await prefs.remove('refreshToken');
-    await prefs.remove('savedEmail');
-
-    if (!mounted) return;
-    Navigator.of(
-      context,
-    ).pushAndRemoveUntil(fadeRoute(const LandingPage()), (_) => false);
-  }
-
-  Widget _infoTile(IconData icon, String label, String value) => Container(
-    margin: const EdgeInsets.only(bottom: 12),
-    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-    decoration: BoxDecoration(
-      color: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
-      borderRadius: BorderRadius.circular(14),
-      boxShadow: [
-        BoxShadow(
-          color: Colors.black.withOpacity(0.04),
-          blurRadius: 8,
-          offset: const Offset(0, 2),
-        ),
-      ],
-    ),
-    child: Row(
-      children: [
-        Icon(icon, color: Colors.blue, size: 22),
-        const SizedBox(width: 14),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                value.isNotEmpty ? value : '—',
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  color: isDarkMode ? Colors.white : Colors.black87, // ← fixed
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    ),
-  );
-
-  void _showEditProfile() {
-    final fk = GlobalKey<FormState>();
-    final nameC = TextEditingController(text: profile.name);
-    final emailC = TextEditingController(text: profile.email);
-    final matricC = TextEditingController(text: profile.matricNumber);
-    final schoolC = TextEditingController(text: profile.school);
-    final facC = TextEditingController(text: profile.faculty);
-    final deptC = TextEditingController(text: profile.department);
-
-    final textColor = isDarkMode ? Colors.white : Colors.black87;
-    final labelColor = isDarkMode ? Colors.white70 : Colors.black54;
-    final fillColor = isDarkMode
-        ? const Color(0xFF2A2A2A)
-        : Colors.grey.shade50;
-
-    showDialog(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setD) => AlertDialog(
-          backgroundColor: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
-          surfaceTintColor: Colors.transparent,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          title: Row(
-            children: [
-              const Icon(Icons.edit, color: Colors.blue),
-              const SizedBox(width: 8),
-              Text('Edit Profile', style: TextStyle(color: textColor)),
-            ],
-          ),
-          content: SingleChildScrollView(
-            child: Form(
-              key: fk,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _editField(
-                    nameC,
-                    'Full Name',
-                    Icons.person_outline,
-                    textColor,
-                    labelColor,
-                    fillColor,
-                    (v) {
-                      if (v == null || v.trim().isEmpty) return 'Required';
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  _editField(
-                    emailC,
-                    'Email',
-                    Icons.email_outlined,
-                    textColor,
-                    labelColor,
-                    fillColor,
-                    (v) {
-                      if (v == null || v.trim().isEmpty) return 'Required';
-                      if (!v.trim().contains('@'))
-                        return 'Email must contain @';
-                      if (!isValidEmail(v.trim())) return 'Invalid email';
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  _editField(
-                    matricC,
-                    'Matric Number',
-                    Icons.badge_outlined,
-                    textColor,
-                    labelColor,
-                    fillColor,
-                    (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
-                  ),
-                  const SizedBox(height: 12),
-                  ComboField(
-                    controller: schoolC,
-                    label: 'School / University',
-                    icon: Icons.account_balance,
-                    suggestions: getAllSchools(),
-                    dark: !isDarkMode,
-                    validator: (v) =>
-                        (v == null || v.trim().isEmpty) ? 'Required' : null,
-                  ),
-                  const SizedBox(height: 12),
-                  ComboField(
-                    controller: facC,
-                    label: 'Faculty',
-                    icon: Icons.account_balance_outlined,
-                    suggestions: getFaculties(),
-                    dark: !isDarkMode,
-                    onSuggestionSelected: (_) => setD(() => deptC.clear()),
-                    validator: (v) =>
-                        (v == null || v.trim().isEmpty) ? 'Required' : null,
-                  ),
-                  const SizedBox(height: 12),
-                  StatefulBuilder(
-                    builder: (_, setSub) => ComboField(
-                      controller: deptC,
-                      label: 'Department',
-                      icon: Icons.school_outlined,
-                      suggestions: facC.text.trim().isNotEmpty
-                          ? getDepartments(facC.text.trim())
-                          : [],
-                      dark: !isDarkMode,
-                      validator: (v) =>
-                          (v == null || v.trim().isEmpty) ? 'Required' : null,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue,
-                foregroundColor: Colors.white,
-              ),
-              onPressed: () async {
-                if (!fk.currentState!.validate()) return;
-                final updated = StudentProfile(
-                  name: nameC.text.trim(),
-                  email: emailC.text.trim(),
-                  matricNumber: matricC.text.trim(),
-                  school: schoolC.text.trim(),
-                  faculty: facC.text.trim(),
-                  department: deptC.text.trim(),
-                );
-                setState(() => profile = updated);
-                _saveProfile();
-                Navigator.pop(ctx);
-                ProfileService()
-                    .updateProfile(updated.toMap())
-                    .then(
-                      (_) =>
-                          AppSnackBar.showSuccess(context, 'Profile updated ✓'),
-                    )
-                    .catchError(
-                      (e) => AppSnackBar.showError(
-                        context,
-                        'Saved locally. Server: $e',
-                      ),
-                    );
-              },
-              child: const Text('Save'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _editField(
-    TextEditingController ctrl,
-    String label,
-    IconData icon,
-    Color textColor,
-    Color labelColor,
-    Color fillColor,
-    String? Function(String?) validator,
-  ) => TextFormField(
-    controller: ctrl,
-    validator: validator,
-    style: TextStyle(color: textColor),
-    decoration: _editDec(label, icon, labelColor, fillColor),
-  );
-
-  InputDecoration _editDec(
-    String label,
-    IconData icon,
-    Color labelColor,
-    Color fillColor,
-  ) => InputDecoration(
-    labelText: label,
-    labelStyle: TextStyle(color: labelColor),
-    prefixIcon: Icon(icon, color: Colors.blue),
-    filled: true,
-    fillColor: fillColor,
-    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-    isDense: true,
-  );
 
   // ══════════════════════════════════════════════════════════
   //  GPA CHART
@@ -5383,146 +4819,181 @@ class _HomeScreenState extends State<HomeScreen>
     ),
   );
 
+
+
+  Widget _buildClearAllTab() {
+  final isDark = context.read<ThemeNotifier>().isDarkMode;
+  return Center(
+    child: Padding(
+      padding: const EdgeInsets.all(32),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.delete_forever_rounded, size: 64,
+              color: Colors.red.withOpacity(0.7)),
+          const SizedBox(height: 16),
+          const Text('Clear All Courses',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          Text(
+            'This will permanently delete all your courses.\nThis cannot be undone.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+                color: isDark ? Colors.white54 : Colors.black45, fontSize: 14),
+          ),
+          const SizedBox(height: 28),
+          ElevatedButton.icon(
+            onPressed: _clearAll,
+            icon: const Icon(Icons.delete_forever),
+            label: const Text('Clear All'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14)),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
   // ══════════════════════════════════════════════════════════
   //  MAIN BUILD
   // ══════════════════════════════════════════════════════════
 
-  @override
-  Widget build(BuildContext context) => Theme(
-    data: isDarkMode ? ThemeData.dark() : ThemeData.light(),
-    child: Scaffold(
-      backgroundColor: isDarkMode ? Colors.black : Colors.blue.shade50,
-      appBar: AppBar(
-        elevation: 0,
-        centerTitle: true,
-        title: const Text('CGPA Calculator'),
-        actions: [
-          IconButton(
-            icon: Icon(isDarkMode ? Icons.dark_mode : Icons.light_mode),
-            onPressed: () {
-              setState(() => isDarkMode = !isDarkMode);
-              _savePref('isDarkMode', isDarkMode);
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.delete_forever),
-            onPressed: _clearAll,
+@override
+Widget build(BuildContext context) {
+  final isDark = context.watch<ThemeNotifier>().isDarkMode;
+  final navBg = isDark ? const Color(0xFF1E293B) : Colors.white;
+  final navFg = isDark ? Colors.white : Colors.black87;
+
+  return Scaffold(
+    backgroundColor: isDark ? const Color(0xFF0A0A0A) : Colors.blue.shade50,
+    appBar: AppBar(
+      elevation: 0,
+      centerTitle: true,
+      backgroundColor: navBg,
+      foregroundColor: navFg,
+      iconTheme: IconThemeData(color: navFg),
+      title: Text(
+        'CGPA Calculator',
+        style: TextStyle(color: navFg, fontWeight: FontWeight.bold),
+      ),
+      bottom: TabBar(
+        controller: _tabCtrl,
+        isScrollable: false,
+        labelColor: isDark ? const Color(0xFF818CF8) : Colors.blue.shade700,
+        unselectedLabelColor: isDark ? Colors.white38 : Colors.black45,
+        indicatorColor: isDark ? const Color(0xFF818CF8) : Colors.blue.shade700,
+        tabs: [
+          const Tab(icon: Icon(Icons.add_circle_outline, size: 20), text: 'Add'),
+          const Tab(icon: Icon(Icons.list_alt, size: 20), text: 'Courses'),
+          const Tab(icon: Icon(Icons.show_chart, size: 20), text: 'Chart'),
+          const Tab(icon: Icon(Icons.dashboard, size: 20), text: 'Summary'),
+          Tab(
+            icon: const Icon(Icons.delete_forever, size: 20),
+            text: 'Clear All',
+            iconMargin: EdgeInsets.zero,
           ),
         ],
-        bottom: TabBar(
-          controller: _tabCtrl,
-          isScrollable: false,
-          tabs: const [
-            Tab(icon: Icon(Icons.add_circle_outline, size: 20), text: 'Add'),
-            Tab(icon: Icon(Icons.list_alt, size: 20), text: 'Courses'),
-            Tab(icon: Icon(Icons.show_chart, size: 20), text: 'Chart'),
-            Tab(icon: Icon(Icons.dashboard, size: 20), text: 'Summary'),
-            Tab(icon: Icon(Icons.person, size: 20), text: 'Profile'),
-          ],
-        ),
       ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Colors.black87, Colors.indigo.shade900],
-                ),
+    ),
+    body: SafeArea(
+      child: Column(
+        children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Colors.black87, Colors.indigo.shade900],
               ),
-              child: Row(
-                children: [
-                  // CGPA value
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Overall CGPA',
-                        style: TextStyle(color: Colors.white54, fontSize: 11),
+            ),
+            child: Row(
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Overall CGPA',
+                      style: TextStyle(color: Colors.white54, fontSize: 11),
+                    ),
+                    Text(
+                      _cgpaHidden ? '••••' : cgpa.toStringAsFixed(2),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
                       ),
-                      Text(
-                        _cgpaHidden ? '••••' : cgpa.toStringAsFixed(2),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(width: 10),
-
-                  // Degree class badge — fixed width so it never shifts the hide button
-                  SizedBox(
-                    width: 160,
-                    child: _cgpaHidden
-                        ? const SizedBox()
-                        : Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 5,
-                            ),
-                            decoration: BoxDecoration(
-                              color: degreeColor(cgpa, maxGP).withOpacity(0.2),
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(
-                                color: degreeColor(
-                                  cgpa,
-                                  maxGP,
-                                ).withOpacity(0.5),
-                              ),
-                            ),
-                            child: Text(
-                              getDegreeClass(cgpa, maxGP),
-                              textAlign: TextAlign.center,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: degreeColor(cgpa, maxGP),
-                                fontWeight: FontWeight.bold,
-                                fontSize: 12,
-                              ),
+                    ),
+                  ],
+                ),
+                const SizedBox(width: 10),
+                SizedBox(
+                  width: 160,
+                  child: _cgpaHidden
+                      ? const SizedBox()
+                      : Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: degreeColor(cgpa, maxGP).withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: degreeColor(cgpa, maxGP).withOpacity(0.5),
                             ),
                           ),
+                          child: Text(
+                            getDegreeClass(cgpa, maxGP),
+                            textAlign: TextAlign.center,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: degreeColor(cgpa, maxGP),
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                ),
+                const Spacer(),
+                IconButton(
+                  icon: Icon(
+                    _cgpaHidden ? Icons.visibility_off : Icons.visibility,
+                    color: Colors.white54,
+                    size: 22,
                   ),
-
-                  const Spacer(),
-
-                  // Hide button — always fixed at the right
-                  IconButton(
-                    icon: Icon(
-                      _cgpaHidden ? Icons.visibility_off : Icons.visibility,
-                      color: Colors.white54,
-                      size: 22,
-                    ),
-                    onPressed: () {
-                      setState(() => _cgpaHidden = !_cgpaHidden);
-                      _savePref('cgpaHidden', _cgpaHidden);
-                    },
-                    tooltip: _cgpaHidden ? 'Show CGPA' : 'Hide CGPA',
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
-                  ),
-                ],
-              ),
+                  onPressed: () {
+                    setState(() => _cgpaHidden = !_cgpaHidden);
+                    _savePref('cgpaHidden', _cgpaHidden);
+                  },
+                  tooltip: _cgpaHidden ? 'Show CGPA' : 'Hide CGPA',
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+              ],
             ),
-            Expanded(
-              child: TabBarView(
-                controller: _tabCtrl,
-                children: [
-                  _buildAddTab(),
-                  _buildCourses(),
-                  _buildChart(),
-                  _buildSummary(),
-                  _buildProfile(),
-                ],
-              ),
+          ),
+          Expanded(
+            child: TabBarView(
+              controller: _tabCtrl,
+              children: [
+                _buildAddTab(),
+                _buildCourses(),
+                _buildChart(),
+                _buildSummary(),
+                _buildClearAllTab(),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     ),
   );
+}
 }
