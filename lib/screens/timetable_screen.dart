@@ -18,7 +18,9 @@ class TimetableScreen extends StatefulWidget {
 class _TimetableScreenState extends State<TimetableScreen>
     with TickerProviderStateMixin {
   late TabController _typeTabCtrl;   // Lecture / Personal / Exam
-  late TabController _dayTabCtrl;    // Mon–Sun
+  late TabController _dayTabCtrl;
+  late PageController _lecturePageCtrl;
+  late PageController _personalPageCtrl;    // Mon–Sun
 
   List<LectureEntry>  _lectures = [];
   List<LectureEntry>  _exams    = [];
@@ -54,6 +56,8 @@ class _TimetableScreenState extends State<TimetableScreen>
       vsync: this,
       initialIndex: _todayIndex,
     );
+    _lecturePageCtrl  = PageController(initialPage: _todayIndex); // ← add
+    _personalPageCtrl = PageController(initialPage: _todayIndex);
     _loadAll();
   }
 
@@ -61,6 +65,8 @@ class _TimetableScreenState extends State<TimetableScreen>
   void dispose() {
     _typeTabCtrl.dispose();
     _dayTabCtrl.dispose();
+    _lecturePageCtrl.dispose();
+    _personalPageCtrl.dispose();
     super.dispose();
   }
 
@@ -110,6 +116,7 @@ class _TimetableScreenState extends State<TimetableScreen>
   Future<void> _checkAdminStatus() async {
     try {
       final res = await _svc.getAdminStatus();
+      print('ADMIN STATUS: $res');
       if (mounted) setState(() {
         _isAdmin      = res['isAdmin']      ?? false;
         _isSuperAdmin = res['isSuperAdmin'] ?? false;
@@ -234,139 +241,134 @@ class _TimetableScreenState extends State<TimetableScreen>
   //  DAY VIEW (shared by Lecture + Personal tabs)
   // ══════════════════════════════════════════════════════════
   Widget _buildDayView(bool isDark, {required bool isPersonal}) {
-    final accentColor =
-        isPersonal ? Colors.indigo.shade600 : Colors.blue.shade700;
+  final accentColor =
+      isPersonal ? Colors.indigo.shade600 : Colors.blue.shade700;
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      floatingActionButton: isPersonal
-          ? FloatingActionButton.extended(
-              onPressed: () => _showAddPersonalSheet(isDark),
-              icon: const Icon(Icons.add),
-              label: const Text('Add Study'),
-              backgroundColor: Colors.indigo.shade600,
-            )
-          : (_isAdmin
-              ? FloatingActionButton.extended(
-                  onPressed: () => _showAddLectureSheet(isDark),
-                  icon: const Icon(Icons.add),
-                  label: const Text('Add Class'),
-                  backgroundColor: Colors.blue.shade700,
-                )
-              : null),
-      body: Column(
-        children: [
-          // ── Day tab bar ──────────────────────────────────
-          Container(
-            color: isDark ? const Color(0xFF1E293B) : Colors.white,
-            child: TabBar(
-              controller: _dayTabCtrl,
-              isScrollable: true,
-              labelColor: accentColor,
-              unselectedLabelColor:
-                  isDark ? Colors.white38 : Colors.black38,
-              indicatorColor: accentColor,
-              indicatorWeight: 3,
-              tabs: List.generate(_days.length, (i) {
-                final isToday = i == _todayIndex;
-                return Tab(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          _dayShort[i],
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: isToday
-                                ? FontWeight.w800
-                                : FontWeight.w500,
+  // Use a persistent PageController per tab type
+  final pageCtrl = isPersonal ? _personalPageCtrl : _lecturePageCtrl;
+
+  return Scaffold(
+    backgroundColor: Colors.transparent,
+    floatingActionButton: isPersonal
+        ? FloatingActionButton.extended(
+            onPressed: () => _showAddPersonalSheet(isDark),
+            icon: const Icon(Icons.add),
+            label: const Text('Add Study'),
+            backgroundColor: Colors.indigo.shade600,
+          )
+        : (_isAdmin
+            ? FloatingActionButton.extended(
+                onPressed: () => _showAddLectureSheet(isDark),
+                icon: const Icon(Icons.add),
+                label: const Text('Add Class'),
+                backgroundColor: Colors.blue.shade700,
+              )
+            : null),
+    body: Column(
+      children: [
+        Container(
+          color: isDark ? const Color(0xFF1E293B) : Colors.white,
+          child: TabBar(
+            controller: _dayTabCtrl,
+            isScrollable: true,
+            labelColor: accentColor,
+            unselectedLabelColor: isDark ? Colors.white38 : Colors.black38,
+            indicatorColor: accentColor,
+            indicatorWeight: 3,
+            onTap: (i) {
+              pageCtrl.animateToPage(
+                i,
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeInOut,
+              );
+            },
+            tabs: List.generate(_days.length, (i) {
+              final isToday = i == _todayIndex;
+              return Tab(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        _dayShort[i],
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight:
+                              isToday ? FontWeight.w800 : FontWeight.w500,
+                        ),
+                      ),
+                      if (isToday)
+                        Container(
+                          margin: const EdgeInsets.only(top: 2),
+                          width: 5,
+                          height: 5,
+                          decoration: BoxDecoration(
+                            color: accentColor,
+                            shape: BoxShape.circle,
                           ),
                         ),
-                        if (isToday)
-                          Container(
-                            margin: const EdgeInsets.only(top: 2),
-                            width: 5,
-                            height: 5,
-                            decoration: BoxDecoration(
-                              color: accentColor,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                      ],
-                    ),
+                    ],
+                  ),
+                ),
+              );
+            }),
+          ),
+        ),
+        Expanded(
+          child: PageView.builder(
+            controller: pageCtrl,
+            itemCount: _days.length,
+            onPageChanged: (i) {
+              if (_dayTabCtrl.index != i) {
+                _dayTabCtrl.animateTo(i);
+              }
+            },
+            itemBuilder: (_, dayIndex) {
+              final day = _days[dayIndex];
+
+              if (isPersonal) {
+                final entries = _personal
+                    .where((e) => e.day == day)
+                    .toList()
+                  ..sort((a, b) => a.startTime.compareTo(b.startTime));
+                return _dayEntriesList(
+                  isDark: isDark,
+                  isEmpty: entries.isEmpty,
+                  day: day,
+                  isPersonal: true,
+                  child: ListView.builder(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+                    itemCount: entries.length,
+                    itemBuilder: (_, i) => _personalCard(entries[i], isDark),
                   ),
                 );
-              }),
-            ),
+              } else {
+                final entries = _lectures
+                    .where((e) => e.day == day)
+                    .toList()
+                  ..sort((a, b) => a.startTime.compareTo(b.startTime));
+                return _dayEntriesList(
+                  isDark: isDark,
+                  isEmpty: entries.isEmpty,
+                  day: day,
+                  isPersonal: false,
+                  child: ListView.builder(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+                    itemCount: entries.length,
+                    itemBuilder: (_, i) => _lectureCard(entries[i], isDark),
+                  ),
+                );
+              }
+            },
           ),
+        ),
+      ],
+    ),
+  );
+}
 
-          // ── Day page view ────────────────────────────────
-          Expanded(
-            child: PageView.builder(
-              itemCount: _days.length,
-              controller: PageController(initialPage: _todayIndex),
-              onPageChanged: (i) {
-                if (_dayTabCtrl.index != i) {
-                  _dayTabCtrl.animateTo(i);
-                }
-              },
-              itemBuilder: (_, dayIndex) {
-                final day = _days[dayIndex];
 
-                if (isPersonal) {
-                  final entries = _personal
-                      .where((e) => e.day == day)
-                      .toList()
-                    ..sort((a, b) => a.startTime.compareTo(b.startTime));
-                  return _dayEntriesList(
-                    isDark: isDark,
-                    isEmpty: entries.isEmpty,
-                    day: day,
-                    isPersonal: true,
-                    child: ListView.builder(
-                      padding:
-                          const EdgeInsets.fromLTRB(16, 16, 16, 100),
-                      itemCount: entries.length,
-                      itemBuilder: (_, i) =>
-                          _personalCard(entries[i], isDark),
-                    ),
-                  );
-                } else {
-                  final entries = _lectures
-                      .where((e) => e.day == day)
-                      .toList()
-                    ..sort((a, b) => a.startTime.compareTo(b.startTime));
-                  return _dayEntriesList(
-                    isDark: isDark,
-                    isEmpty: entries.isEmpty,
-                    day: day,
-                    isPersonal: false,
-                    child: ListView.builder(
-                      padding:
-                          const EdgeInsets.fromLTRB(16, 16, 16, 100),
-                      itemCount: entries.length,
-                      itemBuilder: (_, i) =>
-                          _lectureCard(entries[i], isDark),
-                    ),
-                  );
-                }
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDayViewWithTabSync(bool isDark, {required bool isPersonal}) {
-    // Sync tab → page
-    _dayTabCtrl.addListener(() {
-      // handled by PageView onPageChanged
-    });
-    return _buildDayView(isDark, isPersonal: isPersonal);
-  }
 
   Widget _dayEntriesList({
     required bool isDark,
