@@ -16,15 +16,16 @@ class TimetableScreen extends StatefulWidget {
 }
 
 class _TimetableScreenState extends State<TimetableScreen>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabCtrl;
+    with TickerProviderStateMixin {
+  late TabController _typeTabCtrl;   // Lecture / Personal / Exam
+  late TabController _dayTabCtrl;    // Mon–Sun
 
   List<LectureEntry>  _lectures = [];
   List<LectureEntry>  _exams    = [];
   List<PersonalEntry> _personal = [];
 
-  bool _loading = true;
-  bool _isAdmin = false;
+  bool _loading     = true;
+  bool _isAdmin     = false;
   bool _isSuperAdmin = false;
 
   String _school = '', _faculty = '', _department = '', _level = '';
@@ -35,16 +36,31 @@ class _TimetableScreenState extends State<TimetableScreen>
     'Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday',
   ];
 
+  static const _dayShort = [
+    'MON','TUE','WED','THU','FRI','SAT','SUN',
+  ];
+
+  int get _todayIndex {
+    final wd = DateTime.now().weekday; // 1=Mon … 7=Sun
+    return wd - 1;
+  }
+
   @override
   void initState() {
     super.initState();
-    _tabCtrl = TabController(length: 3, vsync: this);
+    _typeTabCtrl = TabController(length: 3, vsync: this);
+    _dayTabCtrl  = TabController(
+      length: _days.length,
+      vsync: this,
+      initialIndex: _todayIndex,
+    );
     _loadAll();
   }
 
   @override
   void dispose() {
-    _tabCtrl.dispose();
+    _typeTabCtrl.dispose();
+    _dayTabCtrl.dispose();
     super.dispose();
   }
 
@@ -95,12 +111,40 @@ class _TimetableScreenState extends State<TimetableScreen>
     try {
       final res = await _svc.getAdminStatus();
       if (mounted) setState(() {
-      _isAdmin      = res['isAdmin']      ?? false;
-      _isSuperAdmin = res['isSuperAdmin'] ?? false; // ← add this
-    });
+        _isAdmin      = res['isAdmin']      ?? false;
+        _isSuperAdmin = res['isSuperAdmin'] ?? false;
+      });
     } catch (_) {}
   }
 
+  // ── Helpers ──────────────────────────────────────────────────────────────
+  Color _hexColor(String hex) {
+    try {
+      return Color(int.parse(hex.replaceFirst('#', '0xFF')));
+    } catch (_) {
+      return Colors.indigo;
+    }
+  }
+
+  String _duration(String start, String end) {
+    try {
+      final s = start.split(':');
+      final e = end.split(':');
+      final sm = int.parse(s[0]) * 60 + int.parse(s[1]);
+      final em = int.parse(e[0]) * 60 + int.parse(e[1]);
+      final diff = em - sm;
+      if (diff <= 0) return '';
+      final h = diff ~/ 60;
+      final m = diff % 60;
+      if (h == 0) return '${m}min';
+      if (m == 0) return '${h}h';
+      return '${h}h ${m}min';
+    } catch (_) {
+      return '';
+    }
+  }
+
+  // ── Build ─────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     final isDark = context.watch<ThemeNotifier>().isDarkMode;
@@ -108,7 +152,8 @@ class _TimetableScreenState extends State<TimetableScreen>
     final navFg  = isDark ? Colors.white : Colors.black87;
 
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF0A0A0A) : const Color(0xFFF2F4F8),
+      backgroundColor:
+          isDark ? const Color(0xFF0A0A0A) : const Color(0xFFF2F4F8),
       appBar: AppBar(
         elevation: 0,
         centerTitle: true,
@@ -116,49 +161,69 @@ class _TimetableScreenState extends State<TimetableScreen>
         backgroundColor: navBg,
         foregroundColor: navFg,
         title: Text('Timetable',
-            style: TextStyle(color: navFg, fontWeight: FontWeight.bold)),
+            style:
+                TextStyle(color: navFg, fontWeight: FontWeight.bold)),
         actions: [
           IconButton(
             icon: Icon(Icons.refresh_rounded, color: navFg),
             onPressed: _loadAll,
           ),
-          if (!_isAdmin)
+          if (_isAdmin)
+            TextButton(
+              onPressed: () => _confirmResign(isDark),
+              child: Text('Resign',
+                  style: TextStyle(
+                      color: Colors.red.shade400,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12)),
+            ),
+          if (!_isAdmin && !_isSuperAdmin)
             TextButton(
               onPressed: () => _showAdminRequestSheet(isDark),
               child: Text('Be Admin',
                   style: TextStyle(
-                      color: isDark ? Colors.indigo.shade300 : Colors.blue,
+                      color: isDark
+                          ? Colors.indigo.shade300
+                          : Colors.blue,
                       fontWeight: FontWeight.w600,
                       fontSize: 12)),
             ),
-              if (_isSuperAdmin) // ← add this block
-    IconButton(
-      icon: Icon(Icons.admin_panel_settings_rounded, color: Colors.purple),
-      onPressed: () => Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => const SuperAdminScreen()),
-      ),
-    ),
+          if (_isSuperAdmin)
+            IconButton(
+              icon: const Icon(Icons.admin_panel_settings_rounded,
+                  color: Colors.purple),
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const SuperAdminScreen()),
+              ),
+            ),
         ],
         bottom: TabBar(
-          controller: _tabCtrl,
-          labelColor: isDark ? Colors.indigo.shade300 : Colors.blue.shade700,
-          unselectedLabelColor: isDark ? Colors.white38 : Colors.black45,
-          indicatorColor: isDark ? Colors.indigo.shade300 : Colors.blue.shade700,
+          controller: _typeTabCtrl,
+          labelColor:
+              isDark ? Colors.indigo.shade300 : Colors.blue.shade700,
+          unselectedLabelColor:
+              isDark ? Colors.white38 : Colors.black45,
+          indicatorColor:
+              isDark ? Colors.indigo.shade300 : Colors.blue.shade700,
           tabs: const [
-            Tab(icon: Icon(Icons.cast_for_education_rounded, size: 20), text: 'Lecture'),
-            Tab(icon: Icon(Icons.menu_book_rounded, size: 20), text: 'Personal'),
-            Tab(icon: Icon(Icons.event_note_rounded, size: 20), text: 'Exam'),
+            Tab(icon: Icon(Icons.cast_for_education_rounded, size: 20),
+                text: 'Lecture'),
+            Tab(icon: Icon(Icons.menu_book_rounded, size: 20),
+                text: 'Personal'),
+            Tab(icon: Icon(Icons.event_note_rounded, size: 20),
+                text: 'Exam'),
           ],
         ),
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : TabBarView(
-              controller: _tabCtrl,
+              controller: _typeTabCtrl,
               children: [
-                _buildLectureTab(isDark),
-                _buildPersonalTab(isDark),
+                _buildDayView(isDark, isPersonal: false),
+                _buildDayView(isDark, isPersonal: true),
                 _buildExamTab(isDark),
               ],
             ),
@@ -166,87 +231,190 @@ class _TimetableScreenState extends State<TimetableScreen>
   }
 
   // ══════════════════════════════════════════════════════════
-  //  LECTURE TAB
+  //  DAY VIEW (shared by Lecture + Personal tabs)
   // ══════════════════════════════════════════════════════════
-  Widget _buildLectureTab(bool isDark) {
+  Widget _buildDayView(bool isDark, {required bool isPersonal}) {
+    final accentColor =
+        isPersonal ? Colors.indigo.shade600 : Colors.blue.shade700;
+
     return Scaffold(
       backgroundColor: Colors.transparent,
-      floatingActionButton: _isAdmin
+      floatingActionButton: isPersonal
           ? FloatingActionButton.extended(
-              onPressed: () => _showAddLectureSheet(isDark),
+              onPressed: () => _showAddPersonalSheet(isDark),
               icon: const Icon(Icons.add),
-              label: const Text('Add Class'),
-              backgroundColor: Colors.blue.shade700,
+              label: const Text('Add Study'),
+              backgroundColor: Colors.indigo.shade600,
             )
-          : null,
-      body: _lectures.isEmpty
-          ? _emptyState(
-              icon: Icons.cast_for_education_outlined,
-              title: 'No Lectures Yet',
-              subtitle: _isAdmin
-                  ? 'Tap "Add Class" to add your first lecture'
-                  : 'Your course rep hasn\'t added any lectures yet',
-              isDark: isDark,
-            )
-          : RefreshIndicator(
-              onRefresh: _loadLectures,
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-                children: _days.map((day) {
-                  final dayEntries = _lectures.where((e) => e.day == day).toList();
-                  if (dayEntries.isEmpty) return const SizedBox.shrink();
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _dayHeader(day, isDark),
-                      ...dayEntries.map((e) => _lectureCard(e, isDark)),
-                      const SizedBox(height: 8),
-                    ],
-                  );
-                }).toList(),
-              ),
+          : (_isAdmin
+              ? FloatingActionButton.extended(
+                  onPressed: () => _showAddLectureSheet(isDark),
+                  icon: const Icon(Icons.add),
+                  label: const Text('Add Class'),
+                  backgroundColor: Colors.blue.shade700,
+                )
+              : null),
+      body: Column(
+        children: [
+          // ── Day tab bar ──────────────────────────────────
+          Container(
+            color: isDark ? const Color(0xFF1E293B) : Colors.white,
+            child: TabBar(
+              controller: _dayTabCtrl,
+              isScrollable: true,
+              labelColor: accentColor,
+              unselectedLabelColor:
+                  isDark ? Colors.white38 : Colors.black38,
+              indicatorColor: accentColor,
+              indicatorWeight: 3,
+              tabs: List.generate(_days.length, (i) {
+                final isToday = i == _todayIndex;
+                return Tab(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          _dayShort[i],
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: isToday
+                                ? FontWeight.w800
+                                : FontWeight.w500,
+                          ),
+                        ),
+                        if (isToday)
+                          Container(
+                            margin: const EdgeInsets.only(top: 2),
+                            width: 5,
+                            height: 5,
+                            decoration: BoxDecoration(
+                              color: accentColor,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                );
+              }),
             ),
+          ),
+
+          // ── Day page view ────────────────────────────────
+          Expanded(
+            child: PageView.builder(
+              itemCount: _days.length,
+              controller: PageController(initialPage: _todayIndex),
+              onPageChanged: (i) {
+                if (_dayTabCtrl.index != i) {
+                  _dayTabCtrl.animateTo(i);
+                }
+              },
+              itemBuilder: (_, dayIndex) {
+                final day = _days[dayIndex];
+
+                if (isPersonal) {
+                  final entries = _personal
+                      .where((e) => e.day == day)
+                      .toList()
+                    ..sort((a, b) => a.startTime.compareTo(b.startTime));
+                  return _dayEntriesList(
+                    isDark: isDark,
+                    isEmpty: entries.isEmpty,
+                    day: day,
+                    isPersonal: true,
+                    child: ListView.builder(
+                      padding:
+                          const EdgeInsets.fromLTRB(16, 16, 16, 100),
+                      itemCount: entries.length,
+                      itemBuilder: (_, i) =>
+                          _personalCard(entries[i], isDark),
+                    ),
+                  );
+                } else {
+                  final entries = _lectures
+                      .where((e) => e.day == day)
+                      .toList()
+                    ..sort((a, b) => a.startTime.compareTo(b.startTime));
+                  return _dayEntriesList(
+                    isDark: isDark,
+                    isEmpty: entries.isEmpty,
+                    day: day,
+                    isPersonal: false,
+                    child: ListView.builder(
+                      padding:
+                          const EdgeInsets.fromLTRB(16, 16, 16, 100),
+                      itemCount: entries.length,
+                      itemBuilder: (_, i) =>
+                          _lectureCard(entries[i], isDark),
+                    ),
+                  );
+                }
+              },
+            ),
+          ),
+        ],
+      ),
     );
   }
 
-  // ══════════════════════════════════════════════════════════
-  //  PERSONAL TAB
-  // ══════════════════════════════════════════════════════════
-  Widget _buildPersonalTab(bool isDark) {
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showAddPersonalSheet(isDark),
-        icon: const Icon(Icons.add),
-        label: const Text('Add Study'),
-        backgroundColor: Colors.indigo.shade600,
-      ),
-      body: _personal.isEmpty
-          ? _emptyState(
-              icon: Icons.menu_book_outlined,
-              title: 'No Study Sessions Yet',
-              subtitle: 'Tap "Add Study" to create your personal timetable',
-              isDark: isDark,
-            )
-          : RefreshIndicator(
-              onRefresh: _loadPersonal,
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-                children: _days.map((day) {
-                  final dayEntries = _personal.where((e) => e.day == day).toList();
-                  if (dayEntries.isEmpty) return const SizedBox.shrink();
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _dayHeader(day, isDark),
-                      ...dayEntries.map((e) => _personalCard(e, isDark)),
-                      const SizedBox(height: 8),
-                    ],
-                  );
-                }).toList(),
+  Widget _buildDayViewWithTabSync(bool isDark, {required bool isPersonal}) {
+    // Sync tab → page
+    _dayTabCtrl.addListener(() {
+      // handled by PageView onPageChanged
+    });
+    return _buildDayView(isDark, isPersonal: isPersonal);
+  }
+
+  Widget _dayEntriesList({
+    required bool isDark,
+    required bool isEmpty,
+    required String day,
+    required bool isPersonal,
+    required Widget child,
+  }) {
+    if (isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(40),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                isPersonal
+                    ? Icons.menu_book_outlined
+                    : Icons.cast_for_education_outlined,
+                size: 56,
+                color: isDark ? Colors.white24 : Colors.black26,
               ),
-            ),
-    );
+              const SizedBox(height: 16),
+              Text(
+                'No classes on $day',
+                style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? Colors.white70 : Colors.black87),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                isPersonal
+                    ? 'Tap "Add Study" to add a session'
+                    : _isAdmin
+                        ? 'Tap "Add Class" to schedule a lecture'
+                        : 'No lectures scheduled for this day',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                    fontSize: 13,
+                    color: isDark ? Colors.white38 : Colors.black45),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    return child;
   }
 
   // ══════════════════════════════════════════════════════════
@@ -257,7 +425,9 @@ class _TimetableScreenState extends State<TimetableScreen>
         if (a.date == null && b.date == null) return 0;
         if (a.date == null) return 1;
         if (b.date == null) return -1;
-        return a.date!.compareTo(b.date!);
+        final dateCmp = a.date!.compareTo(b.date!);
+        if (dateCmp != 0) return dateCmp;
+        return a.startTime.compareTo(b.startTime);
       });
 
     return Scaffold(
@@ -293,19 +463,6 @@ class _TimetableScreenState extends State<TimetableScreen>
   // ══════════════════════════════════════════════════════════
   //  CARDS
   // ══════════════════════════════════════════════════════════
-  Widget _dayHeader(String day, bool isDark) => Padding(
-        padding: const EdgeInsets.only(bottom: 8, top: 4),
-        child: Text(
-          day.toUpperCase(),
-          style: TextStyle(
-            fontWeight: FontWeight.w800,
-            fontSize: 11,
-            letterSpacing: 1.2,
-            color: isDark ? Colors.indigo.shade300 : Colors.blue.shade700,
-          ),
-        ),
-      );
-
   Widget _lectureCard(LectureEntry e, bool isDark) {
     final typeColor = e.classType == 'test'
         ? Colors.red
@@ -323,6 +480,8 @@ class _TimetableScreenState extends State<TimetableScreen>
                 ? Icons.groups_rounded
                 : Icons.school_rounded;
 
+    final dur = _duration(e.startTime, e.endTime);
+
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
@@ -339,106 +498,196 @@ class _TimetableScreenState extends State<TimetableScreen>
           ),
         ],
       ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        leading: Container(
-          width: 44,
-          height: 44,
-          decoration: BoxDecoration(
-            color: typeColor.withOpacity(0.12),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Icon(typeIcon, color: typeColor, size: 22),
-        ),
-        title: Row(
-          children: [
-            Expanded(
-              child: Text(e.courseCode,
-                  style: TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 15,
-                      color: isDark ? Colors.white : Colors.black87)),
-            ),
-            if (e.isImportant)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: typeColor.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  e.classType.toUpperCase(),
-                  style: TextStyle(
-                      color: typeColor, fontSize: 9, fontWeight: FontWeight.w800),
-                ),
-              ),
-          ],
-        ),
-        subtitle: Column(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (e.courseTitle.isNotEmpty)
-              Text(e.courseTitle,
-                  style: TextStyle(
-                      fontSize: 12,
-                      color: isDark ? Colors.white60 : Colors.black54)),
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                Icon(Icons.access_time_rounded,
-                    size: 13,
-                    color: isDark ? Colors.white38 : Colors.black38),
-                const SizedBox(width: 4),
-                Text('${e.startTime} – ${e.endTime}',
-                    style: TextStyle(
-                        fontSize: 12,
-                        color: isDark ? Colors.white54 : Colors.black54)),
-                if (e.venue.isNotEmpty) ...[
-                  const SizedBox(width: 10),
-                  Icon(Icons.location_on_outlined,
-                      size: 13,
-                      color: isDark ? Colors.white38 : Colors.black38),
-                  const SizedBox(width: 2),
-                  Expanded(
-                    child: Text(e.venue,
-                        overflow: TextOverflow.ellipsis,
+            // Time column
+            SizedBox(
+              width: 52,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(e.startTime,
+                      style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: isDark ? Colors.white : Colors.black87)),
+                  const SizedBox(height: 2),
+                  Text(e.endTime,
+                      style: TextStyle(
+                          fontSize: 11,
+                          color: isDark
+                              ? Colors.white38
+                              : Colors.black38)),
+                  if (dur.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 4, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: typeColor.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(dur,
+                          style: TextStyle(
+                              fontSize: 9,
+                              color: typeColor,
+                              fontWeight: FontWeight.w600)),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(width: 4),
+            // Vertical line
+            Container(
+              width: 2,
+              height: 60,
+              decoration: BoxDecoration(
+                color: typeColor.withOpacity(0.4),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(width: 12),
+            // Content
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(typeIcon, color: typeColor, size: 16),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(e.courseCode,
+                            style: TextStyle(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 15,
+                                color: isDark
+                                    ? Colors.white
+                                    : Colors.black87)),
+                      ),
+                      if (e.isImportant)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: typeColor.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            e.classType.toUpperCase(),
+                            style: TextStyle(
+                                color: typeColor,
+                                fontSize: 8,
+                                fontWeight: FontWeight.w800),
+                          ),
+                        ),
+                    ],
+                  ),
+                  if (e.courseTitle.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(e.courseTitle,
                         style: TextStyle(
                             fontSize: 12,
-                            color: isDark ? Colors.white54 : Colors.black54)),
+                            color: isDark
+                                ? Colors.white60
+                                : Colors.black54)),
+                  ],
+                  if (e.venue.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Icon(Icons.location_on_outlined,
+                            size: 12,
+                            color: isDark
+                                ? Colors.white38
+                                : Colors.black38),
+                        const SizedBox(width: 2),
+                        Expanded(
+                          child: Text(e.venue,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                  fontSize: 11,
+                                  color: isDark
+                                      ? Colors.white54
+                                      : Colors.black45)),
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            // Actions column
+            Column(
+              children: [
+                // Emergency star — visible to all, controlled by admin
+                GestureDetector(
+                  onTap: _isAdmin
+                      ? () async {
+                          try {
+                            await _svc.toggleEmergency(e.id);
+                            await _loadLectures();
+                            setState(() {});
+                          } catch (err) {
+                            if (mounted)
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('Error: $err')));
+                          }
+                        }
+                      : null,
+                  child: Icon(
+                    e.isEmergency
+                        ? Icons.star_rounded
+                        : Icons.star_outline_rounded,
+                    color: e.isEmergency
+                        ? Colors.amber
+                        : isDark
+                            ? Colors.white24
+                            : Colors.black26,
+                    size: 24,
+                  ),
+                ),
+                if (_isAdmin) ...[
+                  const SizedBox(height: 4),
+                  PopupMenuButton<String>(
+                    icon: Icon(Icons.more_vert,
+                        color: isDark ? Colors.white38 : Colors.black38,
+                        size: 20),
+                    itemBuilder: (_) => [
+                      const PopupMenuItem(
+                          value: 'edit', child: Text('Edit')),
+                      const PopupMenuItem(
+                          value: 'delete',
+                          child: Text('Delete',
+                              style: TextStyle(color: Colors.red))),
+                    ],
+                    onSelected: (val) async {
+                      if (val == 'delete') {
+                        await _svc.deleteLecture(e.id);
+                        await _loadLectures();
+                        setState(() {});
+                      } else {
+                        _showAddLectureSheet(isDark, editing: e);
+                      }
+                    },
                   ),
                 ],
               ],
             ),
           ],
         ),
-        trailing: _isAdmin
-            ? PopupMenuButton<String>(
-                icon: Icon(Icons.more_vert,
-                    color: isDark ? Colors.white38 : Colors.black38),
-                itemBuilder: (_) => [
-                  const PopupMenuItem(value: 'edit', child: Text('Edit')),
-                  const PopupMenuItem(
-                      value: 'delete',
-                      child: Text('Delete',
-                          style: TextStyle(color: Colors.red))),
-                ],
-                onSelected: (val) async {
-                  if (val == 'delete') {
-                    await _svc.deleteLecture(e.id);
-                    await _loadLectures();
-                    setState(() {});
-                  } else {
-                    _showAddLectureSheet(isDark, editing: e);
-                  }
-                },
-              )
-            : null,
       ),
     );
   }
 
   Widget _personalCard(PersonalEntry e, bool isDark) {
     final color = _hexColor(e.color);
+    final dur   = _duration(e.startTime, e.endTime);
+
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
@@ -453,60 +702,120 @@ class _TimetableScreenState extends State<TimetableScreen>
           ),
         ],
       ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        title: Text(e.title,
-            style: TextStyle(
-                fontWeight: FontWeight.w700,
-                color: isDark ? Colors.white : Colors.black87)),
-        subtitle: Row(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(Icons.access_time_rounded,
-                size: 13,
-                color: isDark ? Colors.white38 : Colors.black38),
-            const SizedBox(width: 4),
-            Text('${e.startTime} – ${e.endTime}',
-                style: TextStyle(
-                    fontSize: 12,
-                    color: isDark ? Colors.white54 : Colors.black54)),
-          ],
-        ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            IconButton(
-              icon: Icon(
-                e.isBookmarked
-                    ? Icons.bookmark_rounded
-                    : Icons.bookmark_outline,
-                color: e.isBookmarked ? Colors.amber : Colors.grey,
-                size: 22,
+            // Time column
+            SizedBox(
+              width: 52,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(e.startTime,
+                      style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: isDark ? Colors.white : Colors.black87)),
+                  const SizedBox(height: 2),
+                  Text(e.endTime,
+                      style: TextStyle(
+                          fontSize: 11,
+                          color: isDark
+                              ? Colors.white38
+                              : Colors.black38)),
+                  if (dur.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 4, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: color.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(dur,
+                          style: TextStyle(
+                              fontSize: 9,
+                              color: color,
+                              fontWeight: FontWeight.w600)),
+                    ),
+                  ],
+                ],
               ),
-              onPressed: () async {
-                await _svc.toggleBookmark(e.id);
-                await _loadPersonal();
-                setState(() {});
-              },
             ),
-            PopupMenuButton<String>(
-              icon: Icon(Icons.more_vert,
-                  color: isDark ? Colors.white38 : Colors.black38),
-              itemBuilder: (_) => [
-                const PopupMenuItem(value: 'edit', child: Text('Edit')),
-                const PopupMenuItem(
-                    value: 'delete',
-                    child: Text('Delete',
-                        style: TextStyle(color: Colors.red))),
+            const SizedBox(width: 4),
+            Container(
+              width: 2,
+              height: 50,
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.4),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(e.title,
+                      style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 15,
+                          color:
+                              isDark ? Colors.white : Colors.black87)),
+                  if (e.note.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(e.note,
+                        style: TextStyle(
+                            fontSize: 12,
+                            color: isDark
+                                ? Colors.white54
+                                : Colors.black45)),
+                  ],
+                ],
+              ),
+            ),
+            Column(
+              children: [
+                IconButton(
+                  icon: Icon(
+                    e.isBookmarked
+                        ? Icons.bookmark_rounded
+                        : Icons.bookmark_outline,
+                    color: e.isBookmarked ? Colors.amber : Colors.grey,
+                    size: 22,
+                  ),
+                  onPressed: () async {
+                    await _svc.toggleBookmark(e.id);
+                    await _loadPersonal();
+                    setState(() {});
+                  },
+                ),
+                PopupMenuButton<String>(
+                  icon: Icon(Icons.more_vert,
+                      color:
+                          isDark ? Colors.white38 : Colors.black38,
+                      size: 20),
+                  itemBuilder: (_) => [
+                    const PopupMenuItem(
+                        value: 'edit', child: Text('Edit')),
+                    const PopupMenuItem(
+                        value: 'delete',
+                        child: Text('Delete',
+                            style: TextStyle(color: Colors.red))),
+                  ],
+                  onSelected: (val) async {
+                    if (val == 'delete') {
+                      await _svc.deletePersonal(e.id);
+                      await _loadPersonal();
+                      setState(() {});
+                    } else {
+                      _showAddPersonalSheet(isDark, editing: e);
+                    }
+                  },
+                ),
               ],
-              onSelected: (val) async {
-                if (val == 'delete') {
-                  await _svc.deletePersonal(e.id);
-                  await _loadPersonal();
-                  setState(() {});
-                } else {
-                  _showAddPersonalSheet(isDark, editing: e);
-                }
-              },
             ),
           ],
         ),
@@ -518,7 +827,8 @@ class _TimetableScreenState extends State<TimetableScreen>
     final daysLeft = e.date != null
         ? e.date!.difference(DateTime.now()).inDays
         : null;
-    final urgent = daysLeft != null && daysLeft <= 7;
+    final urgent   = daysLeft != null && daysLeft <= 7;
+    final dur      = _duration(e.startTime, e.endTime);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -560,19 +870,44 @@ class _TimetableScreenState extends State<TimetableScreen>
                       style: TextStyle(
                           fontWeight: FontWeight.w800,
                           fontSize: 16,
-                          color: isDark ? Colors.white : Colors.black87)),
+                          color:
+                              isDark ? Colors.white : Colors.black87)),
                   if (e.courseTitle.isNotEmpty)
                     Text(e.courseTitle,
                         style: TextStyle(
                             fontSize: 12,
-                            color: isDark ? Colors.white60 : Colors.black54)),
+                            color: isDark
+                                ? Colors.white60
+                                : Colors.black54)),
                   const SizedBox(height: 6),
                   if (e.date != null)
                     Text(
                       '${e.date!.day}/${e.date!.month}/${e.date!.year}  •  ${e.startTime} – ${e.endTime}',
                       style: TextStyle(
                           fontSize: 13,
-                          color: isDark ? Colors.white70 : Colors.black54),
+                          color: isDark
+                              ? Colors.white70
+                              : Colors.black54),
+                    ),
+                  if (dur.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Row(
+                        children: [
+                          Icon(Icons.timer_outlined,
+                              size: 12,
+                              color: isDark
+                                  ? Colors.white38
+                                  : Colors.black38),
+                          const SizedBox(width: 4),
+                          Text('Duration: $dur',
+                              style: TextStyle(
+                                  fontSize: 11,
+                                  color: isDark
+                                      ? Colors.white54
+                                      : Colors.black45)),
+                        ],
+                      ),
                     ),
                   if (e.venue.isNotEmpty)
                     Padding(
@@ -580,64 +915,74 @@ class _TimetableScreenState extends State<TimetableScreen>
                       child: Text('📍 ${e.venue}',
                           style: TextStyle(
                               fontSize: 12,
-                              color:
-                                  isDark ? Colors.white54 : Colors.black45)),
+                              color: isDark
+                                  ? Colors.white54
+                                  : Colors.black45)),
                     ),
                 ],
               ),
             ),
-            if (daysLeft != null)
-              Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    daysLeft <= 0 ? 'Today!' : '$daysLeft',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w900,
-                      fontSize: daysLeft <= 0 ? 13 : 22,
-                      color: daysLeft <= 3
-                          ? Colors.red
-                          : daysLeft <= 7
-                              ? Colors.orange
-                              : Colors.grey,
-                    ),
-                  ),
-                  if (daysLeft > 0)
-                    Text('days',
+            Column(
+              children: [
+                if (daysLeft != null)
+                  Column(
+                    children: [
+                      Text(
+                        daysLeft <= 0 ? 'Today!' : '$daysLeft',
                         style: TextStyle(
-                            fontSize: 10,
-                            color: isDark ? Colors.white38 : Colors.black38)),
-                ],
-              ),
-            if (_isAdmin) ...[
-              const SizedBox(width: 4),
-              PopupMenuButton<String>(
-                icon: Icon(Icons.more_vert,
-                    color: isDark ? Colors.white38 : Colors.black38),
-                itemBuilder: (_) => [
-                  const PopupMenuItem(value: 'edit', child: Text('Edit')),
-                  const PopupMenuItem(
-                      value: 'delete',
-                      child: Text('Delete',
-                          style: TextStyle(color: Colors.red))),
-                ],
-                onSelected: (val) async {
-                  if (val == 'delete') {
-                    await _svc.deleteExam(e.id);
-                    await _loadExams();
-                    setState(() {});
-                  } else {
-                    _showAddExamSheet(isDark, editing: e);
-                  }
-                },
-              ),
-            ],
+                          fontWeight: FontWeight.w900,
+                          fontSize: daysLeft <= 0 ? 13 : 22,
+                          color: daysLeft <= 3
+                              ? Colors.red
+                              : daysLeft <= 7
+                                  ? Colors.orange
+                                  : Colors.grey,
+                        ),
+                      ),
+                      if (daysLeft > 0)
+                        Text('days',
+                            style: TextStyle(
+                                fontSize: 10,
+                                color: isDark
+                                    ? Colors.white38
+                                    : Colors.black38)),
+                    ],
+                  ),
+                if (_isAdmin)
+                  PopupMenuButton<String>(
+                    icon: Icon(Icons.more_vert,
+                        color: isDark
+                            ? Colors.white38
+                            : Colors.black38),
+                    itemBuilder: (_) => [
+                      const PopupMenuItem(
+                          value: 'edit', child: Text('Edit')),
+                      const PopupMenuItem(
+                          value: 'delete',
+                          child: Text('Delete',
+                              style: TextStyle(color: Colors.red))),
+                    ],
+                    onSelected: (val) async {
+                      if (val == 'delete') {
+                        await _svc.deleteExam(e.id);
+                        await _loadExams();
+                        setState(() {});
+                      } else {
+                        _showAddExamSheet(isDark, editing: e);
+                      }
+                    },
+                  ),
+              ],
+            ),
           ],
         ),
       ),
     );
   }
 
+  // ══════════════════════════════════════════════════════════
+  //  EMPTY STATE
+  // ══════════════════════════════════════════════════════════
   Widget _emptyState({
     required IconData icon,
     required String title,
@@ -658,35 +1003,29 @@ class _TimetableScreenState extends State<TimetableScreen>
                   style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
-                      color: isDark ? Colors.white70 : Colors.black87)),
+                      color:
+                          isDark ? Colors.white70 : Colors.black87)),
               const SizedBox(height: 8),
               Text(subtitle,
                   textAlign: TextAlign.center,
                   style: TextStyle(
                       fontSize: 13,
-                      color: isDark ? Colors.white38 : Colors.black45)),
+                      color:
+                          isDark ? Colors.white38 : Colors.black45)),
             ],
           ),
         ),
       );
 
-  Color _hexColor(String hex) {
-    try {
-      return Color(int.parse(hex.replaceFirst('#', '0xFF')));
-    } catch (_) {
-      return Colors.indigo;
-    }
-  }
-
   // ══════════════════════════════════════════════════════════
-  //  BOTTOM SHEETS
+  //  BOTTOM SHEETS (keep all existing ones)
   // ══════════════════════════════════════════════════════════
   void _showAddLectureSheet(bool isDark, {LectureEntry? editing}) {
     final codeCtrl  = TextEditingController(text: editing?.courseCode ?? '');
     final titleCtrl = TextEditingController(text: editing?.courseTitle ?? '');
     final venueCtrl = TextEditingController(text: editing?.venue ?? '');
     final noteCtrl  = TextEditingController(text: editing?.note ?? '');
-    String day         = editing?.day ?? _days[0];
+    String day         = editing?.day ?? _days[_todayIndex];
     String startTime   = editing?.startTime ?? '08:00';
     String endTime     = editing?.endTime ?? '10:00';
     String classType   = editing?.classType ?? 'normal';
@@ -701,9 +1040,7 @@ class _TimetableScreenState extends State<TimetableScreen>
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setS) => Padding(
           padding: EdgeInsets.only(
-              left: 20,
-              right: 20,
-              top: 20,
+              left: 20, right: 20, top: 20,
               bottom: MediaQuery.of(ctx).viewInsets.bottom + 24),
           child: SingleChildScrollView(
             child: Column(
@@ -727,44 +1064,33 @@ class _TimetableScreenState extends State<TimetableScreen>
                 _dropdownField('Day', _days, day, isDark,
                     (v) => setS(() => day = v!)),
                 const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                        child: _timePicker(
-                            ctx, 'Start', startTime, isDark,
-                            (t) => setS(() => startTime = t))),
-                    const SizedBox(width: 12),
-                    Expanded(
-                        child: _timePicker(
-                            ctx, 'End', endTime, isDark,
-                            (t) => setS(() => endTime = t))),
-                  ],
-                ),
+                Row(children: [
+                  Expanded(child: _timePicker(ctx, 'Start', startTime, isDark,
+                      (t) => setS(() => startTime = t))),
+                  const SizedBox(width: 12),
+                  Expanded(child: _timePicker(ctx, 'End', endTime, isDark,
+                      (t) => setS(() => endTime = t))),
+                ]),
                 const SizedBox(height: 12),
                 _dropdownField(
                     'Class Type',
                     ['normal', 'impromptu', 'test', 'meeting', 'other'],
-                    classType,
-                    isDark,
-                    (v) => setS(() {
-                          classType = v!;
-                          if (v != 'normal') isImportant = true;
-                        })),
+                    classType, isDark, (v) => setS(() {
+                      classType = v!;
+                      if (v != 'normal') isImportant = true;
+                    })),
                 const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Text('Mark as Important',
-                        style: TextStyle(
-                            color:
-                                isDark ? Colors.white70 : Colors.black54)),
-                    const Spacer(),
-                    Switch(
-                      value: isImportant,
-                      onChanged: (v) => setS(() => isImportant = v),
-                      activeColor: Colors.blue,
-                    ),
-                  ],
-                ),
+                Row(children: [
+                  Text('Mark as Important',
+                      style: TextStyle(
+                          color: isDark ? Colors.white70 : Colors.black54)),
+                  const Spacer(),
+                  Switch(
+                    value: isImportant,
+                    onChanged: (v) => setS(() => isImportant = v),
+                    activeColor: Colors.blue,
+                  ),
+                ]),
                 _sheetField('Note (optional)', noteCtrl, isDark),
                 const SizedBox(height: 20),
                 SizedBox(
@@ -824,7 +1150,7 @@ class _TimetableScreenState extends State<TimetableScreen>
   void _showAddPersonalSheet(bool isDark, {PersonalEntry? editing}) {
     final titleCtrl = TextEditingController(text: editing?.title ?? '');
     final noteCtrl  = TextEditingController(text: editing?.note ?? '');
-    String day       = editing?.day ?? _days[0];
+    String day       = editing?.day ?? _days[_todayIndex];
     String startTime = editing?.startTime ?? '08:00';
     String endTime   = editing?.endTime ?? '10:00';
     String color     = editing?.color ?? '#4F46E5';
@@ -843,9 +1169,7 @@ class _TimetableScreenState extends State<TimetableScreen>
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setS) => Padding(
           padding: EdgeInsets.only(
-              left: 20,
-              right: 20,
-              top: 20,
+              left: 20, right: 20, top: 20,
               bottom: MediaQuery.of(ctx).viewInsets.bottom + 24),
           child: SingleChildScrollView(
             child: Column(
@@ -865,19 +1189,13 @@ class _TimetableScreenState extends State<TimetableScreen>
                 _dropdownField('Day', _days, day, isDark,
                     (v) => setS(() => day = v!)),
                 const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                        child: _timePicker(
-                            ctx, 'Start', startTime, isDark,
-                            (t) => setS(() => startTime = t))),
-                    const SizedBox(width: 12),
-                    Expanded(
-                        child: _timePicker(
-                            ctx, 'End', endTime, isDark,
-                            (t) => setS(() => endTime = t))),
-                  ],
-                ),
+                Row(children: [
+                  Expanded(child: _timePicker(ctx, 'Start', startTime, isDark,
+                      (t) => setS(() => startTime = t))),
+                  const SizedBox(width: 12),
+                  Expanded(child: _timePicker(ctx, 'End', endTime, isDark,
+                      (t) => setS(() => endTime = t))),
+                ]),
                 const SizedBox(height: 12),
                 Text('Color',
                     style: TextStyle(
@@ -891,8 +1209,7 @@ class _TimetableScreenState extends State<TimetableScreen>
                       onTap: () => setS(() => color = c),
                       child: Container(
                         margin: const EdgeInsets.only(right: 8),
-                        width: 30,
-                        height: 30,
+                        width: 30, height: 30,
                         decoration: BoxDecoration(
                           color: _hexColor(c),
                           shape: BoxShape.circle,
@@ -900,11 +1217,9 @@ class _TimetableScreenState extends State<TimetableScreen>
                               ? Border.all(color: Colors.white, width: 3)
                               : null,
                           boxShadow: selected
-                              ? [
-                                  BoxShadow(
-                                      color: _hexColor(c).withOpacity(0.5),
-                                      blurRadius: 8)
-                                ]
+                              ? [BoxShadow(
+                                  color: _hexColor(c).withOpacity(0.5),
+                                  blurRadius: 8)]
                               : null,
                         ),
                       ),
@@ -979,9 +1294,7 @@ class _TimetableScreenState extends State<TimetableScreen>
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setS) => Padding(
           padding: EdgeInsets.only(
-              left: 20,
-              right: 20,
-              top: 20,
+              left: 20, right: 20, top: 20,
               bottom: MediaQuery.of(ctx).viewInsets.bottom + 24),
           child: SingleChildScrollView(
             child: Column(
@@ -1008,8 +1321,7 @@ class _TimetableScreenState extends State<TimetableScreen>
                       context: ctx,
                       initialDate: examDate ?? DateTime.now(),
                       firstDate: DateTime.now(),
-                      lastDate:
-                          DateTime.now().add(const Duration(days: 365)),
+                      lastDate: DateTime.now().add(const Duration(days: 365)),
                     );
                     if (picked != null) setS(() => examDate = picked);
                   },
@@ -1022,43 +1334,33 @@ class _TimetableScreenState extends State<TimetableScreen>
                           : Colors.grey.shade50,
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
-                          color:
-                              isDark ? Colors.white24 : Colors.black12),
+                          color: isDark ? Colors.white24 : Colors.black12),
                     ),
-                    child: Row(
-                      children: [
-                        Icon(Icons.calendar_today_rounded,
-                            size: 18,
-                            color:
-                                isDark ? Colors.white54 : Colors.black45),
-                        const SizedBox(width: 10),
-                        Text(
-                          examDate != null
-                              ? '${examDate!.day}/${examDate!.month}/${examDate!.year}'
-                              : 'Pick Exam Date *',
-                          style: TextStyle(
-                              color: isDark
-                                  ? Colors.white70
-                                  : Colors.black54),
-                        ),
-                      ],
-                    ),
+                    child: Row(children: [
+                      Icon(Icons.calendar_today_rounded,
+                          size: 18,
+                          color: isDark ? Colors.white54 : Colors.black45),
+                      const SizedBox(width: 10),
+                      Text(
+                        examDate != null
+                            ? '${examDate!.day}/${examDate!.month}/${examDate!.year}'
+                            : 'Pick Exam Date *',
+                        style: TextStyle(
+                            color: isDark
+                                ? Colors.white70
+                                : Colors.black54),
+                      ),
+                    ]),
                   ),
                 ),
                 const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                        child: _timePicker(
-                            ctx, 'Start', startTime, isDark,
-                            (t) => setS(() => startTime = t))),
-                    const SizedBox(width: 12),
-                    Expanded(
-                        child: _timePicker(
-                            ctx, 'End', endTime, isDark,
-                            (t) => setS(() => endTime = t))),
-                  ],
-                ),
+                Row(children: [
+                  Expanded(child: _timePicker(ctx, 'Start', startTime, isDark,
+                      (t) => setS(() => startTime = t))),
+                  const SizedBox(width: 12),
+                  Expanded(child: _timePicker(ctx, 'End', endTime, isDark,
+                      (t) => setS(() => endTime = t))),
+                ]),
                 const SizedBox(height: 12),
                 _sheetField('Note (optional)', noteCtrl, isDark),
                 const SizedBox(height: 20),
@@ -1103,8 +1405,8 @@ class _TimetableScreenState extends State<TimetableScreen>
                               SnackBar(content: Text('Error: $e')));
                       }
                     },
-                    child:
-                        Text(editing == null ? 'Add Exam' : 'Save Changes'),
+                    child: Text(
+                        editing == null ? 'Add Exam' : 'Save Changes'),
                   ),
                 ),
               ],
@@ -1125,9 +1427,7 @@ class _TimetableScreenState extends State<TimetableScreen>
           borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (ctx) => Padding(
         padding: EdgeInsets.only(
-            left: 20,
-            right: 20,
-            top: 20,
+            left: 20, right: 20, top: 20,
             bottom: MediaQuery.of(ctx).viewInsets.bottom + 24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -1152,11 +1452,10 @@ class _TimetableScreenState extends State<TimetableScreen>
             TextField(
               controller: reasonCtrl,
               maxLines: 3,
-              style:
-                  TextStyle(color: isDark ? Colors.white : Colors.black87),
+              style: TextStyle(
+                  color: isDark ? Colors.white : Colors.black87),
               decoration: InputDecoration(
-                hintText:
-                    'e.g. I am the elected course rep for 300L CSC...',
+                hintText: 'e.g. I am the elected course rep for 300L CSC...',
                 hintStyle: TextStyle(
                     color: isDark ? Colors.white38 : Colors.black38),
                 filled: true,
@@ -1182,13 +1481,14 @@ class _TimetableScreenState extends State<TimetableScreen>
                   if (reasonCtrl.text.trim().isEmpty) return;
                   try {
                     await _svc.requestAdmin({
-                      'reason':  reasonCtrl.text.trim(),
+                      'reason': reasonCtrl.text.trim(),
                     });
                     if (ctx.mounted) {
                       Navigator.pop(ctx);
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                          content: Text(
-                              '✅ Request submitted! You\'ll be notified when reviewed.')));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                              content: Text(
+                                  '✅ Request submitted! You\'ll be notified when reviewed.')));
                     }
                   } catch (e) {
                     if (ctx.mounted)
@@ -1205,11 +1505,58 @@ class _TimetableScreenState extends State<TimetableScreen>
     );
   }
 
-  // ── Sheet helpers ────────────────────────────────────────────────────────
+  Future<void> _confirmResign(bool isDark) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('Resign as Admin?',
+            style: TextStyle(
+                color: isDark ? Colors.white : Colors.black87,
+                fontWeight: FontWeight.bold)),
+        content: Text(
+          'You will lose admin access immediately. Your timetable entries will remain.',
+          style: TextStyle(
+              color: isDark ? Colors.white60 : Colors.black54,
+              fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Resign'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+    try {
+      await _svc.resignAdmin();
+      await _checkAdminStatus();
+      setState(() {});
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('You have resigned as admin.')));
+    } catch (e) {
+      if (mounted)
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Error: $e')));
+    }
+  }
+
+  // ── Sheet helpers ─────────────────────────────────────────────────────────
   Widget _sheetHandle(bool isDark) => Center(
         child: Container(
-          width: 40,
-          height: 4,
+          width: 40, height: 4,
           decoration: BoxDecoration(
             color: isDark ? Colors.white24 : Colors.black12,
             borderRadius: BorderRadius.circular(2),
@@ -1221,17 +1568,16 @@ class _TimetableScreenState extends State<TimetableScreen>
           String label, TextEditingController ctrl, bool isDark) =>
       TextField(
         controller: ctrl,
-        style:
-            TextStyle(color: isDark ? Colors.white : Colors.black87),
+        style: TextStyle(color: isDark ? Colors.white : Colors.black87),
         decoration: InputDecoration(
           labelText: label,
-          labelStyle: TextStyle(
-              color: isDark ? Colors.white54 : Colors.black54),
+          labelStyle:
+              TextStyle(color: isDark ? Colors.white54 : Colors.black54),
           filled: true,
           fillColor:
               isDark ? const Color(0xFF0F172A) : Colors.grey.shade50,
-          border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12)),
+          border:
+              OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
         ),
       );
 
@@ -1245,19 +1591,18 @@ class _TimetableScreenState extends State<TimetableScreen>
       DropdownButtonFormField<String>(
         value: value,
         onChanged: onChanged,
-        dropdownColor:
-            isDark ? const Color(0xFF1E293B) : Colors.white,
-        style: TextStyle(
-            color: isDark ? Colors.white : Colors.black87),
+        dropdownColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+        style:
+            TextStyle(color: isDark ? Colors.white : Colors.black87),
         decoration: InputDecoration(
           labelText: label,
-          labelStyle: TextStyle(
-              color: isDark ? Colors.white54 : Colors.black54),
+          labelStyle:
+              TextStyle(color: isDark ? Colors.white54 : Colors.black54),
           filled: true,
           fillColor:
               isDark ? const Color(0xFF0F172A) : Colors.grey.shade50,
-          border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12)),
+          border:
+              OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
         ),
         items: items
             .map((d) => DropdownMenuItem(
@@ -1287,7 +1632,8 @@ class _TimetableScreenState extends State<TimetableScreen>
           }
         },
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          padding:
+              const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
           decoration: BoxDecoration(
             color:
                 isDark ? const Color(0xFF0F172A) : Colors.grey.shade50,
@@ -1295,29 +1641,27 @@ class _TimetableScreenState extends State<TimetableScreen>
             border: Border.all(
                 color: isDark ? Colors.white24 : Colors.black12),
           ),
-          child: Row(
-            children: [
-              Icon(Icons.access_time_rounded,
-                  size: 18,
-                  color: isDark ? Colors.white54 : Colors.black45),
-              const SizedBox(width: 8),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(label,
-                      style: TextStyle(
-                          fontSize: 10,
-                          color:
-                              isDark ? Colors.white38 : Colors.black38)),
-                  Text(current,
-                      style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          color:
-                              isDark ? Colors.white : Colors.black87)),
-                ],
-              ),
-            ],
-          ),
+          child: Row(children: [
+            Icon(Icons.access_time_rounded,
+                size: 18,
+                color: isDark ? Colors.white54 : Colors.black45),
+            const SizedBox(width: 8),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label,
+                    style: TextStyle(
+                        fontSize: 10,
+                        color:
+                            isDark ? Colors.white38 : Colors.black38)),
+                Text(current,
+                    style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color:
+                            isDark ? Colors.white : Colors.black87)),
+              ],
+            ),
+          ]),
         ),
       );
 }

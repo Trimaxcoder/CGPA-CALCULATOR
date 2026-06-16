@@ -71,6 +71,11 @@ class TimetableService {
     return data['entry'];
   }
 
+  Future<Map<String, dynamic>> toggleEmergency(String id) async {
+  final data = await _client.put('/timetable/lecture/$id/emergency', {});
+  return data['entry'];
+}
+
   // ── Admin ─────────────────────────────────────────────────────────────────
   Future<void> requestAdmin(Map<String, dynamic> body) async {
     await _client.post('/admin/request', body);
@@ -91,6 +96,19 @@ Future<void> reviewRequest(String id, String status, {String reviewNote = ''}) a
     'status':     status,
     'reviewNote': reviewNote,
   });
+}
+
+Future<void> resignAdmin() async {
+  await _client.post('/admin/resign', {});
+}
+
+Future<void> revokeAdmin(String userId) async {
+  await _client.delete('/admin/revoke/$userId');
+}
+
+Future<List<Map<String, dynamic>>> getAllAdmins() async {
+  final data = await _client.get('/admin/all');
+  return List<Map<String, dynamic>>.from(data['admins']);
 }
 
   // ── Notifications token ───────────────────────────────────────────────────
