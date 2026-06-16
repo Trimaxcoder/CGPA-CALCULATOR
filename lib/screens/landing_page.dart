@@ -6,6 +6,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:gradex/screens/main_shell.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import '../services/api_service.dart';
@@ -208,7 +209,7 @@ class _LandingPageState extends State<LandingPage>
       if (!context.mounted) return;
       Navigator.of(
         context,
-      ).pushAndRemoveUntil(fadeRoute(const HomeScreen()), (_) => false);
+      ).pushAndRemoveUntil(fadeRoute(const MainShell()), (_) => false);
     } on ApiException catch (e) {
       print("=== API ERROR: ${e.message}");
       if (mounted) AppSnackBar.showError(context, e.message);

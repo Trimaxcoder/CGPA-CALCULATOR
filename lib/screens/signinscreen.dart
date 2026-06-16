@@ -113,7 +113,7 @@ class _SignInScreenState extends State<SignInScreen> {
       if (saved.isNotEmpty && mounted) {
         Navigator.of(
           context,
-        ).pushAndRemoveUntil(fadeRoute(const HomeScreen()), (_) => false);
+        ).pushAndRemoveUntil(fadeRoute(const MainShell()), (_) => false);
       } else {
         setState(
           () =>
@@ -167,13 +167,13 @@ class _SignInScreenState extends State<SignInScreen> {
       if (!mounted) return;
       Navigator.of(
         context,
-      ).pushAndRemoveUntil(fadeRoute(const HomeScreen()), (_) => false);
+      ).pushAndRemoveUntil(fadeRoute(const MainShell()), (_) => false);
     } catch (e) {
       final prefs = await SharedPreferences.getInstance();
       if ((prefs.getString('profile') ?? '').isNotEmpty && mounted) {
         Navigator.of(
           context,
-        ).pushAndRemoveUntil(fadeRoute(const HomeScreen()), (_) => false);
+        ).pushAndRemoveUntil(fadeRoute(const MainShell()), (_) => false);
       } else {
         if (mounted) {
           setState(
@@ -273,7 +273,7 @@ class _SignInScreenState extends State<SignInScreen> {
       if (!mounted) return;
       Navigator.of(
         context,
-      ).pushAndRemoveUntil(fadeRoute(const HomeScreen()), (_) => false);
+      ).pushAndRemoveUntil(fadeRoute(const MainShell()), (_) => false);
     } on ApiException catch (e) {
       if (mounted) AppSnackBar.showError(context, e.message);
     } catch (e) {

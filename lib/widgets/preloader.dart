@@ -3,6 +3,7 @@
 // ══════════════════════════════════════════════════════════
 
 import 'package:flutter/material.dart';
+import 'package:gradex/screens/main_shell.dart';
 import '../main.dart';
 import '../widgets/ui_helpers.dart';
 import '../screens/homescreen.dart';
@@ -18,7 +19,7 @@ class PreloaderScreenState extends State<PreloaderScreen> {
     super.initState();
     Future.delayed(const Duration(seconds: 1), () {
       if (!mounted) return;
-      Navigator.of(context).pushReplacement(fadeRoute(const HomeScreen()));
+      Navigator.of(context).pushReplacement(fadeRoute(const MainShell()));
     });
   }
 
