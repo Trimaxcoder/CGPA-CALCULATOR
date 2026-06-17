@@ -1,6 +1,7 @@
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:convert';
 import '../services/timetable_service.dart';
 
@@ -16,7 +17,9 @@ class NotificationService {
       sound: true,
     );
 
-    await _initLocalNotifications();
+    if (!kIsWeb) {
+      await _initLocalNotifications();
+    }
 
     final token = await _messaging.getToken();
     if (token != null) {
@@ -25,9 +28,12 @@ class NotificationService {
 
     _messaging.onTokenRefresh.listen(_saveToken);
 
-    // Show a system notification when a message arrives while app is open
     FirebaseMessaging.onMessage.listen((message) {
-      _showLocalNotification(message);
+      if (kIsWeb) {
+        print('FCM foreground (web): ${message.notification?.title}');
+      } else {
+        _showLocalNotification(message);
+      }
     });
   }
 
@@ -55,10 +61,7 @@ class NotificationService {
       priority: Priority.high,
     );
     const iosDetails = DarwinNotificationDetails();
-    const details = NotificationDetails(
-      android: androidDetails,
-      iOS: iosDetails,
-    );
+    const details = NotificationDetails(android: androidDetails, iOS: iosDetails);
 
     await _localNotifications.show(
       DateTime.now().millisecondsSinceEpoch ~/ 1000,
