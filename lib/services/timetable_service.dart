@@ -15,7 +15,9 @@ class TimetableService {
   }
 
   Future<Map<String, dynamic>> updateLecture(
-      String id, Map<String, dynamic> entry) async {
+    String id,
+    Map<String, dynamic> entry,
+  ) async {
     final data = await _client.put('/timetable/lecture/$id', entry);
     return data['entry'];
   }
@@ -36,7 +38,9 @@ class TimetableService {
   }
 
   Future<Map<String, dynamic>> updateExam(
-      String id, Map<String, dynamic> entry) async {
+    String id,
+    Map<String, dynamic> entry,
+  ) async {
     final data = await _client.put('/timetable/exam/$id', entry);
     return data['entry'];
   }
@@ -57,7 +61,9 @@ class TimetableService {
   }
 
   Future<Map<String, dynamic>> updatePersonal(
-      String id, Map<String, dynamic> entry) async {
+    String id,
+    Map<String, dynamic> entry,
+  ) async {
     final data = await _client.put('/timetable/personal/$id', entry);
     return data['entry'];
   }
@@ -72,8 +78,26 @@ class TimetableService {
   }
 
   Future<Map<String, dynamic>> toggleEmergency(String id) async {
-  final data = await _client.put('/timetable/lecture/$id/emergency', {});
-  return data['entry'];
+    final data = await _client.put('/timetable/lecture/$id/emergency', {});
+    return data['entry'];
+  }
+
+  Future<Map<String, dynamic>> toggleAlert(String id, String type) async {
+    final data = await _client.put('/timetable/lecture/$id/alert/$type', {});
+    return data['entry'];
+  }
+
+  Future<List<Map<String, dynamic>>> getReminders() async {
+  final data = await _client.get('/reminders');
+  return List<Map<String, dynamic>>.from(data['reminders']);
+}
+
+Future<Map<String, dynamic>> setReminder(String lectureId, bool enabled, int minutesBefore) async {
+  final data = await _client.put('/reminders/$lectureId', {
+    'enabled': enabled,
+    'minutesBefore': minutesBefore,
+  });
+  return data['reminder'];
 }
 
   // ── Admin ─────────────────────────────────────────────────────────────────
@@ -86,30 +110,34 @@ class TimetableService {
   }
 
   // ── Super Admin ───────────────────────────────────────────────────────────
-Future<List<Map<String, dynamic>>> getPendingRequests() async {
-  final data = await _client.get('/admin/pending');
-  return List<Map<String, dynamic>>.from(data['requests']);
-}
+  Future<List<Map<String, dynamic>>> getPendingRequests() async {
+    final data = await _client.get('/admin/pending');
+    return List<Map<String, dynamic>>.from(data['requests']);
+  }
 
-Future<void> reviewRequest(String id, String status, {String reviewNote = ''}) async {
-  await _client.put('/admin/review/$id', {
-    'status':     status,
-    'reviewNote': reviewNote,
-  });
-}
+  Future<void> reviewRequest(
+    String id,
+    String status, {
+    String reviewNote = '',
+  }) async {
+    await _client.put('/admin/review/$id', {
+      'status': status,
+      'reviewNote': reviewNote,
+    });
+  }
 
-Future<void> resignAdmin() async {
-  await _client.post('/admin/resign', {});
-}
+  Future<void> resignAdmin() async {
+    await _client.post('/admin/resign', {});
+  }
 
-Future<void> revokeAdmin(String userId) async {
-  await _client.delete('/admin/revoke/$userId');
-}
+  Future<void> revokeAdmin(String userId) async {
+    await _client.delete('/admin/revoke/$userId');
+  }
 
-Future<List<Map<String, dynamic>>> getAllAdmins() async {
-  final data = await _client.get('/admin/all');
-  return List<Map<String, dynamic>>.from(data['admins']);
-}
+  Future<List<Map<String, dynamic>>> getAllAdmins() async {
+    final data = await _client.get('/admin/all');
+    return List<Map<String, dynamic>>.from(data['admins']);
+  }
 
   // ── Notifications token ───────────────────────────────────────────────────
   Future<void> saveNotificationToken({

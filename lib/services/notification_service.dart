@@ -3,7 +3,8 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:convert';
-import '../services/timetable_service.dart';
+import 'timetable_service.dart';
+import 'notification_service_web.dart' if (dart.library.io) 'notification_service_stub.dart' as web_impl;
 
 class NotificationService {
   static final _messaging = FirebaseMessaging.instance;
@@ -11,15 +12,13 @@ class NotificationService {
   static final _localNotifications = FlutterLocalNotificationsPlugin();
 
   static Future<void> init() async {
-    await _messaging.requestPermission(
-      alert: true,
-      badge: true,
-      sound: true,
-    );
-
-    if (!kIsWeb) {
-      await _initLocalNotifications();
+    if (kIsWeb) {
+      await web_impl.NotificationServiceWeb.init();
+      return;
     }
+
+    await _messaging.requestPermission(alert: true, badge: true, sound: true);
+    await _initLocalNotifications();
 
     final token = await _messaging.getToken();
     if (token != null) {
@@ -29,11 +28,7 @@ class NotificationService {
     _messaging.onTokenRefresh.listen(_saveToken);
 
     FirebaseMessaging.onMessage.listen((message) {
-      if (kIsWeb) {
-        print('FCM foreground (web): ${message.notification?.title}');
-      } else {
-        _showLocalNotification(message);
-      }
+      _showLocalNotification(message);
     });
   }
 
@@ -85,16 +80,12 @@ class NotificationService {
         department = decoded['department'] ?? '';
         level      = decoded['level']      ?? '';
       }
-
       await _svc.saveNotificationToken(
-        token: token,
-        school: school,
-        faculty: faculty,
-        department: department,
-        level: level,
+        token: token, school: school, faculty: faculty,
+        department: department, level: level,
       );
     } catch (e) {
-      print('Failed to save FCM token to backend: $e');
+      print('Failed to save FCM token: $e');
     }
   }
 

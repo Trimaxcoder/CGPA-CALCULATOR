@@ -16,6 +16,9 @@ class LectureEntry {
   final String type; // lecture | exam
   final DateTime? date; // for exams
   final bool isEmergency;
+  final bool isTest;
+  final bool isAttendance;
+  final bool isCancelled;
 
   LectureEntry({
     required this.id,
@@ -35,6 +38,9 @@ class LectureEntry {
     this.type = 'lecture',
     this.date,
     this.isEmergency = false,
+    this.isTest = false,
+    this.isAttendance = false,
+    this.isCancelled = false,
   });
 
   factory LectureEntry.fromMap(Map<String, dynamic> m) => LectureEntry(
@@ -55,6 +61,9 @@ class LectureEntry {
         type:        m['type'] ?? 'lecture',
         date:        m['date'] != null ? DateTime.tryParse(m['date']) : null,
         isEmergency: m['isEmergency'] ?? false,
+        isTest:       m['isTest'] ?? false,
+        isAttendance: m['isAttendance'] ?? false,
+        isCancelled:  m['isCancelled'] ?? false,
       );
 
   Map<String, dynamic> toMap() => {
@@ -74,6 +83,9 @@ class LectureEntry {
         'type':        type,
         if (date != null) 'date': date!.toIso8601String(),
         'isEmergency': isEmergency,
+        'isTest':       isTest,
+        'isAttendance': isAttendance,
+        'isCancelled':  isCancelled,
       };
 }
 

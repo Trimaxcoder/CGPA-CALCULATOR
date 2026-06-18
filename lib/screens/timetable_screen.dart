@@ -17,30 +17,36 @@ class TimetableScreen extends StatefulWidget {
 
 class _TimetableScreenState extends State<TimetableScreen>
     with TickerProviderStateMixin {
-  late TabController _typeTabCtrl;   // Lecture / Personal / Exam
+  late TabController _typeTabCtrl; // Lecture / Personal / Exam
   late TabController _dayTabCtrl;
   late PageController _lecturePageCtrl;
-  late PageController _personalPageCtrl;    // Mon–Sun
+  late PageController _personalPageCtrl; // Mon–Sun
 
-  List<LectureEntry>  _lectures = [];
-  List<LectureEntry>  _exams    = [];
+  List<LectureEntry> _lectures = [];
+  List<LectureEntry> _exams = [];
   List<PersonalEntry> _personal = [];
 
-  bool _loading     = true;
-  bool _isAdmin     = false;
+  bool _loading = true;
+  bool _isAdmin = false;
   bool _isSuperAdmin = false;
+
+  Map<String, Map<String, dynamic>> _reminders = {};
 
   String _school = '', _faculty = '', _department = '', _level = '';
 
   final _svc = TimetableService();
 
   static const _days = [
-    'Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday',
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+    'Friday',
+    'Saturday',
+    'Sunday',
   ];
 
-  static const _dayShort = [
-    'MON','TUE','WED','THU','FRI','SAT','SUN',
-  ];
+  static const _dayShort = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
 
   int get _todayIndex {
     final wd = DateTime.now().weekday; // 1=Mon … 7=Sun
@@ -51,12 +57,12 @@ class _TimetableScreenState extends State<TimetableScreen>
   void initState() {
     super.initState();
     _typeTabCtrl = TabController(length: 3, vsync: this);
-    _dayTabCtrl  = TabController(
+    _dayTabCtrl = TabController(
       length: _days.length,
       vsync: this,
       initialIndex: _todayIndex,
     );
-    _lecturePageCtrl  = PageController(initialPage: _todayIndex); // ← add
+    _lecturePageCtrl = PageController(initialPage: _todayIndex); // ← add
     _personalPageCtrl = PageController(initialPage: _todayIndex);
     _loadAll();
   }
@@ -75,6 +81,7 @@ class _TimetableScreenState extends State<TimetableScreen>
     await _loadProfile();
     await Future.wait([_loadLectures(), _loadExams(), _loadPersonal()]);
     await _checkAdminStatus();
+    await _loadReminders();
     if (mounted) setState(() => _loading = false);
   }
 
@@ -84,10 +91,10 @@ class _TimetableScreenState extends State<TimetableScreen>
       final raw = prefs.getString('profile');
       if (raw != null) {
         final decoded = jsonDecode(raw) as Map<String, dynamic>;
-        _school     = decoded['school']     ?? '';
-        _faculty    = decoded['faculty']    ?? '';
+        _school = decoded['school'] ?? '';
+        _faculty = decoded['faculty'] ?? '';
         _department = decoded['department'] ?? '';
-        _level      = decoded['level']      ?? '';
+        _level = decoded['level'] ?? '';
       }
     } catch (_) {}
   }
@@ -117,14 +124,45 @@ class _TimetableScreenState extends State<TimetableScreen>
     try {
       final res = await _svc.getAdminStatus();
       print('ADMIN STATUS: $res');
-      if (mounted) setState(() {
-        _isAdmin      = res['isAdmin']      ?? false;
-        _isSuperAdmin = res['isSuperAdmin'] ?? false;
-      });
+      if (mounted)
+        setState(() {
+          _isAdmin = res['isAdmin'] ?? false;
+          _isSuperAdmin = res['isSuperAdmin'] ?? false;
+        });
     } catch (_) {}
   }
 
+  Future<void> _loadReminders() async {
+  try {
+    final list = await _svc.getReminders();
+    final map = <String, Map<String, dynamic>>{};
+    for (final r in list) {
+      final lectureId = r['lecture'] is Map ? r['lecture']['_id'] : r['lecture'];
+      map[lectureId] = r;
+    }
+    if (mounted) setState(() => _reminders = map);
+  } catch (_) {}
+}
+
   // ── Helpers ──────────────────────────────────────────────────────────────
+
+  Future<void> _toggleAlert(String id, String type) async {
+    try {
+      if (type == 'emergency') {
+        await _svc.toggleEmergency(id);
+      } else {
+        await _svc.toggleAlert(id, type);
+      }
+      await _loadLectures();
+      setState(() {});
+    } catch (e) {
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
+    }
+  }
+
   Color _hexColor(String hex) {
     try {
       return Color(int.parse(hex.replaceFirst('#', '0xFF')));
@@ -155,21 +193,23 @@ class _TimetableScreenState extends State<TimetableScreen>
   @override
   Widget build(BuildContext context) {
     final isDark = context.watch<ThemeNotifier>().isDarkMode;
-    final navBg  = isDark ? const Color(0xFF1E293B) : Colors.white;
-    final navFg  = isDark ? Colors.white : Colors.black87;
+    final navBg = isDark ? const Color(0xFF1E293B) : Colors.white;
+    final navFg = isDark ? Colors.white : Colors.black87;
 
     return Scaffold(
-      backgroundColor:
-          isDark ? const Color(0xFF0A0A0A) : const Color(0xFFF2F4F8),
+      backgroundColor: isDark
+          ? const Color(0xFF0A0A0A)
+          : const Color(0xFFF2F4F8),
       appBar: AppBar(
         elevation: 0,
         centerTitle: true,
         automaticallyImplyLeading: false,
         backgroundColor: navBg,
         foregroundColor: navFg,
-        title: Text('Timetable',
-            style:
-                TextStyle(color: navFg, fontWeight: FontWeight.bold)),
+        title: Text(
+          'Timetable',
+          style: TextStyle(color: navFg, fontWeight: FontWeight.bold),
+        ),
         actions: [
           IconButton(
             icon: Icon(Icons.refresh_rounded, color: navFg),
@@ -178,49 +218,56 @@ class _TimetableScreenState extends State<TimetableScreen>
           if (_isAdmin)
             TextButton(
               onPressed: () => _confirmResign(isDark),
-              child: Text('Resign',
-                  style: TextStyle(
-                      color: Colors.red.shade400,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 12)),
+              child: Text(
+                'Resign',
+                style: TextStyle(
+                  color: Colors.red.shade400,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 12,
+                ),
+              ),
             ),
           if (!_isAdmin && !_isSuperAdmin)
             TextButton(
               onPressed: () => _showAdminRequestSheet(isDark),
-              child: Text('Be Admin',
-                  style: TextStyle(
-                      color: isDark
-                          ? Colors.indigo.shade300
-                          : Colors.blue,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 12)),
+              child: Text(
+                'Be Admin',
+                style: TextStyle(
+                  color: isDark ? Colors.indigo.shade300 : Colors.blue,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 12,
+                ),
+              ),
             ),
           if (_isSuperAdmin)
             IconButton(
-              icon: const Icon(Icons.admin_panel_settings_rounded,
-                  color: Colors.purple),
+              icon: const Icon(
+                Icons.admin_panel_settings_rounded,
+                color: Colors.purple,
+              ),
               onPressed: () => Navigator.push(
                 context,
-                MaterialPageRoute(
-                    builder: (_) => const SuperAdminScreen()),
+                MaterialPageRoute(builder: (_) => const SuperAdminScreen()),
               ),
             ),
         ],
         bottom: TabBar(
           controller: _typeTabCtrl,
-          labelColor:
-              isDark ? Colors.indigo.shade300 : Colors.blue.shade700,
-          unselectedLabelColor:
-              isDark ? Colors.white38 : Colors.black45,
-          indicatorColor:
-              isDark ? Colors.indigo.shade300 : Colors.blue.shade700,
+          labelColor: isDark ? Colors.indigo.shade300 : Colors.blue.shade700,
+          unselectedLabelColor: isDark ? Colors.white38 : Colors.black45,
+          indicatorColor: isDark
+              ? Colors.indigo.shade300
+              : Colors.blue.shade700,
           tabs: const [
-            Tab(icon: Icon(Icons.cast_for_education_rounded, size: 20),
-                text: 'Lecture'),
-            Tab(icon: Icon(Icons.menu_book_rounded, size: 20),
-                text: 'Personal'),
-            Tab(icon: Icon(Icons.event_note_rounded, size: 20),
-                text: 'Exam'),
+            Tab(
+              icon: Icon(Icons.cast_for_education_rounded, size: 20),
+              text: 'Lecture',
+            ),
+            Tab(
+              icon: Icon(Icons.menu_book_rounded, size: 20),
+              text: 'Personal',
+            ),
+            Tab(icon: Icon(Icons.event_note_rounded, size: 20), text: 'Exam'),
           ],
         ),
       ),
@@ -241,134 +288,130 @@ class _TimetableScreenState extends State<TimetableScreen>
   //  DAY VIEW (shared by Lecture + Personal tabs)
   // ══════════════════════════════════════════════════════════
   Widget _buildDayView(bool isDark, {required bool isPersonal}) {
-  final accentColor =
-      isPersonal ? Colors.indigo.shade600 : Colors.blue.shade700;
+    final accentColor = isPersonal
+        ? Colors.indigo.shade600
+        : Colors.blue.shade700;
 
-  // Use a persistent PageController per tab type
-  final pageCtrl = isPersonal ? _personalPageCtrl : _lecturePageCtrl;
+    // Use a persistent PageController per tab type
+    final pageCtrl = isPersonal ? _personalPageCtrl : _lecturePageCtrl;
 
-  return Scaffold(
-    backgroundColor: Colors.transparent,
-    floatingActionButton: isPersonal
-        ? FloatingActionButton.extended(
-            onPressed: () => _showAddPersonalSheet(isDark),
-            icon: const Icon(Icons.add),
-            label: const Text('Add Study'),
-            backgroundColor: Colors.indigo.shade600,
-          )
-        : (_isAdmin
-            ? FloatingActionButton.extended(
-                onPressed: () => _showAddLectureSheet(isDark),
-                icon: const Icon(Icons.add),
-                label: const Text('Add Class'),
-                backgroundColor: Colors.blue.shade700,
-              )
-            : null),
-    body: Column(
-      children: [
-        Container(
-          color: isDark ? const Color(0xFF1E293B) : Colors.white,
-          child: TabBar(
-            controller: _dayTabCtrl,
-            isScrollable: true,
-            labelColor: accentColor,
-            unselectedLabelColor: isDark ? Colors.white38 : Colors.black38,
-            indicatorColor: accentColor,
-            indicatorWeight: 3,
-            onTap: (i) {
-              pageCtrl.animateToPage(
-                i,
-                duration: const Duration(milliseconds: 300),
-                curve: Curves.easeInOut,
-              );
-            },
-            tabs: List.generate(_days.length, (i) {
-              final isToday = i == _todayIndex;
-              return Tab(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        _dayShort[i],
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight:
-                              isToday ? FontWeight.w800 : FontWeight.w500,
-                        ),
-                      ),
-                      if (isToday)
-                        Container(
-                          margin: const EdgeInsets.only(top: 2),
-                          width: 5,
-                          height: 5,
-                          decoration: BoxDecoration(
-                            color: accentColor,
-                            shape: BoxShape.circle,
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      floatingActionButton: isPersonal
+          ? FloatingActionButton.extended(
+              onPressed: () => _showAddPersonalSheet(isDark),
+              icon: const Icon(Icons.add),
+              label: const Text('Add Study'),
+              backgroundColor: Colors.indigo.shade600,
+            )
+          : (_isAdmin
+                ? FloatingActionButton.extended(
+                    onPressed: () => _showAddLectureSheet(isDark),
+                    icon: const Icon(Icons.add),
+                    label: const Text('Add Class'),
+                    backgroundColor: Colors.blue.shade700,
+                  )
+                : null),
+      body: Column(
+        children: [
+          Container(
+            color: isDark ? const Color(0xFF1E293B) : Colors.white,
+            child: TabBar(
+              controller: _dayTabCtrl,
+              isScrollable: true,
+              labelColor: accentColor,
+              unselectedLabelColor: isDark ? Colors.white38 : Colors.black38,
+              indicatorColor: accentColor,
+              indicatorWeight: 3,
+              onTap: (i) {
+                pageCtrl.animateToPage(
+                  i,
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeInOut,
+                );
+              },
+              tabs: List.generate(_days.length, (i) {
+                final isToday = i == _todayIndex;
+                return Tab(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          _dayShort[i],
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: isToday
+                                ? FontWeight.w800
+                                : FontWeight.w500,
                           ),
                         ),
-                    ],
-                  ),
-                ),
-              );
-            }),
-          ),
-        ),
-        Expanded(
-          child: PageView.builder(
-            controller: pageCtrl,
-            itemCount: _days.length,
-            onPageChanged: (i) {
-              if (_dayTabCtrl.index != i) {
-                _dayTabCtrl.animateTo(i);
-              }
-            },
-            itemBuilder: (_, dayIndex) {
-              final day = _days[dayIndex];
-
-              if (isPersonal) {
-                final entries = _personal
-                    .where((e) => e.day == day)
-                    .toList()
-                  ..sort((a, b) => a.startTime.compareTo(b.startTime));
-                return _dayEntriesList(
-                  isDark: isDark,
-                  isEmpty: entries.isEmpty,
-                  day: day,
-                  isPersonal: true,
-                  child: ListView.builder(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-                    itemCount: entries.length,
-                    itemBuilder: (_, i) => _personalCard(entries[i], isDark),
+                        if (isToday)
+                          Container(
+                            margin: const EdgeInsets.only(top: 2),
+                            width: 5,
+                            height: 5,
+                            decoration: BoxDecoration(
+                              color: accentColor,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
                 );
-              } else {
-                final entries = _lectures
-                    .where((e) => e.day == day)
-                    .toList()
-                  ..sort((a, b) => a.startTime.compareTo(b.startTime));
-                return _dayEntriesList(
-                  isDark: isDark,
-                  isEmpty: entries.isEmpty,
-                  day: day,
-                  isPersonal: false,
-                  child: ListView.builder(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-                    itemCount: entries.length,
-                    itemBuilder: (_, i) => _lectureCard(entries[i], isDark),
-                  ),
-                );
-              }
-            },
+              }),
+            ),
           ),
-        ),
-      ],
-    ),
-  );
-}
+          Expanded(
+            child: PageView.builder(
+              controller: pageCtrl,
+              itemCount: _days.length,
+              onPageChanged: (i) {
+                if (_dayTabCtrl.index != i) {
+                  _dayTabCtrl.animateTo(i);
+                }
+              },
+              itemBuilder: (_, dayIndex) {
+                final day = _days[dayIndex];
 
-
+                if (isPersonal) {
+                  final entries = _personal.where((e) => e.day == day).toList()
+                    ..sort((a, b) => a.startTime.compareTo(b.startTime));
+                  return _dayEntriesList(
+                    isDark: isDark,
+                    isEmpty: entries.isEmpty,
+                    day: day,
+                    isPersonal: true,
+                    child: ListView.builder(
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+                      itemCount: entries.length,
+                      itemBuilder: (_, i) => _personalCard(entries[i], isDark),
+                    ),
+                  );
+                } else {
+                  final entries = _lectures.where((e) => e.day == day).toList()
+                    ..sort((a, b) => a.startTime.compareTo(b.startTime));
+                  return _dayEntriesList(
+                    isDark: isDark,
+                    isEmpty: entries.isEmpty,
+                    day: day,
+                    isPersonal: false,
+                    child: ListView.builder(
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+                      itemCount: entries.length,
+                      itemBuilder: (_, i) => _lectureCard(entries[i], isDark),
+                    ),
+                  );
+                }
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _dayEntriesList({
     required bool isDark,
@@ -395,21 +438,23 @@ class _TimetableScreenState extends State<TimetableScreen>
               Text(
                 'No classes on $day',
                 style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: isDark ? Colors.white70 : Colors.black87),
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: isDark ? Colors.white70 : Colors.black87,
+                ),
               ),
               const SizedBox(height: 8),
               Text(
                 isPersonal
                     ? 'Tap "Add Study" to add a session'
                     : _isAdmin
-                        ? 'Tap "Add Class" to schedule a lecture'
-                        : 'No lectures scheduled for this day',
+                    ? 'Tap "Add Class" to schedule a lecture'
+                    : 'No lectures scheduled for this day',
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                    fontSize: 13,
-                    color: isDark ? Colors.white38 : Colors.black45),
+                  fontSize: 13,
+                  color: isDark ? Colors.white38 : Colors.black45,
+                ),
               ),
             ],
           ),
@@ -423,7 +468,8 @@ class _TimetableScreenState extends State<TimetableScreen>
   //  EXAM TAB
   // ══════════════════════════════════════════════════════════
   Widget _buildExamTab(bool isDark) {
-    final sorted = [..._exams]..sort((a, b) {
+    final sorted = [..._exams]
+      ..sort((a, b) {
         if (a.date == null && b.date == null) return 0;
         if (a.date == null) return 1;
         if (b.date == null) return -1;
@@ -465,6 +511,7 @@ class _TimetableScreenState extends State<TimetableScreen>
   // ══════════════════════════════════════════════════════════
   //  CARDS
   // ══════════════════════════════════════════════════════════
+
   Widget _lectureCard(LectureEntry e, bool isDark) {
     final typeColor = e.classType == 'test'
         ? Colors.red
@@ -502,170 +549,126 @@ class _TimetableScreenState extends State<TimetableScreen>
       ),
       child: Padding(
         padding: const EdgeInsets.all(14),
-        child: Row(
+        child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Time column
-            SizedBox(
-              width: 52,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(e.startTime,
-                      style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: isDark ? Colors.white : Colors.black87)),
-                  const SizedBox(height: 2),
-                  Text(e.endTime,
-                      style: TextStyle(
-                          fontSize: 11,
-                          color: isDark
-                              ? Colors.white38
-                              : Colors.black38)),
-                  if (dur.isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 4, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: typeColor.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(dur,
-                          style: TextStyle(
-                              fontSize: 9,
-                              color: typeColor,
-                              fontWeight: FontWeight.w600)),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            const SizedBox(width: 4),
-            // Vertical line
-            Container(
-              width: 2,
-              height: 60,
-              decoration: BoxDecoration(
-                color: typeColor.withOpacity(0.4),
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(width: 12),
-            // Content
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Time column
+                SizedBox(
+                  width: 52,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(typeIcon, color: typeColor, size: 16),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(e.courseCode,
-                            style: TextStyle(
-                                fontWeight: FontWeight.w700,
-                                fontSize: 15,
-                                color: isDark
-                                    ? Colors.white
-                                    : Colors.black87)),
-                      ),
-                      if (e.isImportant)
+                      Text(e.startTime,
+                          style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: isDark ? Colors.white : Colors.black87)),
+                      const SizedBox(height: 2),
+                      Text(e.endTime,
+                          style: TextStyle(
+                              fontSize: 11,
+                              color: isDark ? Colors.white38 : Colors.black38)),
+                      if (dur.isNotEmpty) ...[
+                        const SizedBox(height: 4),
                         Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 6, vertical: 2),
+                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                           decoration: BoxDecoration(
-                            color: typeColor.withOpacity(0.15),
-                            borderRadius: BorderRadius.circular(6),
+                            color: typeColor.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(4),
                           ),
-                          child: Text(
-                            e.classType.toUpperCase(),
-                            style: TextStyle(
-                                color: typeColor,
-                                fontSize: 8,
-                                fontWeight: FontWeight.w800),
-                          ),
-                        ),
-                    ],
-                  ),
-                  if (e.courseTitle.isNotEmpty) ...[
-                    const SizedBox(height: 2),
-                    Text(e.courseTitle,
-                        style: TextStyle(
-                            fontSize: 12,
-                            color: isDark
-                                ? Colors.white60
-                                : Colors.black54)),
-                  ],
-                  if (e.venue.isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Icon(Icons.location_on_outlined,
-                            size: 12,
-                            color: isDark
-                                ? Colors.white38
-                                : Colors.black38),
-                        const SizedBox(width: 2),
-                        Expanded(
-                          child: Text(e.venue,
-                              overflow: TextOverflow.ellipsis,
+                          child: Text(dur,
                               style: TextStyle(
-                                  fontSize: 11,
-                                  color: isDark
-                                      ? Colors.white54
-                                      : Colors.black45)),
+                                  fontSize: 9,
+                                  color: typeColor,
+                                  fontWeight: FontWeight.w600)),
                         ),
                       ],
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            // Actions column
-            Column(
-              children: [
-                // Emergency star — visible to all, controlled by admin
-                GestureDetector(
-                  onTap: _isAdmin
-                      ? () async {
-                          try {
-                            await _svc.toggleEmergency(e.id);
-                            await _loadLectures();
-                            setState(() {});
-                          } catch (err) {
-                            if (mounted)
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('Error: $err')));
-                          }
-                        }
-                      : null,
-                  child: Icon(
-                    e.isEmergency
-                        ? Icons.star_rounded
-                        : Icons.star_outline_rounded,
-                    color: e.isEmergency
-                        ? Colors.amber
-                        : isDark
-                            ? Colors.white24
-                            : Colors.black26,
-                    size: 24,
+                    ],
                   ),
                 ),
-                if (_isAdmin) ...[
-                  const SizedBox(height: 4),
+                const SizedBox(width: 4),
+                Container(
+                  width: 2,
+                  height: 60,
+                  decoration: BoxDecoration(
+                    color: typeColor.withOpacity(0.4),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(typeIcon, color: typeColor, size: 16),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(e.courseCode,
+                                style: TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 15,
+                                    color: isDark ? Colors.white : Colors.black87)),
+                          ),
+                          if (e.isImportant)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: typeColor.withOpacity(0.15),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                e.classType.toUpperCase(),
+                                style: TextStyle(
+                                    color: typeColor,
+                                    fontSize: 8,
+                                    fontWeight: FontWeight.w800),
+                              ),
+                            ),
+                        ],
+                      ),
+                      if (e.courseTitle.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(e.courseTitle,
+                            style: TextStyle(
+                                fontSize: 12,
+                                color: isDark ? Colors.white60 : Colors.black54)),
+                      ],
+                      if (e.venue.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Icon(Icons.location_on_outlined,
+                                size: 12,
+                                color: isDark ? Colors.white38 : Colors.black38),
+                            const SizedBox(width: 2),
+                            Expanded(
+                              child: Text(e.venue,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                      fontSize: 11,
+                                      color: isDark ? Colors.white54 : Colors.black45)),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                if (_isAdmin)
                   PopupMenuButton<String>(
                     icon: Icon(Icons.more_vert,
                         color: isDark ? Colors.white38 : Colors.black38,
                         size: 20),
                     itemBuilder: (_) => [
-                      const PopupMenuItem(
-                          value: 'edit', child: Text('Edit')),
+                      const PopupMenuItem(value: 'edit', child: Text('Edit')),
                       const PopupMenuItem(
                           value: 'delete',
-                          child: Text('Delete',
-                              style: TextStyle(color: Colors.red))),
+                          child: Text('Delete', style: TextStyle(color: Colors.red))),
                     ],
                     onSelected: (val) async {
                       if (val == 'delete') {
@@ -677,8 +680,57 @@ class _TimetableScreenState extends State<TimetableScreen>
                       }
                     },
                   ),
-                ],
               ],
+            ),
+
+            // ── Alert row ──────────────────────────────────────
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              decoration: BoxDecoration(
+                border: Border(
+                  top: BorderSide(
+                      color: isDark ? Colors.white12 : Colors.black12,
+                      width: 1),
+                ),
+              ),
+              child: Row(
+                children: [
+                  _alertChip(
+                    icon: e.isEmergency ? Icons.star_rounded : Icons.star_outline_rounded,
+                    active: e.isEmergency,
+                    color: Colors.amber,
+                    isDark: isDark,
+                    onTap: _isAdmin ? () => _toggleAlert(e.id, 'emergency') : null,
+                  ),
+                  const SizedBox(width: 8),
+                  _alertChip(
+                    icon: Icons.quiz_rounded,
+                    active: e.isTest,
+                    color: Colors.red,
+                    isDark: isDark,
+                    onTap: _isAdmin ? () => _toggleAlert(e.id, 'test') : null,
+                  ),
+                  const SizedBox(width: 8),
+                  _alertChip(
+                    icon: Icons.how_to_reg_rounded,
+                    active: e.isAttendance,
+                    color: Colors.green,
+                    isDark: isDark,
+                    onTap: _isAdmin ? () => _toggleAlert(e.id, 'attendance') : null,
+                  ),
+                  const SizedBox(width: 8),
+                  _alertChip(
+                    icon: Icons.block_rounded,
+                    active: e.isCancelled,
+                    color: Colors.red,
+                    isDark: isDark,
+                    onTap: _isAdmin ? () => _toggleAlert(e.id, 'cancelled') : null,
+                  ),
+                  const SizedBox(width: 8),
+                  _reminderChip(e, isDark),
+                ],
+              ),
             ),
           ],
         ),
@@ -686,9 +738,173 @@ class _TimetableScreenState extends State<TimetableScreen>
     );
   }
 
+  // Small compact alert toggle chip used in the lecture card alert row
+  Widget _alertChip({
+    required IconData icon,
+    required bool active,
+    required Color color,
+    required bool isDark,
+    required VoidCallback? onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(6),
+        decoration: BoxDecoration(
+          color: active
+              ? color.withOpacity(0.15)
+              : (isDark ? Colors.white.withOpacity(0.04) : Colors.black.withOpacity(0.03)),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Icon(
+          icon,
+          size: 18,
+          color: active ? color : (isDark ? Colors.white24 : Colors.black26),
+        ),
+      ),
+    );
+  }
+
+
+  Widget _reminderChip(LectureEntry e, bool isDark) {
+  final reminder = _reminders[e.id];
+  final enabled = reminder?['enabled'] ?? false;
+
+  return GestureDetector(
+    onTap: () => _showReminderSheet(e, isDark),
+    child: Container(
+      padding: const EdgeInsets.all(6),
+      decoration: BoxDecoration(
+        color: enabled
+            ? Colors.blue.withOpacity(0.15)
+            : (isDark ? Colors.white.withOpacity(0.04) : Colors.black.withOpacity(0.03)),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Icon(
+        enabled ? Icons.notifications_active_rounded : Icons.notifications_none_rounded,
+        size: 18,
+        color: enabled ? Colors.blue : (isDark ? Colors.white24 : Colors.black26),
+      ),
+    ),
+  );
+}
+
+void _showReminderSheet(LectureEntry e, bool isDark) {
+  final reminder = _reminders[e.id];
+  bool enabled = reminder?['enabled'] ?? false;
+  int minutesBefore = reminder?['minutesBefore'] ?? 10;
+
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+    shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, setS) => Padding(
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _sheetHandle(isDark),
+            const SizedBox(height: 16),
+            Text('Class Reminder',
+                style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? Colors.white : Colors.black87)),
+            const SizedBox(height: 4),
+            Text(e.courseCode,
+                style: TextStyle(
+                    fontSize: 13,
+                    color: isDark ? Colors.white54 : Colors.black54)),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Text('Enable Reminder',
+                    style: TextStyle(
+                        color: isDark ? Colors.white70 : Colors.black54)),
+                const Spacer(),
+                Switch(
+                  value: enabled,
+                  onChanged: (v) => setS(() => enabled = v),
+                  activeColor: Colors.blue,
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Text('Remind me before class',
+                style: TextStyle(
+                    fontSize: 13,
+                    color: isDark ? Colors.white54 : Colors.black54)),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              children: [5, 10, 15, 30, 60].map((min) {
+                final selected = minutesBefore == min;
+                return GestureDetector(
+                  onTap: () => setS(() => minutesBefore = min),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: selected
+                          ? Colors.blue
+                          : (isDark ? const Color(0xFF0F172A) : Colors.grey.shade100),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text('$min min',
+                        style: TextStyle(
+                            color: selected
+                                ? Colors.white
+                                : (isDark ? Colors.white70 : Colors.black54),
+                            fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+                            fontSize: 13)),
+                  ),
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue.shade700,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                onPressed: () async {
+                  try {
+                    await _svc.setReminder(e.id, enabled, minutesBefore);
+                    await _loadReminders();
+                    setState(() {});
+                    if (ctx.mounted) Navigator.pop(ctx);
+                    if (mounted)
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                          content: Text(enabled
+                              ? '🔔 Reminder set for $minutesBefore min before class'
+                              : 'Reminder turned off')));
+                  } catch (err) {
+                    if (ctx.mounted)
+                      ScaffoldMessenger.of(context)
+                          .showSnackBar(SnackBar(content: Text('Error: $err')));
+                  }
+                },
+                child: const Text('Save'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+
   Widget _personalCard(PersonalEntry e, bool isDark) {
     final color = _hexColor(e.color);
-    final dur   = _duration(e.startTime, e.endTime);
+    final dur = _duration(e.startTime, e.endTime);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -715,32 +931,41 @@ class _TimetableScreenState extends State<TimetableScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(e.startTime,
-                      style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: isDark ? Colors.white : Colors.black87)),
+                  Text(
+                    e.startTime,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: isDark ? Colors.white : Colors.black87,
+                    ),
+                  ),
                   const SizedBox(height: 2),
-                  Text(e.endTime,
-                      style: TextStyle(
-                          fontSize: 11,
-                          color: isDark
-                              ? Colors.white38
-                              : Colors.black38)),
+                  Text(
+                    e.endTime,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: isDark ? Colors.white38 : Colors.black38,
+                    ),
+                  ),
                   if (dur.isNotEmpty) ...[
                     const SizedBox(height: 4),
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 4, vertical: 2),
+                        horizontal: 4,
+                        vertical: 2,
+                      ),
                       decoration: BoxDecoration(
                         color: color.withOpacity(0.15),
                         borderRadius: BorderRadius.circular(4),
                       ),
-                      child: Text(dur,
-                          style: TextStyle(
-                              fontSize: 9,
-                              color: color,
-                              fontWeight: FontWeight.w600)),
+                      child: Text(
+                        dur,
+                        style: TextStyle(
+                          fontSize: 9,
+                          color: color,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ),
                   ],
                 ],
@@ -760,20 +985,23 @@ class _TimetableScreenState extends State<TimetableScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(e.title,
-                      style: TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 15,
-                          color:
-                              isDark ? Colors.white : Colors.black87)),
+                  Text(
+                    e.title,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15,
+                      color: isDark ? Colors.white : Colors.black87,
+                    ),
+                  ),
                   if (e.note.isNotEmpty) ...[
                     const SizedBox(height: 4),
-                    Text(e.note,
-                        style: TextStyle(
-                            fontSize: 12,
-                            color: isDark
-                                ? Colors.white54
-                                : Colors.black45)),
+                    Text(
+                      e.note,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isDark ? Colors.white54 : Colors.black45,
+                      ),
+                    ),
                   ],
                 ],
               ),
@@ -795,17 +1023,20 @@ class _TimetableScreenState extends State<TimetableScreen>
                   },
                 ),
                 PopupMenuButton<String>(
-                  icon: Icon(Icons.more_vert,
-                      color:
-                          isDark ? Colors.white38 : Colors.black38,
-                      size: 20),
+                  icon: Icon(
+                    Icons.more_vert,
+                    color: isDark ? Colors.white38 : Colors.black38,
+                    size: 20,
+                  ),
                   itemBuilder: (_) => [
+                    const PopupMenuItem(value: 'edit', child: Text('Edit')),
                     const PopupMenuItem(
-                        value: 'edit', child: Text('Edit')),
-                    const PopupMenuItem(
-                        value: 'delete',
-                        child: Text('Delete',
-                            style: TextStyle(color: Colors.red))),
+                      value: 'delete',
+                      child: Text(
+                        'Delete',
+                        style: TextStyle(color: Colors.red),
+                      ),
+                    ),
                   ],
                   onSelected: (val) async {
                     if (val == 'delete') {
@@ -829,8 +1060,8 @@ class _TimetableScreenState extends State<TimetableScreen>
     final daysLeft = e.date != null
         ? e.date!.difference(DateTime.now()).inDays
         : null;
-    final urgent   = daysLeft != null && daysLeft <= 7;
-    final dur      = _duration(e.startTime, e.endTime);
+    final urgent = daysLeft != null && daysLeft <= 7;
+    final dur = _duration(e.startTime, e.endTime);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -838,9 +1069,10 @@ class _TimetableScreenState extends State<TimetableScreen>
         color: isDark ? const Color(0xFF1E293B) : Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-            color: urgent
-                ? Colors.red.withOpacity(0.5)
-                : Colors.red.withOpacity(0.2)),
+          color: urgent
+              ? Colors.red.withOpacity(0.5)
+              : Colors.red.withOpacity(0.2),
+        ),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(isDark ? 0.3 : 0.06),
@@ -860,66 +1092,73 @@ class _TimetableScreenState extends State<TimetableScreen>
                 color: Colors.red.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: const Icon(Icons.event_note_rounded,
-                  color: Colors.red, size: 28),
+              child: const Icon(
+                Icons.event_note_rounded,
+                color: Colors.red,
+                size: 28,
+              ),
             ),
             const SizedBox(width: 14),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(e.courseCode,
-                      style: TextStyle(
-                          fontWeight: FontWeight.w800,
-                          fontSize: 16,
-                          color:
-                              isDark ? Colors.white : Colors.black87)),
+                  Text(
+                    e.courseCode,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 16,
+                      color: isDark ? Colors.white : Colors.black87,
+                    ),
+                  ),
                   if (e.courseTitle.isNotEmpty)
-                    Text(e.courseTitle,
-                        style: TextStyle(
-                            fontSize: 12,
-                            color: isDark
-                                ? Colors.white60
-                                : Colors.black54)),
+                    Text(
+                      e.courseTitle,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isDark ? Colors.white60 : Colors.black54,
+                      ),
+                    ),
                   const SizedBox(height: 6),
                   if (e.date != null)
                     Text(
                       '${e.date!.day}/${e.date!.month}/${e.date!.year}  •  ${e.startTime} – ${e.endTime}',
                       style: TextStyle(
-                          fontSize: 13,
-                          color: isDark
-                              ? Colors.white70
-                              : Colors.black54),
+                        fontSize: 13,
+                        color: isDark ? Colors.white70 : Colors.black54,
+                      ),
                     ),
                   if (dur.isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.only(top: 2),
                       child: Row(
                         children: [
-                          Icon(Icons.timer_outlined,
-                              size: 12,
-                              color: isDark
-                                  ? Colors.white38
-                                  : Colors.black38),
+                          Icon(
+                            Icons.timer_outlined,
+                            size: 12,
+                            color: isDark ? Colors.white38 : Colors.black38,
+                          ),
                           const SizedBox(width: 4),
-                          Text('Duration: $dur',
-                              style: TextStyle(
-                                  fontSize: 11,
-                                  color: isDark
-                                      ? Colors.white54
-                                      : Colors.black45)),
+                          Text(
+                            'Duration: $dur',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: isDark ? Colors.white54 : Colors.black45,
+                            ),
+                          ),
                         ],
                       ),
                     ),
                   if (e.venue.isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.only(top: 2),
-                      child: Text('📍 ${e.venue}',
-                          style: TextStyle(
-                              fontSize: 12,
-                              color: isDark
-                                  ? Colors.white54
-                                  : Colors.black45)),
+                      child: Text(
+                        '📍 ${e.venue}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: isDark ? Colors.white54 : Colors.black45,
+                        ),
+                      ),
                     ),
                 ],
               ),
@@ -937,32 +1176,35 @@ class _TimetableScreenState extends State<TimetableScreen>
                           color: daysLeft <= 3
                               ? Colors.red
                               : daysLeft <= 7
-                                  ? Colors.orange
-                                  : Colors.grey,
+                              ? Colors.orange
+                              : Colors.grey,
                         ),
                       ),
                       if (daysLeft > 0)
-                        Text('days',
-                            style: TextStyle(
-                                fontSize: 10,
-                                color: isDark
-                                    ? Colors.white38
-                                    : Colors.black38)),
+                        Text(
+                          'days',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: isDark ? Colors.white38 : Colors.black38,
+                          ),
+                        ),
                     ],
                   ),
                 if (_isAdmin)
                   PopupMenuButton<String>(
-                    icon: Icon(Icons.more_vert,
-                        color: isDark
-                            ? Colors.white38
-                            : Colors.black38),
+                    icon: Icon(
+                      Icons.more_vert,
+                      color: isDark ? Colors.white38 : Colors.black38,
+                    ),
                     itemBuilder: (_) => [
+                      const PopupMenuItem(value: 'edit', child: Text('Edit')),
                       const PopupMenuItem(
-                          value: 'edit', child: Text('Edit')),
-                      const PopupMenuItem(
-                          value: 'delete',
-                          child: Text('Delete',
-                              style: TextStyle(color: Colors.red))),
+                        value: 'delete',
+                        child: Text(
+                          'Delete',
+                          style: TextStyle(color: Colors.red),
+                        ),
+                      ),
                     ],
                     onSelected: (val) async {
                       if (val == 'delete') {
@@ -990,60 +1232,65 @@ class _TimetableScreenState extends State<TimetableScreen>
     required String title,
     required String subtitle,
     required bool isDark,
-  }) =>
-      Center(
-        child: Padding(
-          padding: const EdgeInsets.all(40),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon,
-                  size: 64,
-                  color: isDark ? Colors.white24 : Colors.black26),
-              const SizedBox(height: 16),
-              Text(title,
-                  style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color:
-                          isDark ? Colors.white70 : Colors.black87)),
-              const SizedBox(height: 8),
-              Text(subtitle,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                      fontSize: 13,
-                      color:
-                          isDark ? Colors.white38 : Colors.black45)),
-            ],
+  }) => Center(
+    child: Padding(
+      padding: const EdgeInsets.all(40),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 64, color: isDark ? Colors.white24 : Colors.black26),
+          const SizedBox(height: 16),
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: isDark ? Colors.white70 : Colors.black87,
+            ),
           ),
-        ),
-      );
+          const SizedBox(height: 8),
+          Text(
+            subtitle,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 13,
+              color: isDark ? Colors.white38 : Colors.black45,
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
 
   // ══════════════════════════════════════════════════════════
   //  BOTTOM SHEETS (keep all existing ones)
   // ══════════════════════════════════════════════════════════
   void _showAddLectureSheet(bool isDark, {LectureEntry? editing}) {
-    final codeCtrl  = TextEditingController(text: editing?.courseCode ?? '');
+    final codeCtrl = TextEditingController(text: editing?.courseCode ?? '');
     final titleCtrl = TextEditingController(text: editing?.courseTitle ?? '');
     final venueCtrl = TextEditingController(text: editing?.venue ?? '');
-    final noteCtrl  = TextEditingController(text: editing?.note ?? '');
-    String day         = editing?.day ?? _days[_todayIndex];
-    String startTime   = editing?.startTime ?? '08:00';
-    String endTime     = editing?.endTime ?? '10:00';
-    String classType   = editing?.classType ?? 'normal';
-    bool   isImportant = editing?.isImportant ?? false;
+    final noteCtrl = TextEditingController(text: editing?.note ?? '');
+    String day = editing?.day ?? _days[_todayIndex];
+    String startTime = editing?.startTime ?? '08:00';
+    String endTime = editing?.endTime ?? '10:00';
+    String classType = editing?.classType ?? 'normal';
+    bool isImportant = editing?.isImportant ?? false;
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
       shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setS) => Padding(
           padding: EdgeInsets.only(
-              left: 20, right: 20, top: 20,
-              bottom: MediaQuery.of(ctx).viewInsets.bottom + 24),
+            left: 20,
+            right: 20,
+            top: 20,
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+          ),
           child: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -1051,11 +1298,14 @@ class _TimetableScreenState extends State<TimetableScreen>
               children: [
                 _sheetHandle(isDark),
                 const SizedBox(height: 16),
-                Text(editing == null ? 'Add Lecture' : 'Edit Lecture',
-                    style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: isDark ? Colors.white : Colors.black87)),
+                Text(
+                  editing == null ? 'Add Lecture' : 'Edit Lecture',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? Colors.white : Colors.black87,
+                  ),
+                ),
                 const SizedBox(height: 16),
                 _sheetField('Course Code *', codeCtrl, isDark),
                 const SizedBox(height: 12),
@@ -1063,36 +1313,65 @@ class _TimetableScreenState extends State<TimetableScreen>
                 const SizedBox(height: 12),
                 _sheetField('Venue', venueCtrl, isDark),
                 const SizedBox(height: 12),
-                _dropdownField('Day', _days, day, isDark,
-                    (v) => setS(() => day = v!)),
+                _dropdownField(
+                  'Day',
+                  _days,
+                  day,
+                  isDark,
+                  (v) => setS(() => day = v!),
+                ),
                 const SizedBox(height: 12),
-                Row(children: [
-                  Expanded(child: _timePicker(ctx, 'Start', startTime, isDark,
-                      (t) => setS(() => startTime = t))),
-                  const SizedBox(width: 12),
-                  Expanded(child: _timePicker(ctx, 'End', endTime, isDark,
-                      (t) => setS(() => endTime = t))),
-                ]),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _timePicker(
+                        ctx,
+                        'Start',
+                        startTime,
+                        isDark,
+                        (t) => setS(() => startTime = t),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _timePicker(
+                        ctx,
+                        'End',
+                        endTime,
+                        isDark,
+                        (t) => setS(() => endTime = t),
+                      ),
+                    ),
+                  ],
+                ),
                 const SizedBox(height: 12),
                 _dropdownField(
-                    'Class Type',
-                    ['normal', 'impromptu', 'test', 'meeting', 'other'],
-                    classType, isDark, (v) => setS(() {
-                      classType = v!;
-                      if (v != 'normal') isImportant = true;
-                    })),
+                  'Class Type',
+                  ['normal', 'impromptu', 'test', 'meeting', 'other'],
+                  classType,
+                  isDark,
+                  (v) => setS(() {
+                    classType = v!;
+                    if (v != 'normal') isImportant = true;
+                  }),
+                ),
                 const SizedBox(height: 8),
-                Row(children: [
-                  Text('Mark as Important',
+                Row(
+                  children: [
+                    Text(
+                      'Mark as Important',
                       style: TextStyle(
-                          color: isDark ? Colors.white70 : Colors.black54)),
-                  const Spacer(),
-                  Switch(
-                    value: isImportant,
-                    onChanged: (v) => setS(() => isImportant = v),
-                    activeColor: Colors.blue,
-                  ),
-                ]),
+                        color: isDark ? Colors.white70 : Colors.black54,
+                      ),
+                    ),
+                    const Spacer(),
+                    Switch(
+                      value: isImportant,
+                      onChanged: (v) => setS(() => isImportant = v),
+                      activeColor: Colors.blue,
+                    ),
+                  ],
+                ),
                 _sheetField('Note (optional)', noteCtrl, isDark),
                 const SizedBox(height: 20),
                 SizedBox(
@@ -1103,24 +1382,25 @@ class _TimetableScreenState extends State<TimetableScreen>
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12)),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
                     onPressed: () async {
                       if (codeCtrl.text.trim().isEmpty) return;
                       final body = {
-                        'courseCode':  codeCtrl.text.trim(),
+                        'courseCode': codeCtrl.text.trim(),
                         'courseTitle': titleCtrl.text.trim(),
-                        'venue':       venueCtrl.text.trim(),
-                        'day':         day,
-                        'startTime':   startTime,
-                        'endTime':     endTime,
-                        'classType':   classType,
+                        'venue': venueCtrl.text.trim(),
+                        'day': day,
+                        'startTime': startTime,
+                        'endTime': endTime,
+                        'classType': classType,
                         'isImportant': isImportant,
-                        'note':        noteCtrl.text.trim(),
-                        'school':      _school,
-                        'faculty':     _faculty,
-                        'department':  _department,
-                        'level':       _level,
+                        'note': noteCtrl.text.trim(),
+                        'school': _school,
+                        'faculty': _faculty,
+                        'department': _department,
+                        'level': _level,
                       };
                       try {
                         if (editing == null) {
@@ -1133,12 +1413,14 @@ class _TimetableScreenState extends State<TimetableScreen>
                         if (ctx.mounted) Navigator.pop(ctx);
                       } catch (e) {
                         if (ctx.mounted)
-                          ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Error: $e')));
+                          ScaffoldMessenger.of(
+                            context,
+                          ).showSnackBar(SnackBar(content: Text('Error: $e')));
                       }
                     },
                     child: Text(
-                        editing == null ? 'Add Lecture' : 'Save Changes'),
+                      editing == null ? 'Add Lecture' : 'Save Changes',
+                    ),
                   ),
                 ),
               ],
@@ -1151,15 +1433,21 @@ class _TimetableScreenState extends State<TimetableScreen>
 
   void _showAddPersonalSheet(bool isDark, {PersonalEntry? editing}) {
     final titleCtrl = TextEditingController(text: editing?.title ?? '');
-    final noteCtrl  = TextEditingController(text: editing?.note ?? '');
-    String day       = editing?.day ?? _days[_todayIndex];
+    final noteCtrl = TextEditingController(text: editing?.note ?? '');
+    String day = editing?.day ?? _days[_todayIndex];
     String startTime = editing?.startTime ?? '08:00';
-    String endTime   = editing?.endTime ?? '10:00';
-    String color     = editing?.color ?? '#4F46E5';
+    String endTime = editing?.endTime ?? '10:00';
+    String color = editing?.color ?? '#4F46E5';
 
     final colors = [
-      '#4F46E5','#7C3AED','#DB2777','#DC2626',
-      '#D97706','#059669','#0891B2','#1D4ED8',
+      '#4F46E5',
+      '#7C3AED',
+      '#DB2777',
+      '#DC2626',
+      '#D97706',
+      '#059669',
+      '#0891B2',
+      '#1D4ED8',
     ];
 
     showModalBottomSheet(
@@ -1167,12 +1455,16 @@ class _TimetableScreenState extends State<TimetableScreen>
       isScrollControlled: true,
       backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
       shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setS) => Padding(
           padding: EdgeInsets.only(
-              left: 20, right: 20, top: 20,
-              bottom: MediaQuery.of(ctx).viewInsets.bottom + 24),
+            left: 20,
+            right: 20,
+            top: 20,
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+          ),
           child: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -1180,29 +1472,56 @@ class _TimetableScreenState extends State<TimetableScreen>
               children: [
                 _sheetHandle(isDark),
                 const SizedBox(height: 16),
-                Text(editing == null ? 'Add Study Session' : 'Edit Session',
-                    style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: isDark ? Colors.white : Colors.black87)),
+                Text(
+                  editing == null ? 'Add Study Session' : 'Edit Session',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? Colors.white : Colors.black87,
+                  ),
+                ),
                 const SizedBox(height: 16),
                 _sheetField('Title (e.g. Read MTH301) *', titleCtrl, isDark),
                 const SizedBox(height: 12),
-                _dropdownField('Day', _days, day, isDark,
-                    (v) => setS(() => day = v!)),
+                _dropdownField(
+                  'Day',
+                  _days,
+                  day,
+                  isDark,
+                  (v) => setS(() => day = v!),
+                ),
                 const SizedBox(height: 12),
-                Row(children: [
-                  Expanded(child: _timePicker(ctx, 'Start', startTime, isDark,
-                      (t) => setS(() => startTime = t))),
-                  const SizedBox(width: 12),
-                  Expanded(child: _timePicker(ctx, 'End', endTime, isDark,
-                      (t) => setS(() => endTime = t))),
-                ]),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _timePicker(
+                        ctx,
+                        'Start',
+                        startTime,
+                        isDark,
+                        (t) => setS(() => startTime = t),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _timePicker(
+                        ctx,
+                        'End',
+                        endTime,
+                        isDark,
+                        (t) => setS(() => endTime = t),
+                      ),
+                    ),
+                  ],
+                ),
                 const SizedBox(height: 12),
-                Text('Color',
-                    style: TextStyle(
-                        fontSize: 13,
-                        color: isDark ? Colors.white54 : Colors.black54)),
+                Text(
+                  'Color',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: isDark ? Colors.white54 : Colors.black54,
+                  ),
+                ),
                 const SizedBox(height: 8),
                 Row(
                   children: colors.map((c) {
@@ -1211,7 +1530,8 @@ class _TimetableScreenState extends State<TimetableScreen>
                       onTap: () => setS(() => color = c),
                       child: Container(
                         margin: const EdgeInsets.only(right: 8),
-                        width: 30, height: 30,
+                        width: 30,
+                        height: 30,
                         decoration: BoxDecoration(
                           color: _hexColor(c),
                           shape: BoxShape.circle,
@@ -1219,9 +1539,12 @@ class _TimetableScreenState extends State<TimetableScreen>
                               ? Border.all(color: Colors.white, width: 3)
                               : null,
                           boxShadow: selected
-                              ? [BoxShadow(
-                                  color: _hexColor(c).withOpacity(0.5),
-                                  blurRadius: 8)]
+                              ? [
+                                  BoxShadow(
+                                    color: _hexColor(c).withOpacity(0.5),
+                                    blurRadius: 8,
+                                  ),
+                                ]
                               : null,
                         ),
                       ),
@@ -1239,17 +1562,18 @@ class _TimetableScreenState extends State<TimetableScreen>
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12)),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
                     onPressed: () async {
                       if (titleCtrl.text.trim().isEmpty) return;
                       final body = {
-                        'title':     titleCtrl.text.trim(),
-                        'day':       day,
+                        'title': titleCtrl.text.trim(),
+                        'day': day,
                         'startTime': startTime,
-                        'endTime':   endTime,
-                        'color':     color,
-                        'note':      noteCtrl.text.trim(),
+                        'endTime': endTime,
+                        'color': color,
+                        'note': noteCtrl.text.trim(),
                       };
                       try {
                         if (editing == null) {
@@ -1262,12 +1586,14 @@ class _TimetableScreenState extends State<TimetableScreen>
                         if (ctx.mounted) Navigator.pop(ctx);
                       } catch (e) {
                         if (ctx.mounted)
-                          ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Error: $e')));
+                          ScaffoldMessenger.of(
+                            context,
+                          ).showSnackBar(SnackBar(content: Text('Error: $e')));
                       }
                     },
                     child: Text(
-                        editing == null ? 'Add Session' : 'Save Changes'),
+                      editing == null ? 'Add Session' : 'Save Changes',
+                    ),
                   ),
                 ),
               ],
@@ -1279,12 +1605,12 @@ class _TimetableScreenState extends State<TimetableScreen>
   }
 
   void _showAddExamSheet(bool isDark, {LectureEntry? editing}) {
-    final codeCtrl  = TextEditingController(text: editing?.courseCode ?? '');
+    final codeCtrl = TextEditingController(text: editing?.courseCode ?? '');
     final titleCtrl = TextEditingController(text: editing?.courseTitle ?? '');
     final venueCtrl = TextEditingController(text: editing?.venue ?? '');
-    final noteCtrl  = TextEditingController(text: editing?.note ?? '');
-    String startTime  = editing?.startTime ?? '09:00';
-    String endTime    = editing?.endTime ?? '11:00';
+    final noteCtrl = TextEditingController(text: editing?.note ?? '');
+    String startTime = editing?.startTime ?? '09:00';
+    String endTime = editing?.endTime ?? '11:00';
     DateTime? examDate = editing?.date;
 
     showModalBottomSheet(
@@ -1292,12 +1618,16 @@ class _TimetableScreenState extends State<TimetableScreen>
       isScrollControlled: true,
       backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
       shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setS) => Padding(
           padding: EdgeInsets.only(
-              left: 20, right: 20, top: 20,
-              bottom: MediaQuery.of(ctx).viewInsets.bottom + 24),
+            left: 20,
+            right: 20,
+            top: 20,
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+          ),
           child: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -1305,11 +1635,14 @@ class _TimetableScreenState extends State<TimetableScreen>
               children: [
                 _sheetHandle(isDark),
                 const SizedBox(height: 16),
-                Text(editing == null ? 'Add Exam' : 'Edit Exam',
-                    style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: isDark ? Colors.white : Colors.black87)),
+                Text(
+                  editing == null ? 'Add Exam' : 'Edit Exam',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? Colors.white : Colors.black87,
+                  ),
+                ),
                 const SizedBox(height: 16),
                 _sheetField('Course Code *', codeCtrl, isDark),
                 const SizedBox(height: 12),
@@ -1329,40 +1662,62 @@ class _TimetableScreenState extends State<TimetableScreen>
                   },
                   child: Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 14),
+                      horizontal: 14,
+                      vertical: 14,
+                    ),
                     decoration: BoxDecoration(
                       color: isDark
                           ? const Color(0xFF0F172A)
                           : Colors.grey.shade50,
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
-                          color: isDark ? Colors.white24 : Colors.black12),
-                    ),
-                    child: Row(children: [
-                      Icon(Icons.calendar_today_rounded,
-                          size: 18,
-                          color: isDark ? Colors.white54 : Colors.black45),
-                      const SizedBox(width: 10),
-                      Text(
-                        examDate != null
-                            ? '${examDate!.day}/${examDate!.month}/${examDate!.year}'
-                            : 'Pick Exam Date *',
-                        style: TextStyle(
-                            color: isDark
-                                ? Colors.white70
-                                : Colors.black54),
+                        color: isDark ? Colors.white24 : Colors.black12,
                       ),
-                    ]),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.calendar_today_rounded,
+                          size: 18,
+                          color: isDark ? Colors.white54 : Colors.black45,
+                        ),
+                        const SizedBox(width: 10),
+                        Text(
+                          examDate != null
+                              ? '${examDate!.day}/${examDate!.month}/${examDate!.year}'
+                              : 'Pick Exam Date *',
+                          style: TextStyle(
+                            color: isDark ? Colors.white70 : Colors.black54,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
                 const SizedBox(height: 12),
-                Row(children: [
-                  Expanded(child: _timePicker(ctx, 'Start', startTime, isDark,
-                      (t) => setS(() => startTime = t))),
-                  const SizedBox(width: 12),
-                  Expanded(child: _timePicker(ctx, 'End', endTime, isDark,
-                      (t) => setS(() => endTime = t))),
-                ]),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _timePicker(
+                        ctx,
+                        'Start',
+                        startTime,
+                        isDark,
+                        (t) => setS(() => startTime = t),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _timePicker(
+                        ctx,
+                        'End',
+                        endTime,
+                        isDark,
+                        (t) => setS(() => endTime = t),
+                      ),
+                    ),
+                  ],
+                ),
                 const SizedBox(height: 12),
                 _sheetField('Note (optional)', noteCtrl, isDark),
                 const SizedBox(height: 20),
@@ -1374,23 +1729,24 @@ class _TimetableScreenState extends State<TimetableScreen>
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12)),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
                     onPressed: () async {
                       if (codeCtrl.text.trim().isEmpty || examDate == null)
                         return;
                       final body = {
-                        'courseCode':  codeCtrl.text.trim(),
+                        'courseCode': codeCtrl.text.trim(),
                         'courseTitle': titleCtrl.text.trim(),
-                        'venue':       venueCtrl.text.trim(),
-                        'date':        examDate!.toIso8601String(),
-                        'startTime':   startTime,
-                        'endTime':     endTime,
-                        'note':        noteCtrl.text.trim(),
-                        'school':      _school,
-                        'faculty':     _faculty,
-                        'department':  _department,
-                        'level':       _level,
+                        'venue': venueCtrl.text.trim(),
+                        'date': examDate!.toIso8601String(),
+                        'startTime': startTime,
+                        'endTime': endTime,
+                        'note': noteCtrl.text.trim(),
+                        'school': _school,
+                        'faculty': _faculty,
+                        'department': _department,
+                        'level': _level,
                       };
                       try {
                         if (editing == null) {
@@ -1403,12 +1759,12 @@ class _TimetableScreenState extends State<TimetableScreen>
                         if (ctx.mounted) Navigator.pop(ctx);
                       } catch (e) {
                         if (ctx.mounted)
-                          ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Error: $e')));
+                          ScaffoldMessenger.of(
+                            context,
+                          ).showSnackBar(SnackBar(content: Text('Error: $e')));
                       }
                     },
-                    child: Text(
-                        editing == null ? 'Add Exam' : 'Save Changes'),
+                    child: Text(editing == null ? 'Add Exam' : 'Save Changes'),
                   ),
                 ),
               ],
@@ -1426,46 +1782,55 @@ class _TimetableScreenState extends State<TimetableScreen>
       isScrollControlled: true,
       backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
       shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
       builder: (ctx) => Padding(
         padding: EdgeInsets.only(
-            left: 20, right: 20, top: 20,
-            bottom: MediaQuery.of(ctx).viewInsets.bottom + 24),
+          left: 20,
+          right: 20,
+          top: 20,
+          bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _sheetHandle(isDark),
             const SizedBox(height: 16),
-            Text('Request Admin Access',
-                style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: isDark ? Colors.white : Colors.black87)),
+            Text(
+              'Request Admin Access',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: isDark ? Colors.white : Colors.black87,
+              ),
+            ),
             const SizedBox(height: 8),
             Text(
               'Your school/faculty/department/level from your profile will be used. '
               'Tell us why you should be a course rep admin.',
               style: TextStyle(
-                  fontSize: 13,
-                  color: isDark ? Colors.white54 : Colors.black45),
+                fontSize: 13,
+                color: isDark ? Colors.white54 : Colors.black45,
+              ),
             ),
             const SizedBox(height: 16),
             TextField(
               controller: reasonCtrl,
               maxLines: 3,
-              style: TextStyle(
-                  color: isDark ? Colors.white : Colors.black87),
+              style: TextStyle(color: isDark ? Colors.white : Colors.black87),
               decoration: InputDecoration(
                 hintText: 'e.g. I am the elected course rep for 300L CSC...',
                 hintStyle: TextStyle(
-                    color: isDark ? Colors.white38 : Colors.black38),
+                  color: isDark ? Colors.white38 : Colors.black38,
+                ),
                 filled: true,
                 fillColor: isDark
                     ? const Color(0xFF0F172A)
                     : Colors.grey.shade50,
                 border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12)),
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
             ),
             const SizedBox(height: 20),
@@ -1477,25 +1842,28 @@ class _TimetableScreenState extends State<TimetableScreen>
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
                 onPressed: () async {
                   if (reasonCtrl.text.trim().isEmpty) return;
                   try {
-                    await _svc.requestAdmin({
-                      'reason': reasonCtrl.text.trim(),
-                    });
+                    await _svc.requestAdmin({'reason': reasonCtrl.text.trim()});
                     if (ctx.mounted) {
                       Navigator.pop(ctx);
                       ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                              content: Text(
-                                  '✅ Request submitted! You\'ll be notified when reviewed.')));
+                        const SnackBar(
+                          content: Text(
+                            '✅ Request submitted! You\'ll be notified when reviewed.',
+                          ),
+                        ),
+                      );
                     }
                   } catch (e) {
                     if (ctx.mounted)
-                      ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Error: $e')));
+                      ScaffoldMessenger.of(
+                        context,
+                      ).showSnackBar(SnackBar(content: Text('Error: $e')));
                   }
                 },
                 child: const Text('Submit Request'),
@@ -1512,17 +1880,20 @@ class _TimetableScreenState extends State<TimetableScreen>
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('Resign as Admin?',
-            style: TextStyle(
-                color: isDark ? Colors.white : Colors.black87,
-                fontWeight: FontWeight.bold)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          'Resign as Admin?',
+          style: TextStyle(
+            color: isDark ? Colors.white : Colors.black87,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
         content: Text(
           'You will lose admin access immediately. Your timetable entries will remain.',
           style: TextStyle(
-              color: isDark ? Colors.white60 : Colors.black54,
-              fontSize: 13),
+            color: isDark ? Colors.white60 : Colors.black54,
+            fontSize: 13,
+          ),
         ),
         actions: [
           TextButton(
@@ -1531,8 +1902,9 @@ class _TimetableScreenState extends State<TimetableScreen>
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red,
-                foregroundColor: Colors.white),
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Resign'),
           ),
@@ -1547,39 +1919,40 @@ class _TimetableScreenState extends State<TimetableScreen>
       setState(() {});
       if (mounted)
         ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('You have resigned as admin.')));
+          const SnackBar(content: Text('You have resigned as admin.')),
+        );
     } catch (e) {
       if (mounted)
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Error: $e')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
     }
   }
 
   // ── Sheet helpers ─────────────────────────────────────────────────────────
   Widget _sheetHandle(bool isDark) => Center(
-        child: Container(
-          width: 40, height: 4,
-          decoration: BoxDecoration(
-            color: isDark ? Colors.white24 : Colors.black12,
-            borderRadius: BorderRadius.circular(2),
-          ),
-        ),
-      );
+    child: Container(
+      width: 40,
+      height: 4,
+      decoration: BoxDecoration(
+        color: isDark ? Colors.white24 : Colors.black12,
+        borderRadius: BorderRadius.circular(2),
+      ),
+    ),
+  );
 
-  Widget _sheetField(
-          String label, TextEditingController ctrl, bool isDark) =>
+  Widget _sheetField(String label, TextEditingController ctrl, bool isDark) =>
       TextField(
         controller: ctrl,
         style: TextStyle(color: isDark ? Colors.white : Colors.black87),
         decoration: InputDecoration(
           labelText: label,
-          labelStyle:
-              TextStyle(color: isDark ? Colors.white54 : Colors.black54),
+          labelStyle: TextStyle(
+            color: isDark ? Colors.white54 : Colors.black54,
+          ),
           filled: true,
-          fillColor:
-              isDark ? const Color(0xFF0F172A) : Colors.grey.shade50,
-          border:
-              OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+          fillColor: isDark ? const Color(0xFF0F172A) : Colors.grey.shade50,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
         ),
       );
 
@@ -1589,29 +1962,27 @@ class _TimetableScreenState extends State<TimetableScreen>
     String value,
     bool isDark,
     ValueChanged<String?> onChanged,
-  ) =>
-      DropdownButtonFormField<String>(
-        value: value,
-        onChanged: onChanged,
-        dropdownColor: isDark ? const Color(0xFF1E293B) : Colors.white,
-        style:
-            TextStyle(color: isDark ? Colors.white : Colors.black87),
-        decoration: InputDecoration(
-          labelText: label,
-          labelStyle:
-              TextStyle(color: isDark ? Colors.white54 : Colors.black54),
-          filled: true,
-          fillColor:
-              isDark ? const Color(0xFF0F172A) : Colors.grey.shade50,
-          border:
-              OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-        ),
-        items: items
-            .map((d) => DropdownMenuItem(
-                value: d,
-                child: Text(d[0].toUpperCase() + d.substring(1))))
-            .toList(),
-      );
+  ) => DropdownButtonFormField<String>(
+    value: value,
+    onChanged: onChanged,
+    dropdownColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+    style: TextStyle(color: isDark ? Colors.white : Colors.black87),
+    decoration: InputDecoration(
+      labelText: label,
+      labelStyle: TextStyle(color: isDark ? Colors.white54 : Colors.black54),
+      filled: true,
+      fillColor: isDark ? const Color(0xFF0F172A) : Colors.grey.shade50,
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+    ),
+    items: items
+        .map(
+          (d) => DropdownMenuItem(
+            value: d,
+            child: Text(d[0].toUpperCase() + d.substring(1)),
+          ),
+        )
+        .toList(),
+  );
 
   Widget _timePicker(
     BuildContext ctx,
@@ -1619,51 +1990,56 @@ class _TimetableScreenState extends State<TimetableScreen>
     String current,
     bool isDark,
     ValueChanged<String> onPicked,
-  ) =>
-      GestureDetector(
-        onTap: () async {
-          final parts = current.split(':');
-          final initial = TimeOfDay(
-              hour: int.tryParse(parts[0]) ?? 8,
-              minute: int.tryParse(parts[1]) ?? 0);
-          final picked =
-              await showTimePicker(context: ctx, initialTime: initial);
-          if (picked != null) {
-            onPicked(
-                '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}');
-          }
-        },
-        child: Container(
-          padding:
-              const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-          decoration: BoxDecoration(
-            color:
-                isDark ? const Color(0xFF0F172A) : Colors.grey.shade50,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-                color: isDark ? Colors.white24 : Colors.black12),
-          ),
-          child: Row(children: [
-            Icon(Icons.access_time_rounded,
-                size: 18,
-                color: isDark ? Colors.white54 : Colors.black45),
-            const SizedBox(width: 8),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(label,
-                    style: TextStyle(
-                        fontSize: 10,
-                        color:
-                            isDark ? Colors.white38 : Colors.black38)),
-                Text(current,
-                    style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color:
-                            isDark ? Colors.white : Colors.black87)),
-              ],
-            ),
-          ]),
-        ),
+  ) => GestureDetector(
+    onTap: () async {
+      final parts = current.split(':');
+      final initial = TimeOfDay(
+        hour: int.tryParse(parts[0]) ?? 8,
+        minute: int.tryParse(parts[1]) ?? 0,
       );
+      final picked = await showTimePicker(context: ctx, initialTime: initial);
+      if (picked != null) {
+        onPicked(
+          '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}',
+        );
+      }
+    },
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF0F172A) : Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: isDark ? Colors.white24 : Colors.black12),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.access_time_rounded,
+            size: 18,
+            color: isDark ? Colors.white54 : Colors.black45,
+          ),
+          const SizedBox(width: 8),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 10,
+                  color: isDark ? Colors.white38 : Colors.black38,
+                ),
+              ),
+              Text(
+                current,
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: isDark ? Colors.white : Colors.black87,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    ),
+  );
 }
