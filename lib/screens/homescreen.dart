@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -18,25 +17,16 @@ import 'dart:async';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:google_mlkit_document_scanner/google_mlkit_document_scanner.dart';
 
-
 import 'package:provider/provider.dart';
 import '../providers/theme_notifier.dart';
 import '../models/grading_model.dart';
 import '../uniport_courses.dart';
 import '../services/api_service.dart';
-import '../widgets/combo_field.dart';
 import '../models/course_model.dart';
 import '../models/studentProfile_model.dart';
-import '../screens/splash_screen.dart';
-import '../screens/landing_page.dart';
 import '../screens/signinscreen.dart';
-import '../screens/registerscreen.dart';
 import '../widgets/ui_helpers.dart';
 import '../widgets/snackBar.dart';
-
-
-
-
 
 // ══════════════════════════════════════════════════════════
 //  HOME SCREEN
@@ -54,7 +44,7 @@ class _HomeScreenState extends State<HomeScreen>
   StudentProfile profile = StudentProfile();
   GradingModel grading = GradingModel.defaultNigerian5();
 
-  bool isDarkMode = false;
+  bool get isDarkMode => Provider.of<ThemeNotifier>(context).isDarkMode;
   bool _cgpaHidden = false;
   Timer? _syncTimer;
   final Set<String> _deletedServerIds = {};
@@ -62,7 +52,6 @@ class _HomeScreenState extends State<HomeScreen>
   Future<void> _loadPrefs() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
-      isDarkMode = prefs.getBool('isDarkMode') ?? false;
       _cgpaHidden = prefs.getBool('cgpaHidden') ?? false;
     });
   }
@@ -162,9 +151,9 @@ class _HomeScreenState extends State<HomeScreen>
 
     try {
       final localList = courses
-    .where((c) => !_deletedServerIds.contains(c.serverId))
-    .map((c) => c.toMap())
-    .toList();
+          .where((c) => !_deletedServerIds.contains(c.serverId))
+          .map((c) => c.toMap())
+          .toList();
       print("=== SYNC deletedIds: $_deletedServerIds");
       final serverCourses = await CourseService().syncCourses(
         localList,
@@ -296,6 +285,8 @@ class _HomeScreenState extends State<HomeScreen>
 
   Future<void> _scanResultSheet() async {
     if (kIsWeb) return;
+    bool dialogShown = false;
+
     try {
       final documentScanner = DocumentScanner(
         options: DocumentScannerOptions(
@@ -311,6 +302,7 @@ class _HomeScreenState extends State<HomeScreen>
 
       // Show loading
       if (mounted) {
+        dialogShown = true;
         showDialog(
           context: context,
           barrierDismissible: false,
@@ -337,13 +329,15 @@ class _HomeScreenState extends State<HomeScreen>
       final ocrResult = await recognizer.processImage(inputImage);
       await recognizer.close();
 
-      print("=== OCR TEXT: ${ocrResult.text}");
+      debugPrint("=== OCR TEXT: ${ocrResult.text}");
 
-      print("=== OCR TEXT: ${ocrResult.text}");
       final extracted = _parseCoursesFromText(ocrResult.text);
-      print("=== EXTRACTED COUNT: ${extracted.length}");
+      debugPrint("=== EXTRACTED COUNT: ${extracted.length}");
 
-      if (mounted) Navigator.pop(context);
+      if (mounted && dialogShown) {
+        Navigator.pop(context);
+        dialogShown = false;
+      }
 
       if (extracted.isEmpty) {
         if (mounted) {
@@ -357,8 +351,13 @@ class _HomeScreenState extends State<HomeScreen>
 
       if (mounted) _showExtractedCoursesPreview(extracted);
     } catch (e) {
-      if (mounted) Navigator.pop(context);
-      if (mounted) {
+      if (mounted && dialogShown) {
+        Navigator.pop(context);
+        dialogShown = false;
+      }
+      // Don't show an error if the user simply cancelled the scanner
+      final cancelled = e.toString().toLowerCase().contains('cancel');
+      if (!cancelled && mounted) {
         AppSnackBar.showError(context, 'Scan failed. Try again.');
       }
       debugPrint('Scan error: $e');
@@ -2094,7 +2093,6 @@ class _HomeScreenState extends State<HomeScreen>
       AppSnackBar.showSuccess(context, 'All courses cleared');
     }
   }
-
 
   Future<bool> _confirm(
     String title,
@@ -3846,11 +3844,11 @@ class _HomeScreenState extends State<HomeScreen>
     }
   }
 
-
-
   // ══════════════════════════════════════════════════════════
   //  GPA CHART
   // ══════════════════════════════════════════════════════════
+
+  static const Color _primary = Color(0xFF1565C0);
 
   Widget _buildChart() {
     final spots = <FlSpot>[];
@@ -3870,11 +3868,27 @@ class _HomeScreenState extends State<HomeScreen>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.bar_chart, size: 64, color: Colors.grey.shade300),
-            const SizedBox(height: 12),
-            const Text(
+            Container(
+              width: 96,
+              height: 96,
+              decoration: BoxDecoration(
+                color: _primary.withOpacity(0.08),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.bar_chart_rounded,
+                size: 44,
+                color: _primary.withOpacity(0.4),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
               'Add courses to see your GPA trend',
-              style: TextStyle(color: Colors.grey),
+              style: TextStyle(
+                color: Colors.grey.shade600,
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ],
         ),
@@ -3886,7 +3900,11 @@ class _HomeScreenState extends State<HomeScreen>
         children: [
           const Text(
             'GPA Per Semester',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.2,
+            ),
           ),
           const SizedBox(height: 20),
           Expanded(
@@ -3899,7 +3917,7 @@ class _HomeScreenState extends State<HomeScreen>
                   drawVerticalLine: false,
                   horizontalInterval: maxGP > 0 ? maxGP / 5 : 1,
                   getDrawingHorizontalLine: (v) => FlLine(
-                    color: Colors.grey.withOpacity(0.2),
+                    color: Colors.grey.withOpacity(0.15),
                     strokeWidth: 1,
                   ),
                 ),
@@ -3911,7 +3929,10 @@ class _HomeScreenState extends State<HomeScreen>
                       interval: maxGP > 0 ? maxGP / 5 : 1,
                       getTitlesWidget: (v, _) => Text(
                         v.toStringAsFixed(1),
-                        style: const TextStyle(fontSize: 10),
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: Colors.grey.shade600,
+                        ),
                       ),
                     ),
                   ),
@@ -3927,7 +3948,11 @@ class _HomeScreenState extends State<HomeScreen>
                           padding: const EdgeInsets.only(top: 6),
                           child: Text(
                             labels[i],
-                            style: const TextStyle(fontSize: 10),
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: Colors.grey.shade600,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         );
                       },
@@ -3945,20 +3970,27 @@ class _HomeScreenState extends State<HomeScreen>
                   LineChartBarData(
                     spots: spots,
                     isCurved: true,
-                    color: Colors.blue,
+                    color: _primary,
                     barWidth: 3,
                     dotData: FlDotData(
                       show: true,
                       getDotPainter: (_, __, ___, ____) => FlDotCirclePainter(
                         radius: 5,
-                        color: Colors.blue,
+                        color: _primary,
                         strokeColor: Colors.white,
                         strokeWidth: 2,
                       ),
                     ),
                     belowBarData: BarAreaData(
                       show: true,
-                      color: Colors.blue.withOpacity(0.1),
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          _primary.withOpacity(0.18),
+                          _primary.withOpacity(0.0),
+                        ],
+                      ),
                     ),
                   ),
                 ],
@@ -3969,9 +4001,9 @@ class _HomeScreenState extends State<HomeScreen>
           Wrap(
             spacing: 14,
             children: [
-              _dot('First Class', Colors.green),
-              _dot('2nd Upper', Colors.blue),
-              _dot('2nd Lower', Colors.orange),
+              _dot('First Class', const Color(0xFF2E7D32)),
+              _dot('2nd Upper', _primary),
+              _dot('2nd Lower', const Color(0xFFEF6C00)),
             ],
           ),
         ],
@@ -3996,8 +4028,14 @@ class _HomeScreenState extends State<HomeScreen>
   //  SUMMARY
   // ══════════════════════════════════════════════════════════
 
+  // static const Color _primary = Color(0xFF1565C0);
+
   Widget _buildSummary() {
     final top = topCourse;
+    final isDark = isDarkMode;
+    final textColor = isDark ? Colors.white : Colors.black;
+    final subColor = isDark ? Colors.white60 : Colors.black54;
+
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 40),
       child: Column(
@@ -4008,10 +4046,23 @@ class _HomeScreenState extends State<HomeScreen>
               width: double.infinity,
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Colors.black, Colors.indigo.shade800],
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Color(0xFF0D47A1),
+                    Color(0xFF1565C0),
+                    Color(0xFF1E88E5),
+                  ],
                 ),
                 borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: _primary.withOpacity(0.3),
+                    blurRadius: 20,
+                    offset: const Offset(0, 10),
+                  ),
+                ],
               ),
               child: Column(
                 children: [
@@ -4022,6 +4073,7 @@ class _HomeScreenState extends State<HomeScreen>
                         color: Colors.white70,
                         fontSize: 13,
                         letterSpacing: 1.2,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                     if (profile.department.isNotEmpty)
@@ -4036,14 +4088,18 @@ class _HomeScreenState extends State<HomeScreen>
                   ],
                   const Text(
                     'CGPA',
-                    style: TextStyle(color: Colors.white54, fontSize: 13),
+                    style: TextStyle(
+                      color: Colors.white54,
+                      fontSize: 13,
+                      letterSpacing: 1,
+                    ),
                   ),
                   Text(
                     _cgpaHidden ? '••••' : cgpa.toStringAsFixed(2),
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 52,
-                      fontWeight: FontWeight.bold,
+                      fontWeight: FontWeight.w900,
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -4091,7 +4147,12 @@ class _HomeScreenState extends State<HomeScreen>
                   icon: const Icon(Icons.share, size: 18),
                   label: const Text('Share'),
                   style: OutlinedButton.styleFrom(
+                    foregroundColor: _primary,
+                    side: BorderSide(color: _primary.withOpacity(0.4)),
                     padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
                 ),
               ),
@@ -4102,7 +4163,12 @@ class _HomeScreenState extends State<HomeScreen>
                   icon: const Icon(Icons.picture_as_pdf, size: 18),
                   label: const Text('PDF'),
                   style: OutlinedButton.styleFrom(
+                    foregroundColor: _primary,
+                    side: BorderSide(color: _primary.withOpacity(0.4)),
                     padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
                 ),
               ),
@@ -4170,224 +4236,272 @@ class _HomeScreenState extends State<HomeScreen>
         style: const TextStyle(
           color: Colors.white,
           fontSize: 18,
-          fontWeight: FontWeight.bold,
+          fontWeight: FontWeight.w800,
         ),
       ),
       Text(label, style: const TextStyle(color: Colors.white54, fontSize: 11)),
     ],
   );
 
-  Widget _statCard(String title, String value, IconData icon, Color color) =>
-      Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
+  Widget _statCard(String title, String value, IconData icon, Color color) {
+    final isDark = isDarkMode;
+    final textColor = isDark ? Colors.white : Colors.black;
+    final subColor = isDark ? Colors.white60 : Colors.black54;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.black : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark
+              ? Colors.white.withOpacity(0.08)
+              : Colors.black.withOpacity(0.06),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Icon(icon, color: color, size: 24),
-            const SizedBox(height: 12),
-            Text(
-              value,
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(10),
             ),
-            const SizedBox(height: 6),
-            Text(
-              title,
-              style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+            child: Icon(icon, color: color, size: 20),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            value,
+            style: TextStyle(
+              fontWeight: FontWeight.w700,
+              fontSize: 13,
+              color: textColor,
             ),
-          ],
-        ),
-      );
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 6),
+          Text(title, style: TextStyle(fontSize: 11, color: subColor)),
+        ],
+      ),
+    );
+  }
 
   // ══════════════════════════════════════════════════════════
   //  COURSES TAB
   // ══════════════════════════════════════════════════════════
 
-  Widget _buildCourses() => Column(
-    children: [
-      Padding(
-        padding: const EdgeInsets.fromLTRB(14, 14, 14, 0),
-        child: TextField(
-          controller: _searchCtrl,
-          onChanged: (v) => setState(() => searchQuery = v),
-          decoration: InputDecoration(
-            hintText: 'Search courses...',
-            prefixIcon: const Icon(Icons.search),
-            suffixIcon: searchQuery.isNotEmpty
-                ? IconButton(
-                    icon: const Icon(Icons.clear),
-                    onPressed: () => setState(() {
-                      searchQuery = '';
-                      _searchCtrl.clear();
-                    }),
-                  )
-                : null,
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-            filled: true,
-            fillColor: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
-          ),
-        ),
-      ),
-      if (searchQuery.isNotEmpty)
-        Expanded(
-          child: Builder(
-            builder: (_) {
-              final r = searchResults;
-              if (r.isEmpty)
-                return const Center(
-                  child: Text(
-                    'No courses found',
-                    style: TextStyle(color: Colors.grey),
-                  ),
-                );
-              return ListView.builder(
-                padding: const EdgeInsets.fromLTRB(14, 14, 14, 40),
-                itemCount: r.length,
-                itemBuilder: (_, i) => _courseCard(r[i]),
-              );
-            },
-          ),
-        )
-      else ...[
+  Widget _buildCourses() {
+    final isDark = isDarkMode;
+    final cardBg = isDark ? Colors.black : Colors.white;
+    final textColor = isDark ? Colors.white : Colors.black;
+    final subColor = isDark ? Colors.white60 : Colors.black54;
+
+    return Column(
+      children: [
         Padding(
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          child: _indicator(),
+          padding: const EdgeInsets.fromLTRB(14, 14, 14, 0),
+          child: TextField(
+            controller: _searchCtrl,
+            onChanged: (v) => setState(() => searchQuery = v),
+            style: TextStyle(color: textColor),
+            decoration: InputDecoration(
+              hintText: 'Search courses...',
+              hintStyle: TextStyle(color: subColor),
+              prefixIcon: Icon(Icons.search, color: subColor),
+              suffixIcon: searchQuery.isNotEmpty
+                  ? IconButton(
+                      icon: Icon(Icons.clear, color: subColor),
+                      onPressed: () => setState(() {
+                        searchQuery = '';
+                        _searchCtrl.clear();
+                      }),
+                    )
+                  : null,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide.none,
+              ),
+              filled: true,
+              fillColor: cardBg,
+            ),
+          ),
         ),
-        Expanded(
-          child: PageView.builder(
-            controller: _pageCtrl,
-            itemCount: 14,
-            onPageChanged: (i) => setState(() => currentPage = i),
-            itemBuilder: (_, index) {
-              final y = (index ~/ 2) + 1;
-              final s = (index % 2) + 1;
-              final list = _semCourses(y, s);
-              final gpa = _gpa(list);
-              return Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                child: Column(
-                  children: [
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(18),
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Colors.blue, Colors.indigo],
-                        ),
-                        borderRadius: BorderRadius.circular(18),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Year $y • Semester $s',
-                                style: const TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: 13,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                _cgpaHidden
-                                    ? 'GPA: ••••'
-                                    : 'GPA: ${gpa.toStringAsFixed(2)}',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 26,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ],
-                          ),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Text(
-                                '${list.length} course${list.length != 1 ? 's' : ''}',
-                                style: const TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: 12,
-                                ),
-                              ),
-                              Text(
-                                '${list.fold(0, (s, c) => s + c.unit)} units',
-                                style: const TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
+        if (searchQuery.isNotEmpty)
+          Expanded(
+            child: Builder(
+              builder: (_) {
+                final r = searchResults;
+                if (r.isEmpty)
+                  return Center(
+                    child: Text(
+                      'No courses found',
+                      style: TextStyle(color: subColor),
                     ),
-                    const SizedBox(height: 12),
-                    Expanded(
-                      child: Container(
+                  );
+                return ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(14, 14, 14, 40),
+                  itemCount: r.length,
+                  itemBuilder: (_, i) => _courseCard(r[i]),
+                );
+              },
+            ),
+          )
+        else ...[
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            child: _indicator(),
+          ),
+          Expanded(
+            child: PageView.builder(
+              controller: _pageCtrl,
+              itemCount: 14,
+              onPageChanged: (i) => setState(() => currentPage = i),
+              itemBuilder: (_, index) {
+                final y = (index ~/ 2) + 1;
+                final s = (index % 2) + 1;
+                final list = _semCourses(y, s);
+                final gpa = _gpa(list);
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  child: Column(
+                    children: [
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(18),
                         decoration: BoxDecoration(
-                          color: isDarkMode
-                              ? const Color(0xFF1E1E1E)
-                              : Colors.white,
+                          gradient: const LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [
+                              Color(0xFF0D47A1),
+                              Color(0xFF1565C0),
+                              Color(0xFF1E88E5),
+                            ],
+                          ),
                           borderRadius: BorderRadius.circular(18),
                         ),
-                        child: list.isEmpty
-                            ? Center(
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(
-                                      Icons.inbox_outlined,
-                                      size: 50,
-                                      color: Colors.grey.shade300,
-                                    ),
-                                    const SizedBox(height: 10),
-                                    const Text(
-                                      'No courses yet',
-                                      style: TextStyle(
-                                        color: Colors.grey,
-                                        fontSize: 15,
-                                      ),
-                                    ),
-                                  ],
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Year $y • Semester $s',
+                                  style: const TextStyle(
+                                    color: Colors.white70,
+                                    fontSize: 13,
+                                  ),
                                 ),
-                              )
-                            : ListView.builder(
-                                padding: const EdgeInsets.fromLTRB(
-                                  10,
-                                  10,
-                                  10,
-                                  40,
+                                const SizedBox(height: 4),
+                                Text(
+                                  _cgpaHidden
+                                      ? 'GPA: ••••'
+                                      : 'GPA: ${gpa.toStringAsFixed(2)}',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 26,
+                                    fontWeight: FontWeight.w900,
+                                  ),
                                 ),
-                                itemCount: list.length,
-                                itemBuilder: (_, i) => _dismissible(list[i]),
-                              ),
+                              ],
+                            ),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text(
+                                  '${list.length} course${list.length != 1 ? 's' : ''}',
+                                  style: const TextStyle(
+                                    color: Colors.white70,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                                Text(
+                                  '${list.fold(0, (s, c) => s + c.unit)} units',
+                                  style: const TextStyle(
+                                    color: Colors.white70,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-              );
-            },
+                      const SizedBox(height: 12),
+                      Expanded(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: cardBg,
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(
+                              color: isDark
+                                  ? Colors.white.withOpacity(0.08)
+                                  : Colors.black.withOpacity(0.06),
+                            ),
+                          ),
+                          child: list.isEmpty
+                              ? Center(
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Container(
+                                        width: 80,
+                                        height: 80,
+                                        decoration: BoxDecoration(
+                                          color: _primary.withOpacity(0.08),
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: Icon(
+                                          Icons.inbox_outlined,
+                                          size: 36,
+                                          color: _primary.withOpacity(0.5),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 12),
+                                      Text(
+                                        'No courses yet',
+                                        style: TextStyle(
+                                          color: subColor,
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                )
+                              : ListView.builder(
+                                  padding: const EdgeInsets.fromLTRB(
+                                    10,
+                                    10,
+                                    10,
+                                    40,
+                                  ),
+                                  itemCount: list.length,
+                                  itemBuilder: (_, i) => _dismissible(list[i]),
+                                ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
           ),
-        ),
+        ],
       ],
-    ],
-  );
+    );
+  }
 
   Widget _indicator() => Row(
     mainAxisAlignment: MainAxisAlignment.center,
@@ -4399,7 +4513,7 @@ class _HomeScreenState extends State<HomeScreen>
         width: a ? 18 : 6,
         height: 6,
         decoration: BoxDecoration(
-          color: a ? Colors.blue : Colors.grey.shade400,
+          color: a ? _primary : Colors.grey.shade400,
           borderRadius: BorderRadius.circular(20),
         ),
       );
@@ -4430,280 +4544,283 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-  Widget _courseCard(Course c) => Card(
-    elevation: 2,
-    margin: const EdgeInsets.only(bottom: 12),
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-    child: ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-      leading: CircleAvatar(
-        radius: 22,
-        backgroundColor: scoreColor(c.score),
-        child: Text(
-          grading.getGrade(c.score),
-          style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      ),
-      title: Text(
-        c.name,
-        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-      ),
-      subtitle: Padding(
-        padding: const EdgeInsets.only(top: 4),
-        child: Text(
-          'Score ${c.score} • Unit ${c.unit} • GP ${grading.getPoint(c.score).toStringAsFixed(1)} • Y${c.year}S${c.semester}'
-          '${c.title.isNotEmpty ? "\n${c.title}" : ""}',
-          style: const TextStyle(fontSize: 12),
-          maxLines: 3,
-          overflow: TextOverflow.ellipsis,
-        ),
-      ),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          IconButton(
-            icon: const Icon(Icons.edit, color: Colors.blue, size: 20),
-            onPressed: () => _editCourse(c),
-          ),
-          IconButton(
-            icon: const Icon(Icons.delete, color: Colors.red, size: 20),
-            onPressed: () => _deleteCourse(c),
-          ),
-        ],
-      ),
-    ),
-  );
+  Widget _courseCard(Course c) {
+    final isDark = isDarkMode;
+    final textColor = isDark ? Colors.white : Colors.black;
+    final subColor = isDark ? Colors.white60 : Colors.black54;
 
+    return Card(
+      color: isDark ? Colors.black : Colors.white,
+      elevation: isDark ? 0 : 2,
+      margin: const EdgeInsets.only(bottom: 12),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(
+          color: isDark ? Colors.white.withOpacity(0.08) : Colors.transparent,
+        ),
+      ),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        leading: CircleAvatar(
+          radius: 22,
+          backgroundColor: scoreColor(c.score),
+          child: Text(
+            grading.getGrade(c.score),
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+        title: Text(
+          c.name,
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 15,
+            color: textColor,
+          ),
+        ),
+        subtitle: Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Text(
+            'Score ${c.score} • Unit ${c.unit} • GP ${grading.getPoint(c.score).toStringAsFixed(1)} • Y${c.year}S${c.semester}'
+            '${c.title.isNotEmpty ? "\n${c.title}" : ""}',
+            style: TextStyle(fontSize: 12, color: subColor),
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              icon: Icon(Icons.edit, color: _primary, size: 20),
+              onPressed: () => _editCourse(c),
+            ),
+            IconButton(
+              icon: const Icon(Icons.delete, color: Colors.red, size: 20),
+              onPressed: () => _deleteCourse(c),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
   // ══════════════════════════════════════════════════════════
   //  ADD TAB
   // ══════════════════════════════════════════════════════════
 
-  Widget _buildAddTab() => SingleChildScrollView(
-    padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
-    child: Form(
-      key: _formKey,
-      child: Column(
-        children: [
-          if (_editingCourse != null)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              margin: const EdgeInsets.only(bottom: 12),
-              decoration: BoxDecoration(
-                color: Colors.orange.withOpacity(0.12),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: Colors.orange.withOpacity(0.4)),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.edit, color: Colors.orange, size: 18),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      'Editing: ${_editingCourse!.name} — save to confirm or switch tabs to cancel.',
-                      style: const TextStyle(
-                        color: Colors.orange,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ),
-                  GestureDetector(
-                    onTap: _cancelEdit,
-                    child: const Icon(
-                      Icons.close,
-                      color: Colors.orange,
-                      size: 18,
-                    ),
-                  ),
-                ],
-              ),
-            ),
+  Widget _buildAddTab() {
+    final isDark = isDarkMode;
+    final cardBg = isDark ? Colors.black : Colors.white;
+    final textColor = isDark ? Colors.white : Colors.black;
+    final subColor = isDark ? Colors.white60 : Colors.black54;
+    final dividerColor = isDark
+        ? Colors.white.withOpacity(0.12)
+        : Colors.grey.shade300;
 
-          if (profile.name.isNotEmpty)
-            GestureDetector(
-              onTap: () => _tabCtrl.animateTo(4),
-              child: Container(
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+      child: Form(
+        key: _formKey,
+        child: Column(
+          children: [
+            if (_editingCourse != null)
+              Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(
                   horizontal: 16,
-                  vertical: 12,
+                  vertical: 10,
                 ),
-                margin: const EdgeInsets.only(bottom: 16),
+                margin: const EdgeInsets.only(bottom: 12),
                 decoration: BoxDecoration(
-                  color: Colors.blue.withOpacity(0.1),
+                  color: Colors.orange.withOpacity(0.12),
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: Colors.blue.withOpacity(0.2)),
+                  border: Border.all(color: Colors.orange.withOpacity(0.4)),
                 ),
                 child: Row(
                   children: [
-                    CircleAvatar(
-                      backgroundColor: Colors.blue,
-                      radius: 18,
+                    const Icon(Icons.edit, color: Colors.orange, size: 18),
+                    const SizedBox(width: 10),
+                    Expanded(
                       child: Text(
-                        profile.name[0].toUpperCase(),
+                        'Editing: ${_editingCourse!.name} — save to confirm or switch tabs to cancel.',
                         style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
+                          color: Colors.orange,
+                          fontSize: 12,
                         ),
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            profile.name,
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                          if (profile.department.isNotEmpty)
-                            Text(
-                              profile.department,
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey.shade600,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                        ],
+                    GestureDetector(
+                      onTap: _cancelEdit,
+                      child: const Icon(
+                        Icons.close,
+                        color: Colors.orange,
+                        size: 18,
                       ),
                     ),
-                    Icon(Icons.chevron_right, color: Colors.blue.shade300),
                   ],
                 ),
               ),
-            ),
 
-          Card(
-            elevation: 4,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(18),
-              child: Column(
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: DropdownButtonFormField<int>(
-                          value: _selYear,
-                          decoration: InputDecoration(
-                            labelText: 'Year',
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          items: List.generate(7, (i) => i + 1)
-                              .map(
-                                (e) => DropdownMenuItem(
-                                  value: e,
-                                  child: Text('Year $e'),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: (v) => setState(() => _selYear = v!),
-                        ),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: DropdownButtonFormField<int>(
-                          value: _selSem,
-                          decoration: InputDecoration(
-                            labelText: 'Semester',
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          items: [1, 2]
-                              .map(
-                                (e) => DropdownMenuItem(
-                                  value: e,
-                                  child: Text('Sem $e'),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: (v) => setState(() => _selSem = v!),
-                        ),
-                      ),
-                    ],
+            if (profile.name.isNotEmpty)
+              GestureDetector(
+                // onTap: () => Navigator.of(context).pushReplacement(fadeRoute(const MainShell())),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
                   ),
-                  const SizedBox(height: 16),
-
-                  SizedBox(
-                    width: double.infinity,
-                    height: 48,
-                    child: OutlinedButton.icon(
-                      onPressed: _addFromPicker,
-                      icon: const Icon(Icons.list_alt),
-                      label: const Text('Select from Course List'),
-                      style: OutlinedButton.styleFrom(
-                        side: BorderSide(color: Colors.blue.shade400),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                    ),
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: _primary.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: _primary.withOpacity(0.2)),
                   ),
-                  const SizedBox(height: 12),
-
-                  Row(
+                  child: Row(
                     children: [
-                      Expanded(child: Divider(color: Colors.grey.shade300)),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                      CircleAvatar(
+                        backgroundColor: _primary,
+                        radius: 18,
                         child: Text(
-                          'or enter manually',
-                          style: TextStyle(
-                            color: Colors.grey.shade500,
-                            fontSize: 12,
+                          profile.name[0].toUpperCase(),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
                       ),
-                      Expanded(child: Divider(color: Colors.grey.shade300)),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              profile.name,
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: textColor,
+                              ),
+                            ),
+                            if (profile.department.isNotEmpty)
+                              Text(
+                                profile.department,
+                                style: TextStyle(fontSize: 12, color: subColor),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                          ],
+                        ),
+                      ),
+                      Icon(
+                        Icons.chevron_right,
+                        color: _primary.withOpacity(0.6),
+                      ),
                     ],
                   ),
-                  const SizedBox(height: 12),
+                ),
+              ),
 
-                  SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: ElevatedButton.icon(
-                      onPressed: _showManualBatchEntry,
-                      icon: const Icon(Icons.table_rows_outlined),
-                      label: const Text('Enter Courses Manually'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blue.shade700,
-                        foregroundColor: Colors.white,
-                        elevation: 2,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+            Card(
+              color: cardBg,
+              elevation: isDark ? 0 : 4,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+                side: BorderSide(
+                  color: isDark
+                      ? Colors.white.withOpacity(0.08)
+                      : Colors.transparent,
+                ),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(18),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: DropdownButtonFormField<int>(
+                            value: _selYear,
+                            dropdownColor: cardBg,
+                            style: TextStyle(color: textColor),
+                            decoration: InputDecoration(
+                              labelText: 'Year',
+                              labelStyle: TextStyle(color: subColor),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            items: List.generate(7, (i) => i + 1)
+                                .map(
+                                  (e) => DropdownMenuItem(
+                                    value: e,
+                                    child: Text('Year $e'),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: (v) => setState(() => _selYear = v!),
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: DropdownButtonFormField<int>(
+                            value: _selSem,
+                            dropdownColor: cardBg,
+                            style: TextStyle(color: textColor),
+                            decoration: InputDecoration(
+                              labelText: 'Semester',
+                              labelStyle: TextStyle(color: subColor),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            items: [1, 2]
+                                .map(
+                                  (e) => DropdownMenuItem(
+                                    value: e,
+                                    child: Text('Sem $e'),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: (v) => setState(() => _selSem = v!),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+
+                    SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: OutlinedButton.icon(
+                        onPressed: _addFromPicker,
+                        icon: Icon(Icons.list_alt, color: _primary),
+                        label: Text(
+                          'Select from Course List',
+                          style: TextStyle(color: _primary),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          side: BorderSide(color: _primary.withOpacity(0.5)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
                         ),
                       ),
                     ),
-                  ),
-
-                  if (!kIsWeb) ...[
                     const SizedBox(height: 12),
 
                     Row(
                       children: [
-                        Expanded(child: Divider(color: Colors.grey.shade300)),
+                        Expanded(child: Divider(color: dividerColor)),
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 10),
                           child: Text(
-                            'or scan result sheet',
-                            style: TextStyle(
-                              color: Colors.grey.shade500,
-                              fontSize: 12,
-                            ),
+                            'or enter manually',
+                            style: TextStyle(color: subColor, fontSize: 12),
                           ),
                         ),
-                        Expanded(child: Divider(color: Colors.grey.shade300)),
+                        Expanded(child: Divider(color: dividerColor)),
                       ],
                     ),
                     const SizedBox(height: 12),
@@ -4712,11 +4829,11 @@ class _HomeScreenState extends State<HomeScreen>
                       width: double.infinity,
                       height: 50,
                       child: ElevatedButton.icon(
-                        onPressed: _scanResultSheet,
-                        icon: const Icon(Icons.document_scanner),
-                        label: const Text('Scan Result Sheet'),
+                        onPressed: _showManualBatchEntry,
+                        icon: const Icon(Icons.table_rows_outlined),
+                        label: const Text('Enter Courses Manually'),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green.shade700,
+                          backgroundColor: _primary,
                           foregroundColor: Colors.white,
                           elevation: 2,
                           shape: RoundedRectangleBorder(
@@ -4725,65 +4842,102 @@ class _HomeScreenState extends State<HomeScreen>
                         ),
                       ),
                     ),
+
+                    if (!kIsWeb) ...[
+                      const SizedBox(height: 12),
+
+                      Row(
+                        children: [
+                          Expanded(child: Divider(color: dividerColor)),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 10),
+                            child: Text(
+                              'or scan result sheet',
+                              style: TextStyle(color: subColor, fontSize: 12),
+                            ),
+                          ),
+                          Expanded(child: Divider(color: dividerColor)),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+
+                      SizedBox(
+                        width: double.infinity,
+                        height: 50,
+                        child: ElevatedButton.icon(
+                          onPressed: _scanResultSheet,
+                          icon: const Icon(Icons.document_scanner),
+                          label: const Text('Scan Result Sheet'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.green.shade700,
+                            foregroundColor: Colors.white,
+                            elevation: 2,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: 16),
+            const SizedBox(height: 16),
 
-          Row(
-            children: [
-              Expanded(
-                child: _toolBtn(
-                  Icons.science,
-                  'What-If',
-                  Colors.purple,
-                  _showWhatIf,
+            Row(
+              children: [
+                Expanded(
+                  child: _toolBtn(
+                    Icons.science,
+                    'What-If',
+                    Colors.purple,
+                    _showWhatIf,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _toolBtn(
-                  Icons.track_changes,
-                  'Target',
-                  Colors.teal,
-                  _showTargetCalc,
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _toolBtn(
+                    Icons.track_changes,
+                    'Target',
+                    Colors.teal,
+                    _showTargetCalc,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _toolBtn(
-                  Icons.calculate_outlined,
-                  'Min Score',
-                  Colors.indigo,
-                  _showMinScoreCalc,
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _toolBtn(
+                    Icons.calculate_outlined,
+                    'Min Score',
+                    Colors.indigo,
+                    _showMinScoreCalc,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _toolBtn(
-                  Icons.tune,
-                  'Grading',
-                  Colors.orange,
-                  _showGradingSettings,
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _toolBtn(
+                    Icons.tune,
+                    'Grading',
+                    Colors.orange,
+                    _showGradingSettings,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _toolBtn(
-                  Icons.picture_as_pdf,
-                  'PDF',
-                  Colors.red,
-                  _exportPDF,
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _toolBtn(
+                    Icons.picture_as_pdf,
+                    'PDF',
+                    Colors.red,
+                    _exportPDF,
+                  ),
                 ),
-              ),
-            ],
-          ),
-        ],
+              ],
+            ),
+          ],
+        ),
       ),
-    ),
-  );
+    );
+  }
 
   Widget _toolBtn(
     IconData icon,
@@ -4819,164 +4973,223 @@ class _HomeScreenState extends State<HomeScreen>
     ),
   );
 
-
-
   Widget _buildClearAllTab() {
-  final isDark = context.read<ThemeNotifier>().isDarkMode;
-  return Center(
-    child: Padding(
-      padding: const EdgeInsets.all(32),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.delete_forever_rounded, size: 64,
-              color: Colors.red.withOpacity(0.7)),
-          const SizedBox(height: 16),
-          const Text('Clear All Courses',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          Text(
-            'This will permanently delete all your courses.\nThis cannot be undone.',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-                color: isDark ? Colors.white54 : Colors.black45, fontSize: 14),
-          ),
-          const SizedBox(height: 28),
-          ElevatedButton.icon(
-            onPressed: _clearAll,
-            icon: const Icon(Icons.delete_forever),
-            label: const Text('Clear All'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14)),
+    final isDark = context.read<ThemeNotifier>().isDarkMode;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.delete_forever_rounded,
+              size: 64,
+              color: Colors.red.withOpacity(0.7),
             ),
-          ),
-        ],
+            const SizedBox(height: 16),
+            const Text(
+              'Clear All Courses',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'This will permanently delete all your courses.\nThis cannot be undone.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: isDark ? Colors.white54 : Colors.black45,
+                fontSize: 14,
+              ),
+            ),
+            const SizedBox(height: 28),
+            ElevatedButton.icon(
+              onPressed: _clearAll,
+              icon: const Icon(Icons.delete_forever),
+              label: const Text('Clear All'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 32,
+                  vertical: 14,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   // ══════════════════════════════════════════════════════════
   //  MAIN BUILD
   // ══════════════════════════════════════════════════════════
 
-@override
-Widget build(BuildContext context) {
-  final isDark = context.watch<ThemeNotifier>().isDarkMode;
-  final navBg = isDark ? const Color(0xFF1E293B) : Colors.white;
-  final navFg = isDark ? Colors.white : Colors.black87;
+  @override
+  Widget build(BuildContext context) {
+    final isDark = context.watch<ThemeNotifier>().isDarkMode;
 
-  return Scaffold(
-    backgroundColor: isDark ? const Color(0xFF0A0A0A) : Colors.blue.shade50,
-    appBar: AppBar(
-      elevation: 0,
-      centerTitle: true,
-      backgroundColor: navBg,
-      foregroundColor: navFg,
-      iconTheme: IconThemeData(color: navFg),
-      title: Text(
-        'CGPA Calculator',
-        style: TextStyle(color: navFg, fontWeight: FontWeight.bold),
-      ),
-      bottom: TabBar(
-        controller: _tabCtrl,
-        isScrollable: false,
-        labelColor: isDark ? const Color(0xFF818CF8) : Colors.blue.shade700,
-        unselectedLabelColor: isDark ? Colors.white38 : Colors.black45,
-        indicatorColor: isDark ? const Color(0xFF818CF8) : Colors.blue.shade700,
-        tabs: [
-          const Tab(icon: Icon(Icons.add_circle_outline, size: 20), text: 'Add'),
-          const Tab(icon: Icon(Icons.list_alt, size: 20), text: 'Courses'),
-          const Tab(icon: Icon(Icons.show_chart, size: 20), text: 'Chart'),
-          const Tab(icon: Icon(Icons.dashboard, size: 20), text: 'Summary'),
-          Tab(
-            icon: const Icon(Icons.delete_forever, size: 20),
-            text: 'Clear All',
-            iconMargin: EdgeInsets.zero,
-          ),
-        ],
-      ),
-    ),
-    body: SafeArea(
-      child: Column(
+    return Scaffold(
+      backgroundColor: isDark ? const Color(0xFF0A0A0A) : Colors.blue.shade50,
+      body: Column(
         children: [
+          // ── Unified gradient header: AppBar + CGPA + TabBar ──
           Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
               gradient: LinearGradient(
-                colors: [Colors.black87, Colors.indigo.shade900],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Color(0xFF0D47A1),
+                  Color(0xFF1565C0),
+                  Color(0xFF1E88E5),
+                ],
               ),
-            ),
-            child: Row(
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Overall CGPA',
-                      style: TextStyle(color: Colors.white54, fontSize: 11),
-                    ),
-                    Text(
-                      _cgpaHidden ? '••••' : cgpa.toStringAsFixed(2),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
+              borderRadius: BorderRadius.vertical(bottom: Radius.circular(28)),
+              boxShadow: [
+                BoxShadow(
+                  color: Color(0x331565C0),
+                  blurRadius: 16,
+                  offset: Offset(0, 6),
                 ),
-                const SizedBox(width: 10),
-                SizedBox(
-                  width: 160,
-                  child: _cgpaHidden
-                      ? const SizedBox()
-                      : Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 5,
-                          ),
-                          decoration: BoxDecoration(
-                            color: degreeColor(cgpa, maxGP).withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
-                              color: degreeColor(cgpa, maxGP).withOpacity(0.5),
-                            ),
-                          ),
+              ],
+            ),
+            child: SafeArea(
+              bottom: false,
+              child: Column(
+                children: [
+                  // Title row (was AppBar)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+                    child: Row(
+                      children: [
+                        const Expanded(
                           child: Text(
-                            getDegreeClass(cgpa, maxGP),
+                            'CGPA Calculator',
                             textAlign: TextAlign.center,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              color: degreeColor(cgpa, maxGP),
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12,
+                              color: Colors.white,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 18,
                             ),
                           ),
                         ),
-                ),
-                const Spacer(),
-                IconButton(
-                  icon: Icon(
-                    _cgpaHidden ? Icons.visibility_off : Icons.visibility,
-                    color: Colors.white54,
-                    size: 22,
+                      ],
+                    ),
                   ),
-                  onPressed: () {
-                    setState(() => _cgpaHidden = !_cgpaHidden);
-                    _savePref('cgpaHidden', _cgpaHidden);
-                  },
-                  tooltip: _cgpaHidden ? 'Show CGPA' : 'Hide CGPA',
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
-                ),
-              ],
+                  const SizedBox(height: 8),
+                  // CGPA row
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Row(
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Overall CGPA',
+                              style: TextStyle(
+                                color: Colors.white60,
+                                fontSize: 11,
+                              ),
+                            ),
+                            Text(
+                              _cgpaHidden ? '••••' : cgpa.toStringAsFixed(2),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 26,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(width: 10),
+                        SizedBox(
+                          width: 160,
+                          child: _cgpaHidden
+                              ? const SizedBox()
+                              : Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 5,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withOpacity(0.18),
+                                    borderRadius: BorderRadius.circular(20),
+                                    border: Border.all(
+                                      color: Colors.white.withOpacity(0.35),
+                                    ),
+                                  ),
+                                  child: Text(
+                                    getDegreeClass(cgpa, maxGP),
+                                    textAlign: TextAlign.center,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ),
+                        ),
+                        const Spacer(),
+                        IconButton(
+                          icon: Icon(
+                            _cgpaHidden
+                                ? Icons.visibility_off
+                                : Icons.visibility,
+                            color: Colors.white70,
+                            size: 22,
+                          ),
+                          onPressed: () {
+                            setState(() => _cgpaHidden = !_cgpaHidden);
+                            _savePref('cgpaHidden', _cgpaHidden);
+                          },
+                          tooltip: _cgpaHidden ? 'Show CGPA' : 'Hide CGPA',
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  // TabBar — transparent, sits on the same gradient
+                  TabBar(
+                    controller: _tabCtrl,
+                    isScrollable: false,
+                    labelColor: Colors.white,
+                    unselectedLabelColor: Colors.white54,
+                    indicatorColor: Colors.white,
+                    indicatorWeight: 3,
+                    tabs: const [
+                      Tab(
+                        icon: Icon(Icons.add_circle_outline, size: 20),
+                        text: 'Add',
+                      ),
+                      Tab(
+                        icon: Icon(Icons.list_alt, size: 20),
+                        text: 'Courses',
+                      ),
+                      Tab(
+                        icon: Icon(Icons.show_chart, size: 20),
+                        text: 'Chart',
+                      ),
+                      Tab(
+                        icon: Icon(Icons.dashboard, size: 20),
+                        text: 'Summary',
+                      ),
+                      Tab(
+                        icon: Icon(Icons.delete_forever, size: 20),
+                        text: 'Clear All',
+                        iconMargin: EdgeInsets.zero,
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
           Expanded(
@@ -4993,7 +5206,6 @@ Widget build(BuildContext context) {
           ),
         ],
       ),
-    ),
-  );
-}
+    );
+  }
 }

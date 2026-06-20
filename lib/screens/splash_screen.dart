@@ -83,7 +83,7 @@ class _SplashScreenState extends State<SplashScreen>
         }
       }
 
-       if (tokenValid) {
+      if (tokenValid) {
         await NotificationService.init();
       }
 
@@ -114,45 +114,101 @@ class _SplashScreenState extends State<SplashScreen>
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    body: gradientBox(
-      child: FadeTransition(
-        opacity: fadeAnim,
-        child: ScaleTransition(
-          scale: _scale,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              iconCircle(Icons.school, 110, 60),
-              const SizedBox(height: 28),
-              const Text(
-                'Gradex',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1.2,
-                ),
+    body: SizedBox.expand(
+      child: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+             colors: [Color(0xFF0D47A1), Color(0xFF1565C0), Color(0xFF1E88E5)],
+          ),
+        ),
+        child: SafeArea(
+          child: FadeTransition(
+            opacity: fadeAnim,
+            child: ScaleTransition(
+              scale: _scale,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Spacer(flex: 3),
+                  Container(
+                    width: 110,
+                    height: 110,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.2),
+                          blurRadius: 30,
+                          offset: const Offset(0, 10),
+                        ),
+                      ],
+                    ),
+                    child: const Center(
+                      child: Text(
+                        'G',
+                        style: TextStyle(
+                          fontSize: 64,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFF1565C0),
+                          height: 1,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 28),
+                  const Text(
+                    'GRADEX',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 36,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 6,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: const Text(
+                      'Track your academic performance',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ),
+                  const Spacer(flex: 3),
+                  const SizedBox(
+                    width: 28,
+                    height: 28,
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 2.5,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Developed by TRIMAX',
+                    style: TextStyle(
+                      color: Colors.white60,
+                      fontSize: 12,
+                      letterSpacing: 1,
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+                ],
               ),
-              const SizedBox(height: 8),
-              const Text(
-                'Track your academic performance',
-                style: TextStyle(color: Colors.white70, fontSize: 15),
-              ),
-              const SizedBox(height: 60),
-              const Text(
-                'Developed by TRIMAX',
-                style: TextStyle(color: Colors.white70, fontSize: 18),
-              ),
-              const SizedBox(height: 60),
-              const SizedBox(
-                width: 34,
-                height: 34,
-                child: CircularProgressIndicator(
-                  color: Colors.white,
-                  strokeWidth: 3,
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ),

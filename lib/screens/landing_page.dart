@@ -1,8 +1,6 @@
-
 // ══════════════════════════════════════════════════════════
 //  LANDING PAGE
 // ══════════════════════════════════════════════════════════
-
 
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
@@ -18,7 +16,6 @@ import '../models/studentProfile_model.dart';
 import '../widgets/ui_helpers.dart';
 import '../widgets/snackBar.dart';
 import 'dart:convert';
-
 
 class LandingPage extends StatefulWidget {
   const LandingPage({super.key});
@@ -58,114 +55,191 @@ class _LandingPageState extends State<LandingPage>
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    body: gradientBox(
-      child: SafeArea(
-        child: FadeTransition(
-          opacity: fadeAnim,
-          child: SlideTransition(
-            position: _slide,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 28),
-              child: Column(
-                children: [
-                  const Spacer(flex: 2),
-                  iconCircle(Icons.school, 110, 60),
-                  const SizedBox(height: 28),
-                  const Text(
-                    'Gradex',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 30,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 0.8,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    alignment: WrapAlignment.center,
-                    children: [
-                      _featurePill(Icons.track_changes_outlined, 'Track CGPA'),
-                      _featurePill(Icons.science_outlined, 'What-If Sim'),
-                      _featurePill(Icons.picture_as_pdf_outlined, 'PDF Export'),
-                      _featurePill(Icons.show_chart, 'GPA Trends'),
-                    ],
-                  ),
-                  const Spacer(flex: 3),
+    body: SizedBox.expand(
+      child: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFF0D47A1), Color(0xFF1565C0), Color(0xFF1E88E5)],
+          ),
+        ),
+        child: SafeArea(
+          child: FadeTransition(
+            opacity: fadeAnim,
+            child: SlideTransition(
+              position: _slide,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 28),
+                child: Column(
+                  children: [
+                    const Spacer(flex: 2),
 
-                  // ── Sign In ──────────────────────────────────────
-                  SizedBox(
-                    width: double.infinity,
-                    height: 54,
-                    child: ElevatedButton(
-                      onPressed: () => Navigator.of(
-                        context,
-                      ).push(fadeRoute(const SignInScreen())),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        foregroundColor: Colors.blue.shade800,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
+                    // ── Big G Logo ──────────────────────────────
+                    Container(
+                      width: 100,
+                      height: 100,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.2),
+                            blurRadius: 30,
+                            offset: const Offset(0, 10),
+                          ),
+                        ],
+                      ),
+                      child: const Center(
+                        child: Text(
+                          'G',
+                          style: TextStyle(
+                            fontSize: 58,
+                            fontWeight: FontWeight.w900,
+                            color: Color(0xFF1565C0),
+                            height: 1,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+
+                    // ── App name ────────────────────────────────
+                    const Text(
+                      'GRADEX',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 32,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 6,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'Track your academic performance',
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 13,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    const SizedBox(height: 28),
+
+                    // ── Feature pills ────────────────────────────
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      alignment: WrapAlignment.center,
+                      children: [
+                        _featurePill(
+                          Icons.track_changes_outlined,
+                          'Track CGPA',
+                        ),
+                        _featurePill(Icons.science_outlined, 'What-If Sim'),
+                        _featurePill(
+                          Icons.picture_as_pdf_outlined,
+                          'PDF Export',
+                        ),
+                        _featurePill(Icons.show_chart, 'GPA Trends'),
+                      ],
+                    ),
+
+                    const Spacer(flex: 3),
+
+                    // ── Sign In ──────────────────────────────────
+                    SizedBox(
+                      width: double.infinity,
+                      height: 54,
+                      child: ElevatedButton(
+                        onPressed: () => Navigator.of(
+                          context,
+                        ).push(fadeRoute(const SignInScreen())),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: const Color(0xFF0D47A1),
+                          elevation: 4,
+                          shadowColor: Colors.black38,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
+                        child: const Text(
+                          'Sign In',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // ── Create Account ───────────────────────────
+                    SizedBox(
+                      width: double.infinity,
+                      height: 54,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFF1E88E5), Color(0xFF0D47A1)],
+                          ),
                           borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: Colors.white30, width: 1.5),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.2),
+                              blurRadius: 8,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
                         ),
-                      ),
-                      child: const Text(
-                        'Sign In',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-
-                  // ── Create Account ───────────────────────────────
-                  SizedBox(
-                    width: double.infinity,
-                    height: 54,
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.of(
-                        context,
-                      ).push(fadeRoute(const RegisterScreen())),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.white,
-                        side: const BorderSide(
-                          color: Colors.white54,
-                          width: 1.5,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                      ),
-                      child: const Text(
-                        'Create Account',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
+                        child: ElevatedButton(
+                          onPressed: () => Navigator.of(
+                            context,
+                          ).push(fadeRoute(const RegisterScreen())),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.transparent,
+                            shadowColor: Colors.transparent,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                          ),
+                          child: const Text(
+                            'Create Account',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 20),
+                    const SizedBox(height: 12),
 
-                  // ── Continue with Google ─────────────────────────
-                  SizedBox(
-                    width: double.infinity,
-                    height: 54,
-                    child: GoogleButton(
-                      onPressed: () => _handleGoogleSignIn(context),
+                    // ── Continue with Google ─────────────────────
+                    SizedBox(
+                      width: double.infinity,
+                      height: 54,
+                      child: GoogleButton(
+                        onPressed: () => _handleGoogleSignIn(context),
+                      ),
                     ),
-                  ),
 
-                  const SizedBox(height: 32),
-                  const Text(
-                    'Developed by TRIMAX',
-                    style: TextStyle(color: Colors.white38, fontSize: 13),
-                  ),
-                  const SizedBox(height: 16),
-                ],
+                    const SizedBox(height: 24),
+                    const Text(
+                      'Developed by TRIMAX',
+                      style: TextStyle(
+                        color: Colors.white38,
+                        fontSize: 12,
+                        letterSpacing: 1,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                ),
               ),
             ),
           ),
@@ -222,20 +296,39 @@ class _LandingPageState extends State<LandingPage>
   }
 
   Widget _featurePill(IconData icon, String label) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
     decoration: BoxDecoration(
-      color: Colors.white.withOpacity(0.12),
-      borderRadius: BorderRadius.circular(20),
-      border: Border.all(color: Colors.white.withOpacity(0.2)),
+      color: Colors.white.withOpacity(0.15),
+      borderRadius: BorderRadius.circular(24),
+      border: Border.all(color: Colors.white.withOpacity(0.3), width: 1),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withOpacity(0.1),
+          blurRadius: 8,
+          offset: const Offset(0, 2),
+        ),
+      ],
     ),
     child: Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, color: Colors.white70, size: 15),
-        const SizedBox(width: 6),
+        Container(
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.2),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(icon, color: Colors.white, size: 13),
+        ),
+        const SizedBox(width: 7),
         Text(
           label,
-          style: const TextStyle(color: Colors.white70, fontSize: 13),
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.3,
+          ),
         ),
       ],
     ),

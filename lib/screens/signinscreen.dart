@@ -19,6 +19,7 @@ import 'registerscreen.dart';
 import '../widgets/google_button.dart';
 import '../widgets/snackBar.dart';
 import 'homescreen.dart';
+import 'landing_page.dart';
 
 
 class SignInScreen extends StatefulWidget {
@@ -285,8 +286,16 @@ class _SignInScreenState extends State<SignInScreen> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    body: gradientBox(
+Widget build(BuildContext context) => Scaffold(
+  body: SizedBox.expand(
+    child: Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFF0D47A1), Color(0xFF1565C0), Color(0xFF1E88E5)],
+        ),
+      ),
       child: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(26, 24, 26, 40),
@@ -295,34 +304,69 @@ class _SignInScreenState extends State<SignInScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                IconButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  icon: const Icon(
-                    Icons.arrow_back_ios_new,
-                    color: Colors.white70,
+                // ── Back button ──────────────────────────────
+                GestureDetector(
+                  onTap: () => Navigator.of(context).pushReplacement(fadeRoute(const LandingPage())),
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.white24),
+                    ),
+                    child: const Icon(Icons.arrow_back_ios_new,
+                        color: Colors.white, size: 18),
                   ),
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
                 ),
-                const SizedBox(height: 32),
-                iconCircle(Icons.lock_outline_rounded, 76, 38),
-                const SizedBox(height: 20),
+                const SizedBox(height: 36),
+
+                // ── G Logo ───────────────────────────────────
+                Container(
+                  width: 72,
+                  height: 72,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.2),
+                        blurRadius: 20,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
+                  ),
+                  child: const Center(
+                    child: Text(
+                      'G',
+                      style: TextStyle(
+                        fontSize: 42,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFF1565C0),
+                        height: 1,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 24),
+
+                // ── Title ────────────────────────────────────
                 const Text(
                   'Welcome back',
                   style: TextStyle(
                     color: Colors.white,
-                    fontSize: 26,
-                    fontWeight: FontWeight.bold,
+                    fontSize: 28,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 0.5,
                   ),
                 ),
                 const SizedBox(height: 6),
                 const Text(
                   'Sign in to your account',
-                  style: TextStyle(color: Colors.white60, fontSize: 14),
+                  style: TextStyle(color: Colors.white70, fontSize: 14),
                 ),
                 const SizedBox(height: 36),
 
-                // Email
+                // ── Email ────────────────────────────────────
                 TextFormField(
                   controller: _emailC,
                   keyboardType: TextInputType.emailAddress,
@@ -337,7 +381,7 @@ class _SignInScreenState extends State<SignInScreen> {
                 ),
                 const SizedBox(height: 16),
 
-                // Password
+                // ── Password ─────────────────────────────────
                 TextFormField(
                   controller: _passC,
                   obscureText: _obscure,
@@ -352,24 +396,23 @@ class _SignInScreenState extends State<SignInScreen> {
                     suffixIcon: IconButton(
                       icon: Icon(
                         _obscure ? Icons.visibility_off : Icons.visibility,
-                        color: Colors.blue.shade300,
+                        color: Colors.white60,
                       ),
                       onPressed: () => setState(() => _obscure = !_obscure),
                     ),
                   ),
                 ),
 
-                // Forgot password
+                // ── Forgot password ──────────────────────────
                 Align(
                   alignment: Alignment.centerRight,
                   child: TextButton(
-                    onPressed: () => Navigator.of(
-                      context,
-                    ).push(fadeRoute(const ForgotPasswordScreen())),
-                    child: Text(
+                    onPressed: () => Navigator.of(context)
+                        .push(fadeRoute(const ForgotPasswordScreen())),
+                    child: const Text(
                       'Forgot Password?',
                       style: TextStyle(
-                        color: Colors.blue.shade200,
+                        color: Colors.white70,
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
                       ),
@@ -379,83 +422,142 @@ class _SignInScreenState extends State<SignInScreen> {
 
                 if (_errorMsg != null) ...[
                   const SizedBox(height: 6),
-                  errorBox(_errorMsg!),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.red.withOpacity(0.3)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.error_outline,
+                            color: Colors.redAccent, size: 18),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(_errorMsg!,
+                              style: const TextStyle(
+                                  color: Colors.redAccent, fontSize: 13)),
+                        ),
+                      ],
+                    ),
+                  ),
                 ],
-                const SizedBox(height: 20),
+                const SizedBox(height: 24),
 
-                // Sign In button
+                // ── Sign In button ───────────────────────────
                 SizedBox(
                   width: double.infinity,
                   height: 54,
-                  child: ElevatedButton(
-                    onPressed: _loading ? null : _signIn,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: Colors.blue.shade800,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      disabledBackgroundColor: Colors.white38,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.2),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
                     ),
-                    child: _loading
-                        ? SizedBox(
-                            width: 22,
-                            height: 22,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2.5,
-                              color: Colors.blue.shade700,
+                    child: ElevatedButton(
+                      onPressed: _loading ? null : _signIn,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.transparent,
+                        shadowColor: Colors.transparent,
+                        foregroundColor: const Color(0xFF0D47A1),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        disabledBackgroundColor: Colors.transparent,
+                      ),
+                      child: _loading
+                          ? const SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.5,
+                                color: Color(0xFF0D47A1),
+                              ),
+                            )
+                          : const Text(
+                              'Sign In',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 0.5,
+                              ),
                             ),
-                          )
-                        : const Text(
-                            'Sign In',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
+                    ),
                   ),
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 12),
 
-                // Fingerprint button — only shown when device supports it
-                // and user has previously enabled it
+                // ── Fingerprint button ───────────────────────
                 if (_bioAvailable && _bioEnabled) ...[
                   SizedBox(
                     width: double.infinity,
                     height: 54,
-                    child: OutlinedButton.icon(
-                      onPressed: _loading ? null : _signInWithBiometrics,
-                      icon: const Icon(
-                        Icons.fingerprint,
-                        size: 26,
-                        color: Colors.white,
-                      ),
-                      label: const Text(
-                        'Sign in with Fingerprint',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF1E88E5), Color(0xFF0D47A1)],
                         ),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.white30),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.2),
+                            blurRadius: 8,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
                       ),
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(
-                          color: Colors.white54,
-                          width: 1.5,
+                      child: ElevatedButton.icon(
+                        onPressed: _loading ? null : _signInWithBiometrics,
+                        icon: const Icon(Icons.fingerprint,
+                            size: 24, color: Colors.white),
+                        label: const Text(
+                          'Sign in with Fingerprint',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.transparent,
+                          shadowColor: Colors.transparent,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
                         ),
                       ),
                     ),
                   ),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 12),
                 ],
 
-                orDivider(),
-                const SizedBox(height: 16),
+                // ── Divider ──────────────────────────────────
+                Row(
+                  children: [
+                    Expanded(
+                        child: Divider(color: Colors.white.withOpacity(0.2))),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: Text('or',
+                          style: TextStyle(
+                              color: Colors.white.withOpacity(0.5),
+                              fontSize: 13)),
+                    ),
+                    Expanded(
+                        child: Divider(color: Colors.white.withOpacity(0.2))),
+                  ],
+                ),
+                const SizedBox(height: 12),
 
-                // Google button
+                // ── Google button ────────────────────────────
                 SizedBox(
                   width: double.infinity,
                   height: 54,
@@ -463,7 +565,7 @@ class _SignInScreenState extends State<SignInScreen> {
                 ),
                 const SizedBox(height: 28),
 
-                // Register link
+                // ── Register link ────────────────────────────
                 Center(
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -473,17 +575,16 @@ class _SignInScreenState extends State<SignInScreen> {
                         style: TextStyle(color: Colors.white60, fontSize: 14),
                       ),
                       GestureDetector(
-                        onTap: () => Navigator.of(
-                          context,
-                        ).pushReplacement(fadeRoute(const RegisterScreen())),
-                        child: Text(
+                        onTap: () => Navigator.of(context)
+                            .pushReplacement(fadeRoute(const RegisterScreen())),
+                        child: const Text(
                           'Create one',
                           style: TextStyle(
-                            color: Colors.blue.shade200,
+                            color: Colors.white,
                             fontSize: 14,
-                            fontWeight: FontWeight.bold,
+                            fontWeight: FontWeight.w800,
                             decoration: TextDecoration.underline,
-                            decorationColor: Colors.blue.shade200,
+                            decorationColor: Colors.white,
                           ),
                         ),
                       ),
@@ -496,34 +597,44 @@ class _SignInScreenState extends State<SignInScreen> {
         ),
       ),
     ),
-  );
+  ),
+);
 
-  InputDecoration _dec(String label, IconData icon) => InputDecoration(
-    labelText: label,
-    prefixIcon: Icon(icon, color: Colors.blue.shade300),
-    filled: true,
-    fillColor: Colors.white.withOpacity(0.08),
-    labelStyle: const TextStyle(color: Colors.white70),
-    border: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(14),
-      borderSide: const BorderSide(color: Colors.white24),
+InputDecoration _dec(String label, IconData icon) => InputDecoration(
+  labelText: label,
+  prefixIcon: Container(
+    margin: const EdgeInsets.all(10),
+    padding: const EdgeInsets.all(6),
+    decoration: BoxDecoration(
+      color: Colors.white.withOpacity(0.15),
+      borderRadius: BorderRadius.circular(8),
     ),
-    enabledBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(14),
-      borderSide: const BorderSide(color: Colors.white24),
-    ),
-    focusedBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(14),
-      borderSide: BorderSide(color: Colors.blue.shade300, width: 2),
-    ),
-    errorBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(14),
-      borderSide: const BorderSide(color: Colors.redAccent),
-    ),
-    focusedErrorBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(14),
-      borderSide: const BorderSide(color: Colors.redAccent, width: 2),
-    ),
-    errorStyle: const TextStyle(color: Colors.redAccent),
-  );
+    child: Icon(icon, color: Colors.white, size: 18),
+  ),
+  filled: true,
+  fillColor: Colors.white.withOpacity(0.1),
+  labelStyle: const TextStyle(color: Colors.white60, fontSize: 14),
+  floatingLabelStyle: const TextStyle(color: Colors.white, fontSize: 13),
+  border: OutlineInputBorder(
+    borderRadius: BorderRadius.circular(14),
+    borderSide: BorderSide(color: Colors.white.withOpacity(0.2)),
+  ),
+  enabledBorder: OutlineInputBorder(
+    borderRadius: BorderRadius.circular(14),
+    borderSide: BorderSide(color: Colors.white.withOpacity(0.2)),
+  ),
+  focusedBorder: OutlineInputBorder(
+    borderRadius: BorderRadius.circular(14),
+    borderSide: const BorderSide(color: Colors.white, width: 1.5),
+  ),
+  errorBorder: OutlineInputBorder(
+    borderRadius: BorderRadius.circular(14),
+    borderSide: const BorderSide(color: Colors.redAccent),
+  ),
+  focusedErrorBorder: OutlineInputBorder(
+    borderRadius: BorderRadius.circular(14),
+    borderSide: const BorderSide(color: Colors.redAccent, width: 2),
+  ),
+  errorStyle: const TextStyle(color: Colors.redAccent),
+);
 }

@@ -22,6 +22,7 @@ import '../widgets/google_button.dart';
 import '../widgets/snackBar.dart';
 import '../widgets/preloader.dart';
 import 'homescreen.dart';
+import 'landing_page.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -85,7 +86,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       school: profileData['school']!,
       faculty: profileData['faculty']!,
       department: profileData['department']!,
-       level: profileData['level']!,
+      level: profileData['level']!,
     );
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('profile', jsonEncode(profile.toMap()));
@@ -175,267 +176,365 @@ class _RegisterScreenState extends State<RegisterScreen> {
   // ── Keep LoginScreen as alias so existing code compiles ──
   @override
   Widget build(BuildContext context) => Scaffold(
-    body: gradientBox(
-      child: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(26, 24, 26, 40),
-          child: Form(
-            key: _fk,
-            child: Column(
-              children: [
-                // Back button
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: IconButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    icon: const Icon(
-                      Icons.arrow_back_ios_new,
-                      color: Colors.white70,
-                    ),
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-                iconCircle(Icons.school, 76, 38),
-                const SizedBox(height: 16),
-                const Text(
-                  'Create Account',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                const Text(
-                  'Fill in your details to get started',
-                  style: TextStyle(color: Colors.white60, fontSize: 13),
-                ),
-                const SizedBox(height: 28),
-
-                _field(
-                  _nameC,
-                  'Full Name',
-                  Icons.person_outline,
-                  cap: TextCapitalization.words,
-                  validator: (v) {
-                    if (v == null || v.trim().isEmpty)
-                      return 'Full name is required';
-                    if (v.trim().split(' ').length < 2)
-                      return 'Enter first and last name';
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 14),
-                _field(
-                  _emailC,
-                  'Email Address',
-                  Icons.email_outlined,
-                  keyboardType: TextInputType.emailAddress,
-                  validator: (v) {
-                    if (v == null || v.trim().isEmpty)
-                      return 'Email is required';
-                    if (!v.trim().contains('@')) return 'Email must contain @';
-                    if (!isValidEmail(v.trim())) return 'Enter a valid email';
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 14),
-                _field(
-                  _matricC,
-                  'Matric Number',
-                  Icons.badge_outlined,
-                  cap: TextCapitalization.characters,
-                  validator: (v) {
-                    if (v == null || v.trim().isEmpty)
-                      return 'Matric number is required';
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 14),
-
-                // Password
-                TextFormField(
-                  controller: _passC,
-                  obscureText: _obscurePass,
-                  style: const TextStyle(color: Colors.white),
-                  validator: (v) {
-                    if (v == null || v.trim().isEmpty)
-                      return 'Password is required';
-                    if (v.trim().length < 6)
-                      return 'Password must be at least 6 characters';
-                    return null;
-                  },
-                  decoration: _dec('Password', Icons.lock_outline).copyWith(
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        _obscurePass ? Icons.visibility_off : Icons.visibility,
-                        color: Colors.blue.shade300,
+    body: SizedBox.expand(
+      child: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFF0D47A1), Color(0xFF1565C0), Color(0xFF1E88E5)],
+          ),
+        ),
+        child: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(26, 24, 26, 40),
+            child: Form(
+              key: _fk,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // ── Back button ──────────────────────────────
+                  GestureDetector(
+                    onTap: () => Navigator.of(
+                      context,
+                    ).pushReplacement(fadeRoute(const LandingPage())),
+                    child: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.white24),
                       ),
-                      onPressed: () =>
-                          setState(() => _obscurePass = !_obscurePass),
+                      child: const Icon(
+                        Icons.arrow_back_ios_new,
+                        color: Colors.white,
+                        size: 18,
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 14),
+                  const SizedBox(height: 24),
 
-                // Confirm Password
-                TextFormField(
-                  controller: _confirmPassC,
-                  obscureText: _obscureConfirm,
-                  style: const TextStyle(color: Colors.white),
-                  validator: (v) {
-                    if (v == null || v.trim().isEmpty)
-                      return 'Please confirm your password';
-                    if (v.trim() != _passC.text.trim())
-                      return 'Passwords do not match';
-                    return null;
-                  },
-                  decoration: _dec('Confirm Password', Icons.lock_outline)
-                      .copyWith(
-                        suffixIcon: IconButton(
-                          icon: Icon(
-                            _obscureConfirm
-                                ? Icons.visibility_off
-                                : Icons.visibility,
-                            color: Colors.blue.shade300,
-                          ),
-                          onPressed: () => setState(
-                            () => _obscureConfirm = !_obscureConfirm,
-                          ),
+                  // ── G Logo ───────────────────────────────────
+                  Container(
+                    width: 72,
+                    height: 72,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.2),
+                          blurRadius: 20,
+                          offset: const Offset(0, 8),
                         ),
-                      ),
-                ),
-                const SizedBox(height: 14),
-
-                ComboField(
-                  controller: _schoolC,
-                  label: 'School / University',
-                  icon: Icons.account_balance,
-                  suggestions: _schools,
-                  dark: false,
-                  onSuggestionSelected: (_) => setState(() {
-                    _facC.clear();
-                    _deptC.clear();
-                  }),
-                  validator: (v) => (v == null || v.trim().isEmpty)
-                      ? 'Enter your school'
-                      : null,
-                ),
-                const SizedBox(height: 14),
-                ComboField(
-                  controller: _facC,
-                  label: 'Faculty',
-                  icon: Icons.account_balance_outlined,
-                  suggestions: _faculties,
-                  dark: false,
-                  onSuggestionSelected: (_) => setState(() => _deptC.clear()),
-                  validator: (v) => (v == null || v.trim().isEmpty)
-                      ? 'Enter your faculty'
-                      : null,
-                ),
-                const SizedBox(height: 14),
-                const SizedBox(height: 14),
-DropdownButtonFormField<String>(
-  value: _selectedLevel,
-  onChanged: (v) => setState(() => _selectedLevel = v!),
-  style: const TextStyle(color: Colors.white),
-  dropdownColor: Colors.blue.shade900,
-  decoration: _dec('Level', Icons.stairs_outlined),
-  items: _levels
-      .map((l) => DropdownMenuItem(
-            value: l,
-            child: Text('$l Level'),
-          ))
-      .toList(),
-  validator: (v) =>
-      (v == null || v.isEmpty) ? 'Select your level' : null,
-),
-                ComboField(
-                  controller: _deptC,
-                  label: 'Department',
-                  icon: Icons.school_outlined,
-                  suggestions: _depts,
-                  dark: false,
-                  validator: (v) => (v == null || v.trim().isEmpty)
-                      ? 'Enter your department'
-                      : null,
-                ),
-                const SizedBox(height: 32),
-
-                // Submit
-                SizedBox(
-                  width: double.infinity,
-                  height: 54,
-                  child: ElevatedButton(
-                    onPressed: _loading ? null : _submit,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: Colors.blue.shade800,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
+                      ],
                     ),
-                    child: _loading
-                        ? SizedBox(
-                            width: 22,
-                            height: 22,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2.5,
-                              color: Colors.blue.shade700,
-                            ),
-                          )
-                        : const Text(
-                            'Create Account',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-                // Divider
-                orDivider(),
-                const SizedBox(height: 16),
-
-                // Continue with Google
-                SizedBox(
-                  width: double.infinity,
-                  height: 54,
-                  child: GoogleButton(onPressed: _handleGoogleSignIn),
-                ),
-                const SizedBox(height: 28),
-
-                // Already have account
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Text(
-                      'Already have an account?  ',
-                      style: TextStyle(color: Colors.white60, fontSize: 14),
-                    ),
-                    GestureDetector(
-                      onTap: () => Navigator.of(
-                        context,
-                      ).pushReplacement(fadeRoute(const SignInScreen())),
+                    child: const Center(
                       child: Text(
-                        'Sign In',
+                        'G',
                         style: TextStyle(
-                          color: Colors.blue.shade200,
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          decoration: TextDecoration.underline,
-                          decorationColor: Colors.blue.shade200,
+                          fontSize: 42,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFF1565C0),
+                          height: 1,
                         ),
                       ),
                     ),
-                  ],
-                ),
-              ],
+                  ),
+                  const SizedBox(height: 20),
+
+                  // ── Title ────────────────────────────────────
+                  const Text(
+                    'Create Account',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 28,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  const Text(
+                    'Fill in your details to get started',
+                    style: TextStyle(color: Colors.white70, fontSize: 13),
+                  ),
+                  const SizedBox(height: 28),
+
+                  // ── Full Name ────────────────────────────────
+                  _field(
+                    _nameC,
+                    'Full Name',
+                    Icons.person_outline,
+                    cap: TextCapitalization.words,
+                    validator: (v) {
+                      if (v == null || v.trim().isEmpty)
+                        return 'Full name is required';
+                      if (v.trim().split(' ').length < 2)
+                        return 'Enter first and last name';
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 14),
+
+                  // ── Email ────────────────────────────────────
+                  _field(
+                    _emailC,
+                    'Email Address',
+                    Icons.email_outlined,
+                    keyboardType: TextInputType.emailAddress,
+                    validator: (v) {
+                      if (v == null || v.trim().isEmpty)
+                        return 'Email is required';
+                      if (!v.trim().contains('@'))
+                        return 'Email must contain @';
+                      if (!isValidEmail(v.trim())) return 'Enter a valid email';
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 14),
+
+                  // ── Matric Number ────────────────────────────
+                  _field(
+                    _matricC,
+                    'Matric Number',
+                    Icons.badge_outlined,
+                    cap: TextCapitalization.characters,
+                    validator: (v) {
+                      if (v == null || v.trim().isEmpty)
+                        return 'Matric number is required';
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 14),
+
+                  // ── Password ─────────────────────────────────
+                  TextFormField(
+                    controller: _passC,
+                    obscureText: _obscurePass,
+                    style: const TextStyle(color: Colors.white),
+                    validator: (v) {
+                      if (v == null || v.trim().isEmpty)
+                        return 'Password is required';
+                      if (v.trim().length < 6)
+                        return 'Password must be at least 6 characters';
+                      return null;
+                    },
+                    decoration: _dec('Password', Icons.lock_outline).copyWith(
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _obscurePass
+                              ? Icons.visibility_off
+                              : Icons.visibility,
+                          color: Colors.white60,
+                        ),
+                        onPressed: () =>
+                            setState(() => _obscurePass = !_obscurePass),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+
+                  // ── Confirm Password ─────────────────────────
+                  TextFormField(
+                    controller: _confirmPassC,
+                    obscureText: _obscureConfirm,
+                    style: const TextStyle(color: Colors.white),
+                    validator: (v) {
+                      if (v == null || v.trim().isEmpty)
+                        return 'Please confirm your password';
+                      if (v.trim() != _passC.text.trim())
+                        return 'Passwords do not match';
+                      return null;
+                    },
+                    decoration: _dec('Confirm Password', Icons.lock_outline)
+                        .copyWith(
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _obscureConfirm
+                                  ? Icons.visibility_off
+                                  : Icons.visibility,
+                              color: Colors.white60,
+                            ),
+                            onPressed: () => setState(
+                              () => _obscureConfirm = !_obscureConfirm,
+                            ),
+                          ),
+                        ),
+                  ),
+                  const SizedBox(height: 14),
+
+                  // ── School ───────────────────────────────────
+                  ComboField(
+                    controller: _schoolC,
+                    label: 'School / University',
+                    icon: Icons.account_balance,
+                    suggestions: _schools,
+                    dark: false,
+                    onSuggestionSelected: (_) => setState(() {
+                      _facC.clear();
+                      _deptC.clear();
+                    }),
+                    validator: (v) => (v == null || v.trim().isEmpty)
+                        ? 'Enter your school'
+                        : null,
+                  ),
+                  const SizedBox(height: 14),
+
+                  // ── Faculty ──────────────────────────────────
+                  ComboField(
+                    controller: _facC,
+                    label: 'Faculty',
+                    icon: Icons.account_balance_outlined,
+                    suggestions: _faculties,
+                    dark: false,
+                    onSuggestionSelected: (_) => setState(() => _deptC.clear()),
+                    validator: (v) => (v == null || v.trim().isEmpty)
+                        ? 'Enter your faculty'
+                        : null,
+                  ),
+                  const SizedBox(height: 14),
+
+                  // ── Department ───────────────────────────────
+                  ComboField(
+                    controller: _deptC,
+                    label: 'Department',
+                    icon: Icons.school_outlined,
+                    suggestions: _depts,
+                    dark: false,
+                    validator: (v) => (v == null || v.trim().isEmpty)
+                        ? 'Enter your department'
+                        : null,
+                  ),
+                  const SizedBox(height: 14),
+
+                  // ── Level ────────────────────────────────────
+                  DropdownButtonFormField<String>(
+                    value: _selectedLevel,
+                    onChanged: (v) => setState(() => _selectedLevel = v!),
+                    style: const TextStyle(color: Colors.white),
+                    dropdownColor: const Color(0xFF0D47A1),
+                    decoration: _dec('Level', Icons.stairs_outlined),
+                    items: _levels
+                        .map(
+                          (l) => DropdownMenuItem(
+                            value: l,
+                            child: Text('$l Level'),
+                          ),
+                        )
+                        .toList(),
+                    validator: (v) =>
+                        (v == null || v.isEmpty) ? 'Select your level' : null,
+                  ),
+                  const SizedBox(height: 32),
+
+                  // ── Create Account button ────────────────────
+                  SizedBox(
+                    width: double.infinity,
+                    height: 54,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.2),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: ElevatedButton(
+                        onPressed: _loading ? null : _submit,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.transparent,
+                          shadowColor: Colors.transparent,
+                          foregroundColor: const Color(0xFF0D47A1),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
+                        child: _loading
+                            ? const SizedBox(
+                                width: 22,
+                                height: 22,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2.5,
+                                  color: Color(0xFF0D47A1),
+                                ),
+                              )
+                            : const Text(
+                                'Create Account',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // ── Divider ──────────────────────────────────
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Divider(color: Colors.white.withOpacity(0.2)),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        child: Text(
+                          'or',
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.5),
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: Divider(color: Colors.white.withOpacity(0.2)),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  // ── Google button ────────────────────────────
+                  SizedBox(
+                    width: double.infinity,
+                    height: 54,
+                    child: GoogleButton(onPressed: _handleGoogleSignIn),
+                  ),
+                  const SizedBox(height: 28),
+
+                  // ── Sign in link ─────────────────────────────
+                  Center(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Text(
+                          'Already have an account?  ',
+                          style: TextStyle(color: Colors.white60, fontSize: 14),
+                        ),
+                        GestureDetector(
+                          onTap: () => Navigator.of(
+                            context,
+                          ).pushReplacement(fadeRoute(const SignInScreen())),
+                          child: const Text(
+                            'Sign In',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                              decoration: TextDecoration.underline,
+                              decorationColor: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -461,21 +560,30 @@ DropdownButtonFormField<String>(
 
   InputDecoration _dec(String label, IconData icon) => InputDecoration(
     labelText: label,
-    prefixIcon: Icon(icon, color: Colors.blue.shade300),
+    prefixIcon: Container(
+      margin: const EdgeInsets.all(10),
+      padding: const EdgeInsets.all(6),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Icon(icon, color: Colors.white, size: 18),
+    ),
     filled: true,
-    fillColor: Colors.white.withOpacity(0.08),
-    labelStyle: const TextStyle(color: Colors.white70),
+    fillColor: Colors.white.withOpacity(0.1),
+    labelStyle: const TextStyle(color: Colors.white60, fontSize: 14),
+    floatingLabelStyle: const TextStyle(color: Colors.white, fontSize: 13),
     border: OutlineInputBorder(
       borderRadius: BorderRadius.circular(14),
-      borderSide: const BorderSide(color: Colors.white24),
+      borderSide: BorderSide(color: Colors.white.withOpacity(0.2)),
     ),
     enabledBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(14),
-      borderSide: const BorderSide(color: Colors.white24),
+      borderSide: BorderSide(color: Colors.white.withOpacity(0.2)),
     ),
     focusedBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(14),
-      borderSide: BorderSide(color: Colors.blue.shade300, width: 2),
+      borderSide: const BorderSide(color: Colors.white, width: 1.5),
     ),
     errorBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(14),
@@ -489,11 +597,7 @@ DropdownButtonFormField<String>(
   );
 }
 
-
-
-
 // ──────────────────────────────────────────────────────────
 //  Alias so existing code that refers to LoginScreen still compiles
 // ──────────────────────────────────────────────────────────
 typedef LoginScreen = RegisterScreen;
-
