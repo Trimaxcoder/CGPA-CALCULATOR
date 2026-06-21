@@ -4,9 +4,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 
 import '../providers/theme_notifier.dart';
+import '../services/notification_store.dart';
 import 'homescreen.dart';
 import 'timetable_screen.dart';
 import 'settings_screen.dart';
+import 'notifications_screen.dart'; 
 
 class MainShell extends StatefulWidget {
   const MainShell({super.key});
@@ -222,14 +224,50 @@ class _HomeTabState extends State<_HomeTab> {
                         ),
                         const Spacer(),
                         // Notification bell
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.15),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: const Icon(Icons.notifications_outlined, color: Colors.white, size: 22),
-                        ),
+                      // Notification bell with badge
+Consumer<NotificationStore>(
+  builder: (context, store, _) {
+    final count = store.unreadCount;
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+      ),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(Icons.notifications_outlined, color: Colors.white, size: 22),
+          ),
+          if (count > 0)
+            Positioned(
+              top: -4,
+              right: -4,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+                decoration: BoxDecoration(
+                  color: Colors.red,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFF1565C0), width: 1.5),
+                ),
+                child: Text(
+                  count > 99 ? '99+' : '$count',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w800),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  },
+),
                       ],
                     ),
                     const SizedBox(height: 28),

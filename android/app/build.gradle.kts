@@ -4,7 +4,6 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
     id("com.google.gms.google-services")
 }
-
 android {
     namespace = "com.example.gradex"
     compileSdk = 36

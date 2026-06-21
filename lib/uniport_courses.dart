@@ -51,32 +51,202 @@ class UniversityData {
 // ─────────────────────────────────────────────────────────
 
 const List<String> nigerianUniversities = [
-  'University of Port Harcourt',
-  'Abia State University',
-  'Ahmadu Bello University',
-  'Ambrose Alli University',
-  'Bayero University Kano',
-  'Benson Idahosa University',
-  'Covenant University',
-  'Delta State University',
-  'Enugu State University of Science and Technology',
-  'Federal University of Technology Akure',
-  'Federal University of Technology Minna',
-  'Federal University of Technology Owerri',
-  'Imo State University',
-  'Lagos State University',
-  'Nnamdi Azikiwe University',
-  'Obafemi Awolowo University',
-  'Rivers State University',
-  'University of Abuja',
-  'University of Benin',
-  'University of Calabar',
-  'University of Ibadan',
-  'University of Ilorin',
-  'University of Jos',
-  'University of Lagos',
-  'University of Maiduguri',
-  'University of Nigeria Nsukka',
+  "University of Port Harcourt",
+  "Abia State University",
+  "Abubakar Tafawa Balewa University",
+  "Abdu Gusau Polytechnic",
+  "Abia State Polytechnic",
+  "Abraham Adesanya Polytechnic",
+  "Abubakar Tatari Ali Polytechnic",
+  "Achievers University",
+  "A.D. Rufa'i College of Education",
+  "Adamawa State Polytechnic",
+  "Adamawa State University",
+  "Adamu Augie College of Education",
+  "Adamu Tafawa Balewa College of Education",
+  "Adeleke University",
+  "Adekunle Ajasin University",
+  "Afe Babalola University",
+  "African University of Science and Technology",
+  "Ahmadu Bello University",
+  "Ajayi Crowther University",
+  "Akwa Ibom State College of Education",
+  "Akwa Ibom State Polytechnic",
+  "Akwa Ibom State University",
+  "Al-Hikmah University",
+  "Al-Qalam University",
+  "Alvan Ikoku Federal College of Education",
+  "Ambrose Alli University",
+  "American University of Nigeria",
+  "Aminu Saleh College of Education",
+  "Anambra State Polytechnic",
+  "Augustine University",
+  "Auchi Polytechnic",
+  "Babcock University",
+  "Bamidele Olumilua University of Education, Science and Technology",
+  "Bauchi State University",
+  "Bayelsa State Polytechnic",
+  "Bayero University Kano",
+  "Baze University",
+  "Bells University of Technology",
+  "Benson Idahosa University",
+  "Benue State Polytechnic",
+  "Bingham University",
+  "Bowen University",
+  "Caleb University",
+  "Captain Elechi Amadi Polytechnic",
+  "Caritas University",
+  "Chrisland University",
+  "Coal City University",
+  "College of Education Akwanga",
+  "College of Education Gindiri",
+  "College of Education Ikere-Ekiti",
+  "College of Education Warri",
+  "Covenant University",
+  "Crawford University",
+  "Crescent University",
+  "Delta State College of Education Mosogar",
+  "Delta State Polytechnic Ogwashi-Uku",
+  "Delta State Polytechnic Otefe-Oghara",
+  "Delta State Polytechnic Ozoro",
+  "Delta State University",
+  "Dominican University",
+  "Ebonyi State University",
+  "Edo State Polytechnic",
+  "Edwin Clark University",
+  "Ekiti State Polytechnic",
+  "Ekiti State University",
+  "Elizade University",
+  "Emmanuel Alayande College of Education",
+  "Enugu State Polytechnic",
+  "Enugu State University of Science and Technology",
+  "Evangel University",
+  "Federal College of Education Abeokuta",
+  "Federal College of Education Eha-Amufu",
+  "Federal College of Education Kano",
+  "Federal College of Education Katsina",
+  "Federal College of Education Kontagora",
+  "Federal College of Education Obudu",
+  "Federal College of Education Okene",
+  "Federal College of Education Pankshin",
+  "Federal College of Education Potiskum",
+  "Federal College of Education Special Oyo",
+  "Federal College of Education Technical Akoka",
+  "Federal College of Education Technical Asaba",
+  "Federal College of Education Technical Bichi",
+  "Federal College of Education Technical Gombe",
+  "Federal College of Education Technical Omoku",
+  "Federal College of Education Yola",
+  "Federal College of Education Zaria",
+  "Federal Polytechnic Ado-Ekiti",
+  "Federal Polytechnic Bali",
+  "Federal Polytechnic Bauchi",
+  "Federal Polytechnic Bida",
+  "Federal Polytechnic Damaturu",
+  "Federal Polytechnic Ede",
+  "Federal Polytechnic Idah",
+  "Federal Polytechnic Ilaro",
+  "Federal Polytechnic Kaura Namoda",
+  "Federal Polytechnic Mubi",
+  "Federal Polytechnic Nasarawa",
+  "Federal Polytechnic Nekede",
+  "Federal Polytechnic Offa",
+  "Federal Polytechnic Oko",
+  "Federal Polytechnic Ukana",
+  "Federal University Dutse",
+  "Federal University Dutsin-Ma",
+  "Federal University Gashua",
+  "Federal University Kashere",
+  "Federal University Lafia",
+  "Federal University Lokoja",
+  "Federal University Otuoke",
+  "Federal University Wukari",
+  "Federal University of Agriculture Abeokuta",
+  "Federal University of Agriculture Makurdi",
+  "Federal University of Petroleum Resources Effurun",
+  "Federal University of Technology Akure",
+  "Federal University of Technology Minna",
+  "Federal University of Technology Owerri",
+  "Fountain University",
+  "Godfrey Okoye University",
+  "Gregory University",
+  "Hussaini Adamu Federal Polytechnic",
+  "Igbinedion University",
+  "Imo State University",
+  "Institute of Management and Technology Enugu",
+  "Isa Kaita College of Education",
+  "Jigawa State College of Education Gumel",
+  "Joseph Ayo Babalola University",
+  "Kaduna Polytechnic",
+  "Kaduna State University",
+  "Kano State Polytechnic",
+  "Kano University of Science and Technology",
+  "Kashim Ibrahim College of Education",
+  "Kebbi State University of Science and Technology",
+  "Kenule Beeson Saro-Wiwa Polytechnic",
+  "Kogi State College of Education Ankpa",
+  "Kogi State Polytechnic",
+  "Kogi State University",
+  "Kwara State Polytechnic",
+  "Kwara State University",
+  "Ladoke Akintola University of Technology",
+  "Lagos State University",
+  "Landmark University",
+  "Lead City University",
+  "Madonna University",
+  "Michael Okpara University of Agriculture",
+  "Michael Otedola College of Primary Education",
+  "Moshood Abiola Polytechnic",
+  "Mountain Top University",
+  "Nasarawa State Polytechnic",
+  "Nasarawa State University",
+  "National Open University of Nigeria",
+  "Niger Delta University",
+  "Niger State Polytechnic",
+  "Nile University of Nigeria",
+  "Nnamdi Azikiwe University",
+  "Novena University",
+  "Nwafor Orizu College of Education",
+  "Obafemi Awolowo University",
+  "Oduduwa University",
+  "Ogun State Institute of Technology",
+  "Olabisi Onabanjo University",
+  "Osun State Polytechnic",
+  "Pan-Atlantic University",
+  "Plateau State Polytechnic",
+  "Ramat Polytechnic",
+  "Redeemer's University",
+  "Renaissance University",
+  "Rivers State Polytechnic",
+  "Rivers State University",
+  "Rufus Giwa Polytechnic",
+  "Sa'adatu Rimi College of Education",
+  "Samuel Adegboyega University",
+  "Shehu Shagari College of Education",
+  "Skyline University Nigeria",
+  "Sokoto State University",
+  "Tai Solarin College of Education",
+  "Tai Solarin University of Education",
+  "The Polytechnic Ibadan",
+  "Umar Suleiman College of Education",
+  "University of Abuja",
+  "University of Benin",
+  "University of Calabar",
+  "University of Ibadan",
+  "University of Ilorin",
+  "University of Jos",
+  "University of Lagos",
+  "University of Maiduguri",
+  "University of Nigeria Nsukka",
+  "University of Uyo",
+  "Usmanu Danfodiyo University",
+  "Veritas University",
+  "Waziri Umaru Federal Polytechnic",
+  "Yaba College of Technology",
+  "Yobe State Polytechnic",
+  "Yobe State University",
+  "Zamfara State College of Education Maru",
+  "Zamfara State University"
 ];
 
 // ─────────────────────────────────────────────────────────
@@ -120,176 +290,48 @@ const _gst300 = <CourseData>[
 const UniversityData uniportData = UniversityData(
   name: 'University of Port Harcourt',
   faculties: [
+
+
+
     // ── 1. AGRICULTURE ──
     FacultyData(
       name: 'Faculty of Agriculture',
       departments: [
         DepartmentData(
           name: 'Crop and Soil Science',
-          levels: [
-            LevelData(
-              level: '100',
-              semesters: [
-                SemesterData(
-                  label: 'First Semester',
-                  courses: [
-                    CourseData(
-                      code: 'AGR 101',
-                      title: 'Introduction to Agriculture',
-                      unit: 3,
-                    ),
-                    CourseData(
-                      code: 'BIO 101',
-                      title: 'General Biology I',
-                      unit: 3,
-                    ),
-                    CourseData(
-                      code: 'CHM 101',
-                      title: 'General Chemistry I',
-                      unit: 3,
-                    ),
-                    CourseData(
-                      code: 'MTH 101',
-                      title: 'Elementary Mathematics I',
-                      unit: 3,
-                    ),
-                    ..._gst100_1,
-                  ],
-                ),
-                SemesterData(
-                  label: 'Second Semester',
-                  courses: [
-                    CourseData(
-                      code: 'AGR 102',
-                      title: 'Fundamentals of Crop Production',
-                      unit: 3,
-                    ),
-                    CourseData(
-                      code: 'BIO 102',
-                      title: 'General Biology II',
-                      unit: 3,
-                    ),
-                    CourseData(
-                      code: 'STA 102',
-                      title: 'Introduction to Statistics',
-                      unit: 2,
-                    ),
-                    ..._gst100_2,
-                  ],
-                ),
-              ],
-            ),
-            LevelData(
-              level: '200',
-              semesters: [
-                SemesterData(
-                  label: 'First Semester',
-                  courses: [
-                    CourseData(
-                      code: 'CSS 201',
-                      title: 'Introduction to Soil Science',
-                      unit: 3,
-                    ),
-                    CourseData(
-                      code: 'CSS 203',
-                      title: 'Crop Physiology',
-                      unit: 3,
-                    ),
-                    CourseData(
-                      code: 'AGR 201',
-                      title: 'Agricultural Ecology',
-                      unit: 2,
-                    ),
-                    ..._gst200_1,
-                  ],
-                ),
-                SemesterData(
-                  label: 'Second Semester',
-                  courses: [
-                    CourseData(
-                      code: 'CSS 202',
-                      title: 'Soil Chemistry and Mineralogy',
-                      unit: 3,
-                    ),
-                    CourseData(code: 'CSS 204', title: 'Weed Science', unit: 3),
-                    ..._gst200_2,
-                  ],
-                ),
-              ],
-            ),
-            LevelData(
-              level: '300',
-              semesters: [
-                SemesterData(
-                  label: 'First Semester',
-                  courses: [
-                    CourseData(
-                      code: 'CSS 301',
-                      title: 'Soil Fertility and Plant Nutrition',
-                      unit: 3,
-                    ),
-                    CourseData(
-                      code: 'CSS 303',
-                      title: 'Crop Improvement I',
-                      unit: 3,
-                    ),
-                    ..._gst300,
-                  ],
-                ),
-                SemesterData(
-                  label: 'Second Semester',
-                  courses: [
-                    CourseData(
-                      code: 'CSS 302',
-                      title: 'Soil Conservation and Management',
-                      unit: 3,
-                    ),
-                    CourseData(
-                      code: 'CSS 304',
-                      title: 'Crop Protection',
-                      unit: 3,
-                    ),
-                  ],
-                ),
-              ],
-            ),
-            LevelData(
-              level: '400',
-              semesters: [
-                SemesterData(
-                  label: 'First Semester',
-                  courses: [
-                    CourseData(
-                      code: 'CSS 401',
-                      title: 'Advanced Soil Science',
-                      unit: 3,
-                    ),
-                    CourseData(
-                      code: 'CSS 403',
-                      title: 'Research Methods in Agriculture',
-                      unit: 3,
-                    ),
-                  ],
-                ),
-                SemesterData(
-                  label: 'Second Semester',
-                  courses: [
-                    CourseData(
-                      code: 'CSS 498',
-                      title: 'Research Project',
-                      unit: 6,
-                    ),
-                    CourseData(
-                      code: 'CSS 402',
-                      title: 'Land Evaluation and Use',
-                      unit: 3,
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ],
+          levels: [],
         ),
+          
+        DepartmentData(
+          name: 'Agricultural Economics and Agribusiness Management',
+          levels: [],
+        ),
+
+        DepartmentData(
+          name: 'Agricultural Extension and Development Studies',
+          levels: [],
+        ),
+
+          DepartmentData(
+          name: 'Agricultural Economics and Extension',
+          levels: [],
+        ),
+
+        DepartmentData(
+          name: 'Fisheries',
+          levels: [],
+        ),
+
+         DepartmentData(
+          name: 'Food, Nutrition and Home Science',
+          levels: [],
+        ),
+
+         DepartmentData(
+          name: 'Forestry and Wildlife Management',
+          levels: [],
+        ),
+
         DepartmentData(
           name: 'Animal Science',
           levels: [
@@ -444,232 +486,69 @@ const UniversityData uniportData = UniversityData(
       ],
     ),
 
-    // ── 2. ARTS ──
+
+
+
+
+    // ── 2. COMMUNICATION AND MEDIA STUDIES ──
     FacultyData(
-      name: 'Faculty of Arts',
+      name: 'Communication and Media Studies',
       departments: [
-        DepartmentData(
-          name: 'English and Literary Studies',
-          levels: [
-            LevelData(
-              level: '100',
-              semesters: [
-                SemesterData(
-                  label: 'First Semester',
-                  courses: [
-                    CourseData(
-                      code: 'ENG 101',
-                      title: 'Introduction to Literature',
-                      unit: 3,
-                    ),
-                    CourseData(
-                      code: 'ENG 103',
-                      title: 'Use of English I',
-                      unit: 2,
-                    ),
-                    ..._gst100_1,
-                  ],
-                ),
-                SemesterData(
-                  label: 'Second Semester',
-                  courses: [
-                    CourseData(
-                      code: 'ENG 102',
-                      title: 'Introduction to Linguistics',
-                      unit: 3,
-                    ),
-                    CourseData(
-                      code: 'ENG 104',
-                      title: 'Use of English II',
-                      unit: 2,
-                    ),
-                    ..._gst100_2,
-                  ],
-                ),
-              ],
-            ),
-            LevelData(
-              level: '200',
-              semesters: [
-                SemesterData(
-                  label: 'First Semester',
-                  courses: [
-                    CourseData(
-                      code: 'ENG 201',
-                      title: 'Introduction to Poetry',
-                      unit: 3,
-                    ),
-                    CourseData(code: 'ENG 203', title: 'Phonology', unit: 3),
-                    ..._gst200_1,
-                  ],
-                ),
-                SemesterData(
-                  label: 'Second Semester',
-                  courses: [
-                    CourseData(
-                      code: 'ENG 202',
-                      title: 'Introduction to Drama',
-                      unit: 3,
-                    ),
-                    CourseData(
-                      code: 'ENG 204',
-                      title: 'Morphology and Syntax',
-                      unit: 3,
-                    ),
-                    ..._gst200_2,
-                  ],
-                ),
-              ],
-            ),
-            LevelData(
-              level: '300',
-              semesters: [
-                SemesterData(
-                  label: 'First Semester',
-                  courses: [
-                    CourseData(
-                      code: 'ENG 301',
-                      title: 'African Literature in English',
-                      unit: 3,
-                    ),
-                    CourseData(code: 'ENG 303', title: 'Semantics', unit: 3),
-                    ..._gst300,
-                  ],
-                ),
-                SemesterData(
-                  label: 'Second Semester',
-                  courses: [
-                    CourseData(
-                      code: 'ENG 302',
-                      title: 'Caribbean Literature',
-                      unit: 3,
-                    ),
-                    CourseData(code: 'ENG 304', title: 'Stylistics', unit: 3),
-                  ],
-                ),
-              ],
-            ),
-            LevelData(
-              level: '400',
-              semesters: [
-                SemesterData(
-                  label: 'First Semester',
-                  courses: [
-                    CourseData(
-                      code: 'ENG 401',
-                      title: 'Research Methods in English',
-                      unit: 3,
-                    ),
-                    CourseData(
-                      code: 'ENG 403',
-                      title: 'Advanced Linguistics',
-                      unit: 3,
-                    ),
-                  ],
-                ),
-                SemesterData(
-                  label: 'Second Semester',
-                  courses: [
-                    CourseData(code: 'ENG 498', title: 'Long Essay', unit: 6),
-                    CourseData(
-                      code: 'ENG 402',
-                      title: 'Creative Writing',
-                      unit: 3,
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ],
-        ),
-        DepartmentData(
-          name: 'History and Diplomatic Studies',
-          levels: [
-            LevelData(
-              level: '100',
-              semesters: [
-                SemesterData(
-                  label: 'First Semester',
-                  courses: [
-                    CourseData(
-                      code: 'HIS 101',
-                      title: 'African History I',
-                      unit: 3,
-                    ),
-                    CourseData(
-                      code: 'HIS 103',
-                      title: 'Introduction to Diplomatic Studies',
-                      unit: 2,
-                    ),
-                    ..._gst100_1,
-                  ],
-                ),
-                SemesterData(
-                  label: 'Second Semester',
-                  courses: [
-                    CourseData(
-                      code: 'HIS 102',
-                      title: 'African History II',
-                      unit: 3,
-                    ),
-                    CourseData(
-                      code: 'HIS 104',
-                      title: 'World History',
-                      unit: 2,
-                    ),
-                    ..._gst100_2,
-                  ],
-                ),
-              ],
-            ),
-            LevelData(
-              level: '200',
-              semesters: [
-                SemesterData(
-                  label: 'First Semester',
-                  courses: [
-                    CourseData(
-                      code: 'HIS 201',
-                      title: 'History of West Africa I',
-                      unit: 3,
-                    ),
-                    CourseData(
-                      code: 'HIS 203',
-                      title: 'History of International Relations',
-                      unit: 3,
-                    ),
-                    ..._gst200_1,
-                  ],
-                ),
-                SemesterData(
-                  label: 'Second Semester',
-                  courses: [
-                    CourseData(
-                      code: 'HIS 202',
-                      title: 'History of West Africa II',
-                      unit: 3,
-                    ),
-                    CourseData(
-                      code: 'HIS 204',
-                      title: 'Nigerian History',
-                      unit: 3,
-                    ),
-                    ..._gst200_2,
-                  ],
-                ),
-              ],
-            ),
-          ],
-        ),
+        DepartmentData(name: 'Advertising and Public Relations', levels: []),
+        DepartmentData(name: 'Broadcasting', levels: []),
+        DepartmentData(name: 'Film and Multimedia Studies', levels: []),
+        DepartmentData(name: 'Journalism and Media Studies', levels: []),
       ],
     ),
 
-    // ── 3. EDUCATION ──
+
+    // ── 3. DENTISTRY ──
+    FacultyData(
+      name: 'Dentistry', 
+      departments: [
+        DepartmentData(name: 'Dentistry and Dental Surgery', levels: []),
+      ],
+    ),
+
+
+
+
+
+    // ── 4. SCHOOL OF SCIENCE LABORATORY TECHNOLOGY ──
+    FacultyData(
+      name: 'School of Science Laboratory Technology', 
+      departments: [
+        DepartmentData(name: 'Biochemistry and Chemistry Technology', levels: []),
+        DepartmentData(name: 'Biology and Biotechnology', levels: []),
+        DepartmentData(name: 'Biomedical Technology', levels: []),
+        DepartmentData(name: 'Geology and Mining Technology', levels: []),
+        DepartmentData(name: 'Industrial Chemistry and Petroleum Technology', levels: []),
+        DepartmentData(name: 'Microbiology Technology', levels: []),
+        DepartmentData(name: 'Physics with Electronic Technology', levels: []),
+        DepartmentData(name: 'Physics with Production Technology', levels: []),
+      ],
+    ),
+
+
+
+    // ── 5. SPORTS INSTITUTE ──
+    FacultyData(
+      name: 'Sports Institute', 
+      departments: [
+        DepartmentData(name: 'Sports Institute', levels: []),
+      ],
+    ),
+
+
+
+
+
+    // ── 6. EDUCATION ──
     FacultyData(
       name: 'Faculty of Education',
       departments: [
         DepartmentData(
-          name: 'Educational Management',
+          name: 'Educational Management and Planning',
           levels: [
             LevelData(
               level: '100',
@@ -826,10 +705,28 @@ const UniversityData uniportData = UniversityData(
             ),
           ],
         ),
+        DepartmentData(name: 'Adult and Non-formal Education', levels: []),
+        DepartmentData(name: 'Business Education', levels: []),
+        DepartmentData(name: 'Early Childhood and Primary Education', levels: []),
+        DepartmentData(name: 'Educational Foundations', levels: []),
+        DepartmentData(name: 'Sport and Exercise Science', levels: []),
+        DepartmentData(name: 'Educational Physhology, Guidance and Counselling', levels: []),
+        DepartmentData(name: 'Health Education and Promotion', levels: []),
+        DepartmentData(name: 'Health Promotion, Environmental and Safety Education', levels: []),
+        DepartmentData(name: 'Human Kinetics and Health Education', levels: []),
+        DepartmentData(name: 'Institute of Education', levels: []),
+        DepartmentData(name: 'Primary Eduction Studies', levels: []),
+        DepartmentData(name: 'Science Education', levels: []),
       ],
     ),
 
-    // ── 4. ENGINEERING ──
+
+
+
+
+
+
+    // ── 7. ENGINEERING ──
     FacultyData(
       name: 'Faculty of Engineering',
       departments: [
@@ -1089,7 +986,7 @@ const UniversityData uniportData = UniversityData(
           ],
         ),
         DepartmentData(
-          name: 'Electrical and Electronic Engineering',
+          name: 'Electrical Engineering',
           levels: [
             LevelData(
               level: '100',
@@ -1407,182 +1304,23 @@ const UniversityData uniportData = UniversityData(
             ),
           ],
         ),
+        DepartmentData(name: 'Electronic Engineering', levels: []),
+        DepartmentData(name: 'Engineering Management', levels: []),
+        DepartmentData(name: 'Environmental Engineering', levels: []),
+        DepartmentData(name: 'Gas Engineering', levels: []),
+        DepartmentData(name: 'Mechatronic Engineering', levels: []),
+        DepartmentData(name: 'Petroleum Engineering', levels: []),
+        DepartmentData(name: 'Computer Engineering', levels: []),
       ],
     ),
 
-    // ── 5. ENVIRONMENTAL SCIENCES ──
-    FacultyData(
-      name: 'Faculty of Environmental Sciences',
-      departments: [
-        DepartmentData(
-          name: 'Architecture',
-          levels: [
-            LevelData(
-              level: '100',
-              semesters: [
-                SemesterData(
-                  label: 'First Semester',
-                  courses: [
-                    CourseData(
-                      code: 'ARC 101',
-                      title: 'Introduction to Architecture',
-                      unit: 3,
-                    ),
-                    CourseData(
-                      code: 'ARC 103',
-                      title: 'Architectural Drawing',
-                      unit: 3,
-                    ),
-                    CourseData(
-                      code: 'MTH 101',
-                      title: 'Elementary Mathematics I',
-                      unit: 3,
-                    ),
-                    ..._gst100_1,
-                  ],
-                ),
-                SemesterData(
-                  label: 'Second Semester',
-                  courses: [
-                    CourseData(
-                      code: 'ARC 102',
-                      title: 'Architectural Design I',
-                      unit: 4,
-                    ),
-                    CourseData(
-                      code: 'ARC 104',
-                      title: 'Building Materials',
-                      unit: 2,
-                    ),
-                    ..._gst100_2,
-                  ],
-                ),
-              ],
-            ),
-            LevelData(
-              level: '200',
-              semesters: [
-                SemesterData(
-                  label: 'First Semester',
-                  courses: [
-                    CourseData(
-                      code: 'ARC 201',
-                      title: 'Architectural Design II',
-                      unit: 4,
-                    ),
-                    CourseData(
-                      code: 'ARC 203',
-                      title: 'Environmental Science',
-                      unit: 3,
-                    ),
-                    ..._gst200_1,
-                  ],
-                ),
-                SemesterData(
-                  label: 'Second Semester',
-                  courses: [
-                    CourseData(
-                      code: 'ARC 202',
-                      title: 'Architectural Design III',
-                      unit: 4,
-                    ),
-                    CourseData(
-                      code: 'ARC 204',
-                      title: 'Structural Systems',
-                      unit: 3,
-                    ),
-                    ..._gst200_2,
-                  ],
-                ),
-              ],
-            ),
-          ],
-        ),
-        DepartmentData(
-          name: 'Estate Management',
-          levels: [
-            LevelData(
-              level: '100',
-              semesters: [
-                SemesterData(
-                  label: 'First Semester',
-                  courses: [
-                    CourseData(
-                      code: 'EST 101',
-                      title: 'Introduction to Estate Management',
-                      unit: 3,
-                    ),
-                    CourseData(
-                      code: 'ECO 101',
-                      title: 'Introduction to Economics',
-                      unit: 3,
-                    ),
-                    ..._gst100_1,
-                  ],
-                ),
-                SemesterData(
-                  label: 'Second Semester',
-                  courses: [
-                    CourseData(
-                      code: 'EST 102',
-                      title: 'Building Technology',
-                      unit: 3,
-                    ),
-                    CourseData(
-                      code: 'ECO 102',
-                      title: 'Microeconomics I',
-                      unit: 3,
-                    ),
-                    ..._gst100_2,
-                  ],
-                ),
-              ],
-            ),
-            LevelData(
-              level: '200',
-              semesters: [
-                SemesterData(
-                  label: 'First Semester',
-                  courses: [
-                    CourseData(
-                      code: 'EST 201',
-                      title: 'Land Law and Administration',
-                      unit: 3,
-                    ),
-                    CourseData(
-                      code: 'EST 203',
-                      title: 'Property Valuation I',
-                      unit: 3,
-                    ),
-                    ..._gst200_1,
-                  ],
-                ),
-                SemesterData(
-                  label: 'Second Semester',
-                  courses: [
-                    CourseData(
-                      code: 'EST 202',
-                      title: 'Urban and Regional Planning',
-                      unit: 3,
-                    ),
-                    CourseData(
-                      code: 'EST 204',
-                      title: 'Property Valuation II',
-                      unit: 3,
-                    ),
-                    ..._gst200_2,
-                  ],
-                ),
-              ],
-            ),
-          ],
-        ),
-      ],
-    ),
 
-    // ── 6. HEALTH SCIENCES AND TECHNOLOGY ──
+   
+
+
+    // ── 8. ALLIED HEALTH SCIENCE ──
     FacultyData(
-      name: 'Faculty of Health Sciences and Technology',
+      name: 'Allied Health Science',
       departments: [
         DepartmentData(
           name: 'Medical Laboratory Science',
@@ -1668,86 +1406,14 @@ const UniversityData uniportData = UniversityData(
             ),
           ],
         ),
-        DepartmentData(
-          name: 'Nursing Science',
-          levels: [
-            LevelData(
-              level: '100',
-              semesters: [
-                SemesterData(
-                  label: 'First Semester',
-                  courses: [
-                    CourseData(
-                      code: 'NUR 101',
-                      title: 'Introduction to Nursing',
-                      unit: 3,
-                    ),
-                    CourseData(code: 'ANT 101', title: 'Anatomy I', unit: 3),
-                    CourseData(
-                      code: 'BIO 101',
-                      title: 'General Biology I',
-                      unit: 3,
-                    ),
-                    ..._gst100_1,
-                  ],
-                ),
-                SemesterData(
-                  label: 'Second Semester',
-                  courses: [
-                    CourseData(
-                      code: 'NUR 102',
-                      title: 'Fundamentals of Nursing Practice',
-                      unit: 4,
-                    ),
-                    CourseData(code: 'ANT 102', title: 'Anatomy II', unit: 3),
-                    ..._gst100_2,
-                  ],
-                ),
-              ],
-            ),
-            LevelData(
-              level: '200',
-              semesters: [
-                SemesterData(
-                  label: 'First Semester',
-                  courses: [
-                    CourseData(
-                      code: 'NUR 201',
-                      title: 'Adult Health Nursing I',
-                      unit: 3,
-                    ),
-                    CourseData(
-                      code: 'NUR 203',
-                      title: 'Pharmacology for Nurses',
-                      unit: 3,
-                    ),
-                    ..._gst200_1,
-                  ],
-                ),
-                SemesterData(
-                  label: 'Second Semester',
-                  courses: [
-                    CourseData(
-                      code: 'NUR 202',
-                      title: 'Adult Health Nursing II',
-                      unit: 3,
-                    ),
-                    CourseData(
-                      code: 'NUR 204',
-                      title: 'Community Health Nursing',
-                      unit: 3,
-                    ),
-                    ..._gst200_2,
-                  ],
-                ),
-              ],
-            ),
-          ],
-        ),
+        
       ],
     ),
 
-    // ── 7. HUMANITIES ──
+
+
+
+    // ── 9. HUMANITIES ──
     FacultyData(
       name: 'Faculty of Humanities',
       departments: [
@@ -1881,15 +1547,26 @@ const UniversityData uniportData = UniversityData(
             ),
           ],
         ),
+        DepartmentData(name: 'Comparative Literature', levels: []),
+        DepartmentData(name: 'English Studies', levels: []),
+        DepartmentData(name: 'Fine Arts and Designs', levels: []),
+        DepartmentData(name: 'Foriegn Languages and Literature', levels: []),
+        DepartmentData(name: 'Historic and Diplomatic Studies', levels: []),
+        DepartmentData(name: 'Linguistics and Communication Studies', levels: []),
+        DepartmentData(name: 'Music', levels: []),
+        DepartmentData(name: 'Religious and Cultural Studies', levels: []),
       ],
     ),
 
-    // ── 8. LAW ──
+
+
+
+    // ── 10. LAW ──
     FacultyData(
       name: 'Faculty of Law',
       departments: [
         DepartmentData(
-          name: 'Law',
+          name: 'Civil Law',
           levels: [
             LevelData(
               level: '100',
@@ -2085,7 +1762,12 @@ const UniversityData uniportData = UniversityData(
       ],
     ),
 
-    // ── 9. MANAGEMENT SCIENCES ──
+
+
+
+
+
+    // ── 11. MANAGEMENT SCIENCES ──
     FacultyData(
       name: 'Faculty of Management Sciences',
       departments: [
@@ -2410,85 +2092,27 @@ const UniversityData uniportData = UniversityData(
             ),
           ],
         ),
+        DepartmentData(name: 'Employment Relations and Human Resource Management', levels: []),
+        DepartmentData(name: 'Hospitality and Tourism Management', levels: []),
+        DepartmentData(name: 'Innovation and Entreprenuership', levels: []),
+        DepartmentData(name: 'Insurance', levels: []),
+        DepartmentData(name: 'Management', levels: []),
+        DepartmentData(name: 'Marketing', levels: []),
+        DepartmentData(name: 'Procurement Management', levels: []),
+        DepartmentData(name: 'Project Management', levels: []),
       ],
+      
     ),
 
-    // ── 10. COLLEGE OF MEDICINE ──
+
+
+
+
+
+    // ── 12. CLINICAL SCIENCES ──
     FacultyData(
-      name: 'College of Medicine',
+      name: 'Clinical Sciences',
       departments: [
-        DepartmentData(
-          name: 'Dentistry',
-          levels: [
-            LevelData(
-              level: '100',
-              semesters: [
-                SemesterData(
-                  label: 'First Semester',
-                  courses: [
-                    CourseData(
-                      code: 'DEN 101',
-                      title: 'Introduction to Dental Science',
-                      unit: 2,
-                    ),
-                    CourseData(
-                      code: 'BIO 101',
-                      title: 'General Biology I',
-                      unit: 3,
-                    ),
-                    CourseData(
-                      code: 'CHM 101',
-                      title: 'General Chemistry I',
-                      unit: 3,
-                    ),
-                    ..._gst100_1,
-                  ],
-                ),
-                SemesterData(
-                  label: 'Second Semester',
-                  courses: [
-                    CourseData(code: 'ANT 102', title: 'Anatomy I', unit: 4),
-                    CourseData(
-                      code: 'BCH 102',
-                      title: 'Biochemistry I',
-                      unit: 3,
-                    ),
-                    ..._gst100_2,
-                  ],
-                ),
-              ],
-            ),
-            LevelData(
-              level: '200',
-              semesters: [
-                SemesterData(
-                  label: 'First Semester',
-                  courses: [
-                    CourseData(code: 'DEN 201', title: 'Oral Anatomy', unit: 3),
-                    CourseData(code: 'ANT 201', title: 'Anatomy II', unit: 3),
-                    ..._gst200_1,
-                  ],
-                ),
-                SemesterData(
-                  label: 'Second Semester',
-                  courses: [
-                    CourseData(
-                      code: 'DEN 202',
-                      title: 'Oral Histology',
-                      unit: 3,
-                    ),
-                    CourseData(
-                      code: 'PHS 202',
-                      title: 'Physiology II',
-                      unit: 3,
-                    ),
-                    ..._gst200_2,
-                  ],
-                ),
-              ],
-            ),
-          ],
-        ),
         DepartmentData(
           name: 'Medicine and Surgery',
           levels: [
@@ -2577,282 +2201,58 @@ const UniversityData uniportData = UniversityData(
             ),
           ],
         ),
+        DepartmentData(name: 'Anestheology', levels: []),
+        DepartmentData(name: 'Mental Health', levels: []),
+        DepartmentData(name: 'Nursing Science', levels: []),
+        DepartmentData(name: 'Obstetrics and Gynaecology', levels: []),
+        DepartmentData(name: 'Paediatrics and Child Health', levels: []),
+        DepartmentData(name: 'Preventive and Social Medicine', levels: []),
+        DepartmentData(name: 'Radiology', levels: []),
+        DepartmentData(name: 'Sports Medicine', levels: []),
       ],
     ),
 
-    // ── 11. PHARMACY ──
+
+
+    // ── 13. BASIC MEDICAL SCIENCES ──
     FacultyData(
-      name: 'Faculty of Pharmacy',
+      name: 'Basic Medical Sciences',
       departments: [
-        DepartmentData(
-          name: 'Pharmacy',
-          levels: [
-            LevelData(
-              level: '100',
-              semesters: [
-                SemesterData(
-                  label: 'First Semester',
-                  courses: [
-                    CourseData(
-                      code: 'PHM 101',
-                      title: 'Introduction to Pharmacy',
-                      unit: 2,
-                    ),
-                    CourseData(
-                      code: 'CHM 101',
-                      title: 'General Chemistry I',
-                      unit: 3,
-                    ),
-                    CourseData(
-                      code: 'BIO 101',
-                      title: 'General Biology I',
-                      unit: 3,
-                    ),
-                    CourseData(
-                      code: 'MTH 101',
-                      title: 'Elementary Mathematics I',
-                      unit: 3,
-                    ),
-                    ..._gst100_1,
-                  ],
-                ),
-                SemesterData(
-                  label: 'Second Semester',
-                  courses: [
-                    CourseData(
-                      code: 'PHM 102',
-                      title: 'Pharmaceutical Botany',
-                      unit: 3,
-                    ),
-                    CourseData(
-                      code: 'CHM 102',
-                      title: 'General Chemistry II',
-                      unit: 3,
-                    ),
-                    CourseData(
-                      code: 'BIO 102',
-                      title: 'General Biology II',
-                      unit: 3,
-                    ),
-                    ..._gst100_2,
-                  ],
-                ),
-              ],
-            ),
-            LevelData(
-              level: '200',
-              semesters: [
-                SemesterData(
-                  label: 'First Semester',
-                  courses: [
-                    CourseData(
-                      code: 'PHM 201',
-                      title: 'Pharmaceutics I',
-                      unit: 3,
-                    ),
-                    CourseData(
-                      code: 'PHM 203',
-                      title: 'Pharmacognosy I',
-                      unit: 3,
-                    ),
-                    CourseData(code: 'BCH 201', title: 'Biochemistry', unit: 3),
-                    ..._gst200_1,
-                  ],
-                ),
-                SemesterData(
-                  label: 'Second Semester',
-                  courses: [
-                    CourseData(
-                      code: 'PHM 202',
-                      title: 'Pharmaceutics II',
-                      unit: 3,
-                    ),
-                    CourseData(
-                      code: 'PHM 204',
-                      title: 'Pharmaceutical Chemistry',
-                      unit: 3,
-                    ),
-                    ..._gst200_2,
-                  ],
-                ),
-              ],
-            ),
-          ],
-        ),
+        DepartmentData(name: 'Anatomical Pathology', levels: []),
+        DepartmentData(name: 'Chemical Pathology', levels: []),
+        DepartmentData(name: 'Haematology and Immunology', levels: []),
+        DepartmentData(name: 'Human Anatomy', levels: []),
+        DepartmentData(name: 'Human Physiology', levels: []),
+        DepartmentData(name: 'Medical Microbiology and Parasitology', levels: []),
+        DepartmentData(name: 'Pharmacology', levels: []),
       ],
     ),
 
-    // ── 12. PETROLEUM AND ENERGY STUDIES ──
+
+
+
+
+
+    // ── 14. PHARMACEUTICAL SCIENCES ──
     FacultyData(
-      name: 'Faculty of Petroleum and Energy Studies',
+      name: 'Pharmaceutical Sciences',
       departments: [
-        DepartmentData(
-          name: 'Geology',
-          levels: [
-            LevelData(
-              level: '100',
-              semesters: [
-                SemesterData(
-                  label: 'First Semester',
-                  courses: [
-                    CourseData(
-                      code: 'GEO 101',
-                      title: 'Physical Geology',
-                      unit: 3,
-                    ),
-                    CourseData(
-                      code: 'CHM 101',
-                      title: 'General Chemistry I',
-                      unit: 3,
-                    ),
-                    CourseData(
-                      code: 'MTH 101',
-                      title: 'Elementary Mathematics I',
-                      unit: 3,
-                    ),
-                    ..._gst100_1,
-                  ],
-                ),
-                SemesterData(
-                  label: 'Second Semester',
-                  courses: [
-                    CourseData(
-                      code: 'GEO 102',
-                      title: 'Historical Geology',
-                      unit: 3,
-                    ),
-                    CourseData(code: 'GEO 104', title: 'Mineralogy', unit: 3),
-                    ..._gst100_2,
-                  ],
-                ),
-              ],
-            ),
-            LevelData(
-              level: '200',
-              semesters: [
-                SemesterData(
-                  label: 'First Semester',
-                  courses: [
-                    CourseData(
-                      code: 'GEO 201',
-                      title: 'Structural Geology',
-                      unit: 3,
-                    ),
-                    CourseData(code: 'GEO 203', title: 'Petrology I', unit: 3),
-                    ..._gst200_1,
-                  ],
-                ),
-                SemesterData(
-                  label: 'Second Semester',
-                  courses: [
-                    CourseData(code: 'GEO 202', title: 'Stratigraphy', unit: 3),
-                    CourseData(code: 'GEO 204', title: 'Geochemistry', unit: 3),
-                    ..._gst200_2,
-                  ],
-                ),
-              ],
-            ),
-          ],
-        ),
-        DepartmentData(
-          name: 'Petroleum Engineering',
-          levels: [
-            LevelData(
-              level: '100',
-              semesters: [
-                SemesterData(
-                  label: 'First Semester',
-                  courses: [
-                    CourseData(
-                      code: 'MTH 101',
-                      title: 'Elementary Mathematics I',
-                      unit: 3,
-                    ),
-                    CourseData(
-                      code: 'CHM 101',
-                      title: 'General Chemistry I',
-                      unit: 3,
-                    ),
-                    CourseData(
-                      code: 'PHY 101',
-                      title: 'General Physics I',
-                      unit: 3,
-                    ),
-                    CourseData(
-                      code: 'PET 101',
-                      title: 'Introduction to Petroleum Engineering',
-                      unit: 2,
-                    ),
-                    ..._gst100_1,
-                  ],
-                ),
-                SemesterData(
-                  label: 'Second Semester',
-                  courses: [
-                    CourseData(
-                      code: 'MTH 102',
-                      title: 'Elementary Mathematics II',
-                      unit: 3,
-                    ),
-                    CourseData(
-                      code: 'GEO 102',
-                      title: 'Fundamentals of Geology',
-                      unit: 3,
-                    ),
-                    CourseData(
-                      code: 'PET 102',
-                      title: 'Petroleum Exploration',
-                      unit: 2,
-                    ),
-                    ..._gst100_2,
-                  ],
-                ),
-              ],
-            ),
-            LevelData(
-              level: '200',
-              semesters: [
-                SemesterData(
-                  label: 'First Semester',
-                  courses: [
-                    CourseData(
-                      code: 'PET 201',
-                      title: 'Reservoir Engineering I',
-                      unit: 3,
-                    ),
-                    CourseData(
-                      code: 'PET 203',
-                      title: 'Drilling Engineering I',
-                      unit: 3,
-                    ),
-                    CourseData(
-                      code: 'PET 205',
-                      title: 'Fluid Mechanics',
-                      unit: 3,
-                    ),
-                    ..._gst200_1,
-                  ],
-                ),
-                SemesterData(
-                  label: 'Second Semester',
-                  courses: [
-                    CourseData(
-                      code: 'PET 202',
-                      title: 'Reservoir Engineering II',
-                      unit: 3,
-                    ),
-                    CourseData(code: 'PET 204', title: 'Well Logging', unit: 3),
-                    ..._gst200_2,
-                  ],
-                ),
-              ],
-            ),
-          ],
-        ),
+       DepartmentData(name: 'Clinical Pharmacy and Management', levels: []),
+       DepartmentData(name: 'Experimental Pharmacology and Toxicology', levels: []),
+       DepartmentData(name: 'Natural Medicine Technology', levels: []),
+       DepartmentData(name: 'Pharmaceutical and Medicinal Chemistry', levels: []),
+       DepartmentData(name: 'Pharmaceutical Microbiology and Biotechnology', levels: []),
+       DepartmentData(name: 'Pharmaceutics and Pharmaceutical Technology', levels: []),
+       DepartmentData(name: 'Pharmacognosy and Polytotherapy', levels: []),
       ],
     ),
 
-    // ── 13. SCIENCE ──
+
+
+
+
+
+    // ── 15. SCIENCE ──
     FacultyData(
       name: 'Faculty of Science',
       departments: [
@@ -2956,7 +2356,7 @@ const UniversityData uniportData = UniversityData(
           ],
         ),
         DepartmentData(
-          name: 'Chemistry',
+          name: 'Pure and Industrial Chemistry',
           levels: [
             LevelData(
               level: '100',
@@ -3048,221 +2448,6 @@ const UniversityData uniportData = UniversityData(
                       unit: 3,
                     ),
                     ..._gst200_2,
-                  ],
-                ),
-              ],
-            ),
-          ],
-        ),
-        DepartmentData(
-          name: 'Computer Science',
-          levels: [
-            LevelData(
-              level: '100',
-              semesters: [
-                SemesterData(
-                  label: 'First Semester',
-                  courses: [
-                    CourseData(
-                      code: 'CSC 101',
-                      title: 'Introduction to Computer Science',
-                      unit: 3,
-                    ),
-                    CourseData(
-                      code: 'MTH 101',
-                      title: 'Elementary Mathematics I',
-                      unit: 3,
-                    ),
-                    CourseData(
-                      code: 'PHY 101',
-                      title: 'General Physics I',
-                      unit: 3,
-                    ),
-                    CourseData(
-                      code: 'CSC 103',
-                      title: 'Computer Lab Practicals I',
-                      unit: 1,
-                    ),
-                    ..._gst100_1,
-                  ],
-                ),
-                SemesterData(
-                  label: 'Second Semester',
-                  courses: [
-                    CourseData(
-                      code: 'CSC 102',
-                      title: 'Introduction to Programming',
-                      unit: 3,
-                    ),
-                    CourseData(
-                      code: 'MTH 102',
-                      title: 'Elementary Mathematics II',
-                      unit: 3,
-                    ),
-                    CourseData(
-                      code: 'CSC 104',
-                      title: 'Computer Lab Practicals II',
-                      unit: 1,
-                    ),
-                    CourseData(
-                      code: 'STA 102',
-                      title: 'Introduction to Statistics',
-                      unit: 2,
-                    ),
-                    ..._gst100_2,
-                  ],
-                ),
-              ],
-            ),
-            LevelData(
-              level: '200',
-              semesters: [
-                SemesterData(
-                  label: 'First Semester',
-                  courses: [
-                    CourseData(
-                      code: 'CSC 201',
-                      title: 'Structured Programming',
-                      unit: 3,
-                    ),
-                    CourseData(
-                      code: 'CSC 203',
-                      title: 'Data Structures and Algorithms',
-                      unit: 3,
-                    ),
-                    CourseData(
-                      code: 'CSC 205',
-                      title: 'Discrete Mathematics',
-                      unit: 3,
-                    ),
-                    CourseData(
-                      code: 'MTH 203',
-                      title: 'Linear Algebra I',
-                      unit: 3,
-                    ),
-                    ..._gst200_1,
-                  ],
-                ),
-                SemesterData(
-                  label: 'Second Semester',
-                  courses: [
-                    CourseData(
-                      code: 'CSC 202',
-                      title: 'Object-Oriented Programming',
-                      unit: 3,
-                    ),
-                    CourseData(
-                      code: 'CSC 204',
-                      title: 'Computer Organization',
-                      unit: 3,
-                    ),
-                    CourseData(
-                      code: 'CSC 206',
-                      title: 'Operating Systems I',
-                      unit: 3,
-                    ),
-                    ..._gst200_2,
-                  ],
-                ),
-              ],
-            ),
-            LevelData(
-              level: '300',
-              semesters: [
-                SemesterData(
-                  label: 'First Semester',
-                  courses: [
-                    CourseData(
-                      code: 'CSC 301',
-                      title: 'Database Systems',
-                      unit: 3,
-                    ),
-                    CourseData(
-                      code: 'CSC 303',
-                      title: 'Computer Networks',
-                      unit: 3,
-                    ),
-                    CourseData(
-                      code: 'CSC 305',
-                      title: 'Software Engineering',
-                      unit: 3,
-                    ),
-                    CourseData(
-                      code: 'CSC 307',
-                      title: 'Algorithm Analysis',
-                      unit: 3,
-                    ),
-                    ..._gst300,
-                  ],
-                ),
-                SemesterData(
-                  label: 'Second Semester',
-                  courses: [
-                    CourseData(
-                      code: 'CSC 302',
-                      title: 'Compiler Construction',
-                      unit: 3,
-                    ),
-                    CourseData(
-                      code: 'CSC 304',
-                      title: 'Artificial Intelligence',
-                      unit: 3,
-                    ),
-                    CourseData(
-                      code: 'CSC 306',
-                      title: 'Web Technologies',
-                      unit: 3,
-                    ),
-                    CourseData(
-                      code: 'CSC 308',
-                      title: 'Human-Computer Interaction',
-                      unit: 3,
-                    ),
-                  ],
-                ),
-              ],
-            ),
-            LevelData(
-              level: '400',
-              semesters: [
-                SemesterData(
-                  label: 'First Semester',
-                  courses: [
-                    CourseData(
-                      code: 'CSC 401',
-                      title: 'Machine Learning',
-                      unit: 3,
-                    ),
-                    CourseData(
-                      code: 'CSC 403',
-                      title: 'Information Security',
-                      unit: 3,
-                    ),
-                    CourseData(
-                      code: 'CSC 405',
-                      title: 'Mobile Computing',
-                      unit: 3,
-                    ),
-                  ],
-                ),
-                SemesterData(
-                  label: 'Second Semester',
-                  courses: [
-                    CourseData(
-                      code: 'CSC 498',
-                      title: 'Research Project',
-                      unit: 6,
-                    ),
-                    CourseData(
-                      code: 'CSC 402',
-                      title: 'Cloud Computing',
-                      unit: 3,
-                    ),
-                    CourseData(
-                      code: 'CSC 404',
-                      title: 'Distributed Systems',
-                      unit: 3,
-                    ),
                   ],
                 ),
               ],
@@ -3654,10 +2839,20 @@ const UniversityData uniportData = UniversityData(
             ),
           ],
         ),
+        DepartmentData(name: 'Animal and Environmental Biology', levels: []),
+        DepartmentData(name: 'Geology', levels: []),
+        DepartmentData(name: 'Microbiology', levels: []),
+        DepartmentData(name: 'Plant Science and Biotechnology', levels: []),
       ],
     ),
 
-    // ── 14. SOCIAL SCIENCES ──
+
+
+
+
+
+
+    // ── 16. SOCIAL SCIENCES ──
     FacultyData(
       name: 'Faculty of Social Sciences',
       departments: [
@@ -3827,86 +3022,31 @@ const UniversityData uniportData = UniversityData(
           ],
         ),
         DepartmentData(
-          name: 'Political and Administrative Studies',
-          levels: [
-            LevelData(
-              level: '100',
-              semesters: [
-                SemesterData(
-                  label: 'First Semester',
-                  courses: [
-                    CourseData(
-                      code: 'PAS 101',
-                      title: 'Introduction to Political Science',
-                      unit: 3,
-                    ),
-                    CourseData(
-                      code: 'PAS 103',
-                      title: 'Introduction to Public Administration',
-                      unit: 3,
-                    ),
-                    ..._gst100_1,
-                  ],
-                ),
-                SemesterData(
-                  label: 'Second Semester',
-                  courses: [
-                    CourseData(
-                      code: 'PAS 102',
-                      title: 'Comparative Politics',
-                      unit: 3,
-                    ),
-                    CourseData(
-                      code: 'PAS 104',
-                      title: 'Nigerian Government and Politics',
-                      unit: 3,
-                    ),
-                    ..._gst100_2,
-                  ],
-                ),
-              ],
-            ),
-            LevelData(
-              level: '200',
-              semesters: [
-                SemesterData(
-                  label: 'First Semester',
-                  courses: [
-                    CourseData(
-                      code: 'PAS 201',
-                      title: 'Political Theory I',
-                      unit: 3,
-                    ),
-                    CourseData(
-                      code: 'PAS 203',
-                      title: 'International Relations',
-                      unit: 3,
-                    ),
-                    ..._gst200_1,
-                  ],
-                ),
-                SemesterData(
-                  label: 'Second Semester',
-                  courses: [
-                    CourseData(
-                      code: 'PAS 202',
-                      title: 'Political Theory II',
-                      unit: 3,
-                    ),
-                    CourseData(
-                      code: 'PAS 204',
-                      title: 'African Politics',
-                      unit: 3,
-                    ),
-                    ..._gst200_2,
-                  ],
-                ),
-              ],
-            ),
-          ],
+          name: 'Political Science and Administrative Studies',
+          levels: [],
         ),
         DepartmentData(
           name: 'Sociology',
+          levels: [],
+        ),
+        DepartmentData(name: 'Geography and Environmental Management', levels: []),
+        DepartmentData(name: 'Library and Infomation Science', levels: []),
+        DepartmentData(name: 'Public Administration', levels: []),
+        DepartmentData(name: 'Social Works', levels: []),
+
+      ],
+    ),
+
+
+
+
+
+// ── 17. COMPUTING ──
+    FacultyData(
+      name: 'Computing', 
+      departments: [
+        DepartmentData(
+          name: 'Computer Science',
           levels: [
             LevelData(
               level: '100',
@@ -3915,14 +3055,24 @@ const UniversityData uniportData = UniversityData(
                   label: 'First Semester',
                   courses: [
                     CourseData(
-                      code: 'SOC 101',
-                      title: 'Introduction to Sociology',
+                      code: 'CSC 101',
+                      title: 'Introduction to Computer Science',
                       unit: 3,
                     ),
                     CourseData(
-                      code: 'SOC 103',
-                      title: 'Social Anthropology',
-                      unit: 2,
+                      code: 'MTH 101',
+                      title: 'Elementary Mathematics I',
+                      unit: 3,
+                    ),
+                    CourseData(
+                      code: 'PHY 101',
+                      title: 'General Physics I',
+                      unit: 3,
+                    ),
+                    CourseData(
+                      code: 'CSC 103',
+                      title: 'Computer Lab Practicals I',
+                      unit: 1,
                     ),
                     ..._gst100_1,
                   ],
@@ -3931,13 +3081,23 @@ const UniversityData uniportData = UniversityData(
                   label: 'Second Semester',
                   courses: [
                     CourseData(
-                      code: 'SOC 102',
-                      title: 'Social Psychology',
+                      code: 'CSC 102',
+                      title: 'Introduction to Programming',
                       unit: 3,
                     ),
                     CourseData(
-                      code: 'SOC 104',
-                      title: 'Nigerian Society and Culture',
+                      code: 'MTH 102',
+                      title: 'Elementary Mathematics II',
+                      unit: 3,
+                    ),
+                    CourseData(
+                      code: 'CSC 104',
+                      title: 'Computer Lab Practicals II',
+                      unit: 1,
+                    ),
+                    CourseData(
+                      code: 'STA 102',
+                      title: 'Introduction to Statistics',
                       unit: 2,
                     ),
                     ..._gst100_2,
@@ -3952,13 +3112,23 @@ const UniversityData uniportData = UniversityData(
                   label: 'First Semester',
                   courses: [
                     CourseData(
-                      code: 'SOC 201',
-                      title: 'Social Theory I',
+                      code: 'CSC 201',
+                      title: 'Structured Programming',
                       unit: 3,
                     ),
                     CourseData(
-                      code: 'SOC 203',
-                      title: 'Social Research Methods',
+                      code: 'CSC 203',
+                      title: 'Data Structures and Algorithms',
+                      unit: 3,
+                    ),
+                    CourseData(
+                      code: 'CSC 205',
+                      title: 'Discrete Mathematics',
+                      unit: 3,
+                    ),
+                    CourseData(
+                      code: 'MTH 203',
+                      title: 'Linear Algebra I',
                       unit: 3,
                     ),
                     ..._gst200_1,
@@ -3968,13 +3138,18 @@ const UniversityData uniportData = UniversityData(
                   label: 'Second Semester',
                   courses: [
                     CourseData(
-                      code: 'SOC 202',
-                      title: 'Social Theory II',
+                      code: 'CSC 202',
+                      title: 'Object-Oriented Programming',
                       unit: 3,
                     ),
                     CourseData(
-                      code: 'SOC 204',
-                      title: 'Sociology of Development',
+                      code: 'CSC 204',
+                      title: 'Computer Organization',
+                      unit: 3,
+                    ),
+                    CourseData(
+                      code: 'CSC 206',
+                      title: 'Operating Systems I',
                       unit: 3,
                     ),
                     ..._gst200_2,
@@ -3982,119 +3157,123 @@ const UniversityData uniportData = UniversityData(
                 ),
               ],
             ),
+            LevelData(
+              level: '300',
+              semesters: [
+                SemesterData(
+                  label: 'First Semester',
+                  courses: [
+                    CourseData(
+                      code: 'CSC 301',
+                      title: 'Database Systems',
+                      unit: 3,
+                    ),
+                    CourseData(
+                      code: 'CSC 303',
+                      title: 'Computer Networks',
+                      unit: 3,
+                    ),
+                    CourseData(
+                      code: 'CSC 305',
+                      title: 'Software Engineering',
+                      unit: 3,
+                    ),
+                    CourseData(
+                      code: 'CSC 307',
+                      title: 'Algorithm Analysis',
+                      unit: 3,
+                    ),
+                    ..._gst300,
+                  ],
+                ),
+                SemesterData(
+                  label: 'Second Semester',
+                  courses: [
+                    CourseData(
+                      code: 'CSC 302',
+                      title: 'Compiler Construction',
+                      unit: 3,
+                    ),
+                    CourseData(
+                      code: 'CSC 304',
+                      title: 'Artificial Intelligence',
+                      unit: 3,
+                    ),
+                    CourseData(
+                      code: 'CSC 306',
+                      title: 'Web Technologies',
+                      unit: 3,
+                    ),
+                    CourseData(
+                      code: 'CSC 308',
+                      title: 'Human-Computer Interaction',
+                      unit: 3,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            LevelData(
+              level: '400',
+              semesters: [
+                SemesterData(
+                  label: 'First Semester',
+                  courses: [
+                    CourseData(
+                      code: 'CSC 401',
+                      title: 'Machine Learning',
+                      unit: 3,
+                    ),
+                    CourseData(
+                      code: 'CSC 403',
+                      title: 'Information Security',
+                      unit: 3,
+                    ),
+                    CourseData(
+                      code: 'CSC 405',
+                      title: 'Mobile Computing',
+                      unit: 3,
+                    ),
+                  ],
+                ),
+                SemesterData(
+                  label: 'Second Semester',
+                  courses: [
+                    CourseData(
+                      code: 'CSC 498',
+                      title: 'Research Project',
+                      unit: 6,
+                    ),
+                    CourseData(
+                      code: 'CSC 402',
+                      title: 'Cloud Computing',
+                      unit: 3,
+                    ),
+                    CourseData(
+                      code: 'CSC 404',
+                      title: 'Distributed Systems',
+                      unit: 3,
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ],
         ),
-      ],
+        DepartmentData(name: 'Cyber Security', levels: []),
+        DepartmentData(name: 'Information Technology', levels: []),
+      ],   
     ),
 
-    // ── 15. GRADUATE SCHOOL OF MANAGEMENT ──
-    FacultyData(
-      name: 'Graduate School of Management',
-      departments: [
-        DepartmentData(
-          name: 'Master of Business Administration',
-          levels: [
-            LevelData(
-              level: '100',
-              semesters: [
-                SemesterData(
-                  label: 'First Semester',
-                  courses: [
-                    CourseData(
-                      code: 'MBA 501',
-                      title: 'Managerial Economics',
-                      unit: 3,
-                    ),
-                    CourseData(
-                      code: 'MBA 503',
-                      title: 'Financial Accounting for Managers',
-                      unit: 3,
-                    ),
-                    CourseData(
-                      code: 'MBA 505',
-                      title: 'Organizational Theory',
-                      unit: 3,
-                    ),
-                    CourseData(
-                      code: 'MBA 507',
-                      title: 'Business Research Methods',
-                      unit: 3,
-                    ),
-                  ],
-                ),
-                SemesterData(
-                  label: 'Second Semester',
-                  courses: [
-                    CourseData(
-                      code: 'MBA 502',
-                      title: 'Marketing Management',
-                      unit: 3,
-                    ),
-                    CourseData(
-                      code: 'MBA 504',
-                      title: 'Financial Management',
-                      unit: 3,
-                    ),
-                    CourseData(
-                      code: 'MBA 506',
-                      title: 'Human Resource Management',
-                      unit: 3,
-                    ),
-                    CourseData(
-                      code: 'MBA 508',
-                      title: 'Operations Management',
-                      unit: 3,
-                    ),
-                  ],
-                ),
-              ],
-            ),
-            LevelData(
-              level: '200',
-              semesters: [
-                SemesterData(
-                  label: 'First Semester',
-                  courses: [
-                    CourseData(
-                      code: 'MBA 601',
-                      title: 'Strategic Management',
-                      unit: 3,
-                    ),
-                    CourseData(
-                      code: 'MBA 603',
-                      title: 'Entrepreneurship and Innovation',
-                      unit: 3,
-                    ),
-                    CourseData(
-                      code: 'MBA 605',
-                      title: 'Corporate Governance',
-                      unit: 3,
-                    ),
-                  ],
-                ),
-                SemesterData(
-                  label: 'Second Semester',
-                  courses: [
-                    CourseData(code: 'MBA 698', title: 'MBA Thesis', unit: 6),
-                    CourseData(
-                      code: 'MBA 602',
-                      title: 'Business Ethics',
-                      unit: 3,
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ],
-        ),
-      ],
-    ),
+ 
   ],
 );
+
 
 // ─────────────────────────────────────────────────────────
 //  LOOKUP HELPERS
 // ─────────────────────────────────────────────────────────
+
 
 /// All Nigerian universities for school picker
 List<String> getAllSchools() => List.from(nigerianUniversities);

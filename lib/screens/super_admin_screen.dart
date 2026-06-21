@@ -196,50 +196,86 @@ class _SuperAdminScreenState extends State<SuperAdminScreen>
   @override
   Widget build(BuildContext context) {
     final isDark = context.watch<ThemeNotifier>().isDarkMode;
-    final navBg  = isDark ? const Color(0xFF1E293B) : Colors.white;
-    final navFg  = isDark ? Colors.white : Colors.black87;
 
     return Scaffold(
-      backgroundColor:
-          isDark ? const Color(0xFF0A0A0A) : const Color(0xFFF2F4F8),
-      appBar: AppBar(
-        backgroundColor: navBg,
-        foregroundColor: navFg,
-        elevation: 0,
-        centerTitle: true,
-        title: Text('Super Admin',
-            style:
-                TextStyle(color: navFg, fontWeight: FontWeight.bold)),
-        actions: [
-          IconButton(
-            icon: Icon(Icons.refresh_rounded, color: navFg),
-            onPressed: () {
-              _loadRequests();
-              _loadAdmins();
-            },
-          ),
-        ],
-        bottom: TabBar(
-          controller: _tabCtrl,
-          labelColor:
-              isDark ? Colors.indigo.shade300 : Colors.blue.shade700,
-          unselectedLabelColor:
-              isDark ? Colors.white38 : Colors.black45,
-          indicatorColor:
-              isDark ? Colors.indigo.shade300 : Colors.blue.shade700,
-          tabs: const [
-            Tab(icon: Icon(Icons.pending_actions_rounded, size: 20),
-                text: 'Pending'),
-            Tab(icon: Icon(Icons.verified_user_rounded, size: 20),
-                text: 'Admins'),
-          ],
-        ),
-      ),
-      body: TabBarView(
-        controller: _tabCtrl,
+      backgroundColor: isDark ? const Color(0xFF0A0A0A) : const Color(0xFFF2F4F8),
+      body: Column(
         children: [
-          _buildPendingTab(isDark),
-          _buildAdminsTab(isDark),
+          // ── Fixed gradient header ────────────────────────
+          Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFF0D47A1), Color(0xFF1565C0), Color(0xFF1E88E5)],
+              ),
+              borderRadius: BorderRadius.vertical(bottom: Radius.circular(28)),
+              boxShadow: [
+                BoxShadow(
+                  color: Color(0x331565C0),
+                  blurRadius: 16,
+                  offset: Offset(0, 6),
+                ),
+              ],
+            ),
+            child: SafeArea(
+              bottom: false,
+              child: Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(8, 12, 8, 4),
+                    child: Row(
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white),
+                          onPressed: () => Navigator.pop(context),
+                        ),
+                        const Expanded(
+                          child: Text(
+                            'Super Admin',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 18,
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.refresh_rounded, color: Colors.white),
+                          onPressed: () {
+                            _loadRequests();
+                            _loadAdmins();
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  TabBar(
+                    controller: _tabCtrl,
+                    labelColor: Colors.white,
+                    unselectedLabelColor: Colors.white54,
+                    indicatorColor: Colors.white,
+                    indicatorWeight: 3,
+                    tabs: const [
+                      Tab(icon: Icon(Icons.pending_actions_rounded, size: 20), text: 'Pending'),
+                      Tab(icon: Icon(Icons.verified_user_rounded, size: 20), text: 'Admins'),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+          Expanded(
+            child: TabBarView(
+              controller: _tabCtrl,
+              children: [
+                _buildPendingTab(isDark),
+                _buildAdminsTab(isDark),
+              ],
+            ),
+          ),
         ],
       ),
     );

@@ -1287,15 +1287,19 @@ class _HomeScreenState extends State<HomeScreen>
                         height: 50,
                         child: ElevatedButton.icon(
                           onPressed: picked.isEmpty
-                              ? null
-                              : () {
-                                  Navigator.pop(ctx);
-                                  _showScoreEntryForPicked(
-                                    selectable
-                                        .where((c) => picked.contains(c.code))
-                                        .toList(),
-                                  );
-                                },
+    ? null
+    : () {
+        final toShow = selectable
+            .where((c) => picked.contains(c.code))
+            .toList();
+        debugPrint('=== ADD SELECTED TAPPED, toShow.length: ${toShow.length}');
+        Navigator.pop(ctx);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          debugPrint('=== POST FRAME CALLBACK FIRING, mounted: $mounted');
+          if (!mounted) return;
+          _showScoreEntryForPicked(toShow);
+        });
+      },
                           icon: const Icon(Icons.add),
                           label: Text(
                             'Add ${picked.isEmpty ? '' : picked.length.toString()} Selected',
@@ -1320,7 +1324,12 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
+ 
+
+
   void _showScoreEntryForPicked(List<CourseData> picked) {
+    final isDark = context.read<ThemeNotifier>().isDarkMode;
+
     final controllers = {
       for (final c in picked) c.code: TextEditingController(),
     };
@@ -1331,12 +1340,10 @@ class _HomeScreenState extends State<HomeScreen>
     bool _saved = false;
     bool _useGrade = false;
 
-    final textColor = isDarkMode ? Colors.white : Colors.black87;
-    final labelColor = isDarkMode ? Colors.white70 : Colors.black54;
-    final fillColor = isDarkMode
-        ? const Color(0xFF2A2A2A)
-        : Colors.grey.shade50;
-    final subColor = isDarkMode ? Colors.grey.shade400 : Colors.grey.shade500;
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final labelColor = isDark ? Colors.white70 : Colors.black54;
+    final fillColor = isDark ? const Color(0xFF2A2A2A) : Colors.grey.shade50;
+    final subColor = isDark ? Colors.grey.shade400 : Colors.grey.shade500;
     final gradeLetters = grading.rules.map((r) => r.grade).toList();
 
     showModalBottomSheet(
@@ -1347,7 +1354,7 @@ class _HomeScreenState extends State<HomeScreen>
         padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
         child: Container(
           decoration: BoxDecoration(
-            color: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+            color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
             borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
           ),
           child: StatefulBuilder(
@@ -1550,7 +1557,6 @@ class _HomeScreenState extends State<HomeScreen>
                                     _pageCtrl.jumpToPage(currentPage);
                                   _saveCourses();
 
-                                  // Save each new course to server
                                   for (final course in newCourses) {
                                     CourseService()
                                         .addCourse(
@@ -1608,6 +1614,8 @@ class _HomeScreenState extends State<HomeScreen>
       ),
     );
   }
+
+  
 
   Widget _inputModeToggle({
     required bool useGrade,
@@ -1995,7 +2003,7 @@ class _HomeScreenState extends State<HomeScreen>
                           );
                         },
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.orange,
+                          backgroundColor: Colors.blue,
                           foregroundColor: Colors.white,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(14),

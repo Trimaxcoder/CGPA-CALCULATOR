@@ -83,9 +83,6 @@ class _SplashScreenState extends State<SplashScreen>
         }
       }
 
-      if (tokenValid) {
-        await NotificationService.init();
-      }
 
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
