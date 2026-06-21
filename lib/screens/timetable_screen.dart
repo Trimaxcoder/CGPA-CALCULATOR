@@ -7,6 +7,9 @@ import '../providers/theme_notifier.dart';
 import '../models/timetable_entry.dart';
 import '../services/timetable_service.dart';
 import 'super_admin_screen.dart';
+import '../services/muted_courses_store.dart';
+import '../widgets/snackBar.dart';
+import '../services/notification_service.dart'; // adjust path
 
 class TimetableScreen extends StatefulWidget {
   const TimetableScreen({super.key});
@@ -119,6 +122,15 @@ class _TimetableScreenState extends State<TimetableScreen>
     try {
       final list = await _svc.getPersonal();
       _personal = list.map(PersonalEntry.fromMap).toList();
+
+      for (final entry in _personal.where((e) => e.isBookmarked)) {
+        await NotificationService.scheduleStudyReminder(
+          entryId: entry.id,
+          title: entry.title,
+          day: entry.day,
+          startTime: entry.startTime,
+        );
+      }
     } catch (_) {}
   }
 
@@ -585,6 +597,7 @@ class _TimetableScreenState extends State<TimetableScreen>
         : Icons.school_rounded;
 
     final dur = _duration(e.startTime, e.endTime);
+    final isMuted = MutedCoursesStore().isMuted(e.courseCode);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -741,6 +754,24 @@ class _TimetableScreenState extends State<TimetableScreen>
                       ],
                     ],
                   ),
+                ),
+                // ── Mute button (everyone) ──
+                IconButton(
+                  icon: Icon(
+                    isMuted ? Icons.notifications_off_rounded : Icons.notifications_active_outlined,
+                    color: isMuted ? Colors.grey : (isDark ? Colors.white38 : Colors.black38),
+                    size: 20,
+                  ),
+                  onPressed: () async {
+                    await MutedCoursesStore().toggle(e.courseCode);
+                    setState(() {});
+                    AppSnackBar.showInfo(
+                      context,
+                      MutedCoursesStore().isMuted(e.courseCode)
+                          ? '${e.courseCode} notifications muted'
+                          : '${e.courseCode} notifications unmuted',
+                    );
+                  },
                 ),
                 if (_isAdmin)
                   PopupMenuButton<String>(
@@ -1149,10 +1180,22 @@ class _TimetableScreenState extends State<TimetableScreen>
                     size: 22,
                   ),
                   onPressed: () async {
-                    await _svc.toggleBookmark(e.id);
-                    await _loadPersonal();
-                    setState(() {});
-                  },
+  await _svc.toggleBookmark(e.id);
+  await _loadPersonal();
+  setState(() {});
+
+  final updated = _personal.firstWhere((p) => p.id == e.id, orElse: () => e);
+  if (updated.isBookmarked) {
+    await NotificationService.scheduleStudyReminder(
+      entryId: updated.id,
+      title: updated.title,
+      day: updated.day,
+      startTime: updated.startTime,
+    );
+  } else {
+    await NotificationService.cancelStudyReminder(updated.id);
+  }
+},
                 ),
                 PopupMenuButton<String>(
                   icon: Icon(

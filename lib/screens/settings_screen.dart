@@ -271,6 +271,36 @@ class _SettingsScreenState extends State<SettingsScreen> {
     ),
   );
 
+
+  String? _findBestMatch(String input, List<String> options) {
+    final query = input.toLowerCase().trim();
+    if (query.isEmpty) return null;
+
+    for (final opt in options) {
+      if (opt.toLowerCase().trim() == query) return opt;
+    }
+
+    final substringMatches = options.where(
+      (opt) => opt.toLowerCase().contains(query),
+    ).toList();
+    if (substringMatches.length == 1) return substringMatches.first;
+
+    if (substringMatches.isEmpty) {
+      final reverseMatches = options.where(
+        (opt) => query.contains(opt.toLowerCase()),
+      ).toList();
+      if (reverseMatches.length == 1) return reverseMatches.first;
+    }
+
+    final wordMatches = options.where((opt) {
+      final words = opt.toLowerCase().split(RegExp(r'\s+'));
+      return words.any((w) => w.startsWith(query) || query.startsWith(w));
+    }).toList();
+    if (wordMatches.length == 1) return wordMatches.first;
+
+    return null;
+  }
+
   void _showEditProfile(bool isDark) {
     final fk = GlobalKey<FormState>();
     final nameC = TextEditingController(text: profile.name);
@@ -283,24 +313,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     final textColor = isDark ? Colors.white : Colors.black87;
     final labelColor = isDark ? Colors.white70 : Colors.black54;
-    final fillColor =
-        isDark ? const Color(0xFF2A2A2A) : Colors.grey.shade50;
+    final fillColor = isDark ? const Color(0xFF2A2A2A) : Colors.grey.shade50;
 
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setD) => AlertDialog(
-          backgroundColor:
-              isDark ? const Color(0xFF1E1E1E) : Colors.white,
+          backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
           surfaceTintColor: Colors.transparent,
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           title: Row(
             children: [
               const Icon(Icons.edit, color: Colors.blue),
               const SizedBox(width: 8),
-              Text('Edit Profile',
-                  style: TextStyle(color: textColor)),
+              Text('Edit Profile', style: TextStyle(color: textColor)),
             ],
           ),
           content: SingleChildScrollView(
@@ -311,16 +337,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 children: [
                   _editField(nameC, 'Full Name', Icons.person_outline,
                       textColor, labelColor, fillColor,
-                      (v) => (v == null || v.trim().isEmpty)
-                          ? 'Required'
-                          : null),
+                      (v) => (v == null || v.trim().isEmpty) ? 'Required' : null),
                   const SizedBox(height: 12),
                   _editField(
                       emailC, 'Email', Icons.email_outlined, textColor,
                       labelColor, fillColor, (v) {
                     if (v == null || v.trim().isEmpty) return 'Required';
-                    if (!v.trim().contains('@'))
-                      return 'Email must contain @';
+                    if (!v.trim().contains('@')) return 'Email must contain @';
                     if (!isValidEmail(v.trim())) return 'Invalid email';
                     return null;
                   }),
@@ -332,9 +355,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       textColor,
                       labelColor,
                       fillColor,
-                      (v) => (v == null || v.trim().isEmpty)
-                          ? 'Required'
-                          : null),
+                      (v) => (v == null || v.trim().isEmpty) ? 'Required' : null),
                   const SizedBox(height: 12),
                   ComboField(
                     controller: schoolC,
@@ -342,9 +363,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     icon: Icons.account_balance,
                     suggestions: getAllSchools(),
                     dark: !isDark,
-                    validator: (v) => (v == null || v.trim().isEmpty)
-                        ? 'Required'
-                        : null,
+                    validator: (v) {
+                      if (v == null || v.trim().isEmpty) return 'Required';
+                      if (_findBestMatch(v, getAllSchools()) == null) {
+                        return 'Please select a valid school from the list';
+                      }
+                      return null;
+                    },
                   ),
                   const SizedBox(height: 12),
                   ComboField(
@@ -353,59 +378,59 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     icon: Icons.account_balance_outlined,
                     suggestions: getFaculties(),
                     dark: !isDark,
-                    onSuggestionSelected: (_) =>
-                        setD(() => deptC.clear()),
-                    validator: (v) => (v == null || v.trim().isEmpty)
-                        ? 'Required'
-                        : null,
+                    onSuggestionSelected: (_) => setD(() => deptC.clear()),
+                    validator: (v) {
+                      if (v == null || v.trim().isEmpty) return 'Required';
+                      if (_findBestMatch(v, getFaculties()) == null) {
+                        return 'Please select a valid faculty from the list';
+                      }
+                      return null;
+                    },
                   ),
                   const SizedBox(height: 12),
                   StatefulBuilder(
-                    builder: (_, setSub) => ComboField(
-                      controller: deptC,
-                      label: 'Department',
-                      icon: Icons.school_outlined,
-                      suggestions: facC.text.trim().isNotEmpty
+                    builder: (_, setSub) {
+                      final deptOptions = facC.text.trim().isNotEmpty
                           ? getDepartments(facC.text.trim())
-                          : [],
-                      dark: !isDark,
-                      validator: (v) =>
-                          (v == null || v.trim().isEmpty)
-                              ? 'Required'
-                              : null,
-                    ),
+                          : <String>[];
+                      return ComboField(
+                        controller: deptC,
+                        label: 'Department',
+                        icon: Icons.school_outlined,
+                        suggestions: deptOptions,
+                        dark: !isDark,
+                        validator: (v) {
+                          if (v == null || v.trim().isEmpty) return 'Required';
+                          if (_findBestMatch(v, deptOptions) == null) {
+                            return 'Please select a valid department from the list';
+                          }
+                          return null;
+                        },
+                      );
+                    },
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
                     value: selectedLevel,
                     onChanged: (v) => setD(() => selectedLevel = v!),
                     style: TextStyle(color: textColor),
-                    dropdownColor:
-                        isDark ? const Color(0xFF2A2A2A) : Colors.white,
+                    dropdownColor: isDark ? const Color(0xFF2A2A2A) : Colors.white,
                     decoration: InputDecoration(
                       labelText: 'Level',
-                      prefixIcon: const Icon(
-                          Icons.stairs_outlined,
-                          color: Colors.blue),
+                      prefixIcon: const Icon(Icons.stairs_outlined, color: Colors.blue),
                       filled: true,
                       fillColor: fillColor,
                       labelStyle: TextStyle(color: labelColor),
-                      border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12)),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                       enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(
-                              color: isDark
-                                  ? Colors.white24
-                                  : Colors.black12)),
+                          borderSide: BorderSide(color: isDark ? Colors.white24 : Colors.black12)),
                       focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(
-                              color: Colors.blue.shade300, width: 2)),
+                          borderSide: BorderSide(color: Colors.blue.shade300, width: 2)),
                     ),
                     items: ['100', '200', '300', '400', '500', '600', '700']
-                        .map((l) => DropdownMenuItem(
-                            value: l, child: Text('$l Level')))
+                        .map((l) => DropdownMenuItem(value: l, child: Text('$l Level')))
                         .toList(),
                   ),
                 ],
@@ -424,24 +449,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               onPressed: () async {
                 if (!fk.currentState!.validate()) return;
+
+                final canonicalSchool = _findBestMatch(schoolC.text, getAllSchools()) ?? schoolC.text.trim();
+                final canonicalFaculty = _findBestMatch(facC.text, getFaculties()) ?? facC.text.trim();
+                final deptOptions = getDepartments(canonicalFaculty);
+                final canonicalDept = _findBestMatch(deptC.text, deptOptions) ?? deptC.text.trim();
+
                 final updated = StudentProfile(
-                  name:         nameC.text.trim(),
-                  email:        emailC.text.trim(),
+                  name: nameC.text.trim(),
+                  email: emailC.text.trim(),
                   matricNumber: matricC.text.trim(),
-                  school:       schoolC.text.trim(),
-                  faculty:      facC.text.trim(),
-                  department:   deptC.text.trim(),
-                  level:        selectedLevel,
+                  school: canonicalSchool,
+                  faculty: canonicalFaculty,
+                  department: canonicalDept,
+                  level: selectedLevel,
                 );
                 setState(() => profile = updated);
                 await _saveProfile();
                 if (ctx.mounted) Navigator.pop(ctx);
                 ProfileService()
                     .updateProfile(updated.toMap())
-                    .then((_) => AppSnackBar.showSuccess(
-                        context, 'Profile updated ✓'))
-                    .catchError((e) => AppSnackBar.showError(
-                        context, 'Saved locally. Server: $e'));
+                    .then((_) => AppSnackBar.showSuccess(context, 'Profile updated ✓'))
+                    .catchError((e) => AppSnackBar.showError(context, 'Saved locally. Server: $e'));
               },
               child: const Text('Save'),
             ),

@@ -65,17 +65,53 @@ class _RegisterScreenState extends State<RegisterScreen> {
     super.dispose();
   }
 
+  String? _findBestMatch(String input, List<String> options) {
+    final query = input.toLowerCase().trim();
+    if (query.isEmpty) return null;
+
+    for (final opt in options) {
+      if (opt.toLowerCase().trim() == query) return opt;
+    }
+
+    final substringMatches = options
+        .where((opt) => opt.toLowerCase().contains(query))
+        .toList();
+    if (substringMatches.length == 1) return substringMatches.first;
+
+    if (substringMatches.isEmpty) {
+      final reverseMatches = options
+          .where((opt) => query.contains(opt.toLowerCase()))
+          .toList();
+      if (reverseMatches.length == 1) return reverseMatches.first;
+    }
+
+    final wordMatches = options.where((opt) {
+      final words = opt.toLowerCase().split(RegExp(r'\s+'));
+      return words.any((w) => w.startsWith(query) || query.startsWith(w));
+    }).toList();
+    if (wordMatches.length == 1) return wordMatches.first;
+
+    return null;
+  }
+
   Future<void> _submit() async {
     if (!_fk.currentState!.validate()) return;
     setState(() => _loading = true);
+
+    final canonicalSchool =
+        _findBestMatch(_schoolC.text, _schools) ?? _schoolC.text.trim();
+    final canonicalFaculty =
+        _findBestMatch(_facC.text, _faculties) ?? _facC.text.trim();
+    final canonicalDept =
+        _findBestMatch(_deptC.text, _depts) ?? _deptC.text.trim();
 
     final profileData = {
       'name': _nameC.text.trim(),
       'email': _emailC.text.trim(),
       'matricNumber': _matricC.text.trim(),
-      'school': _schoolC.text.trim(),
-      'faculty': _facC.text.trim(),
-      'department': _deptC.text.trim(),
+      'school': canonicalSchool,
+      'faculty': canonicalFaculty,
+      'department': canonicalDept,
       'level': _selectedLevel,
     };
 
@@ -94,12 +130,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
     try {
       await AuthService().register(
         email: profileData['email']!,
-        password: _passC.text.trim(), // use the user's chosen password
+        password: _passC.text.trim(),
         profile: profileData,
       );
     } on ApiException catch (e) {
       if (e.statusCode == 409) {
-        // Already registered — try signing in
         try {
           await AuthService().login(
             email: profileData['email']!,
@@ -374,9 +409,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       _facC.clear();
                       _deptC.clear();
                     }),
-                    validator: (v) => (v == null || v.trim().isEmpty)
-                        ? 'Enter your school'
-                        : null,
+                    validator: (v) {
+                      if (v == null || v.trim().isEmpty)
+                        return 'Enter your school';
+                      if (_findBestMatch(v, _schools) == null) {
+                        return 'Please select a valid school from the list';
+                      }
+                      return null;
+                    },
                   ),
                   const SizedBox(height: 14),
 
@@ -388,9 +428,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     suggestions: _faculties,
                     dark: false,
                     onSuggestionSelected: (_) => setState(() => _deptC.clear()),
-                    validator: (v) => (v == null || v.trim().isEmpty)
-                        ? 'Enter your faculty'
-                        : null,
+                    validator: (v) {
+                      if (v == null || v.trim().isEmpty)
+                        return 'Enter your faculty';
+                      if (_findBestMatch(v, _faculties) == null) {
+                        return 'Please select a valid faculty from the list';
+                      }
+                      return null;
+                    },
                   ),
                   const SizedBox(height: 14),
 
@@ -401,9 +446,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     icon: Icons.school_outlined,
                     suggestions: _depts,
                     dark: false,
-                    validator: (v) => (v == null || v.trim().isEmpty)
-                        ? 'Enter your department'
-                        : null,
+                    validator: (v) {
+                      if (v == null || v.trim().isEmpty)
+                        return 'Enter your department';
+                      if (_findBestMatch(v, _depts) == null) {
+                        return 'Please select a valid department from the list';
+                      }
+                      return null;
+                    },
                   ),
                   const SizedBox(height: 14),
 

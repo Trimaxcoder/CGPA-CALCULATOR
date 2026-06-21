@@ -3,8 +3,10 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:convert';
+import 'package:timezone/timezone.dart' as tz;
 import 'timetable_service.dart';
-import 'notification_store.dart'; // ← new import, adjust path to where you saved it
+import 'muted_courses_store.dart'; 
+import 'notification_store.dart';
 import 'notification_service_web.dart' if (dart.library.io) 'notification_service_stub.dart' as web_impl;
 
 class NotificationService {
@@ -61,38 +63,50 @@ class NotificationService {
     }
   }
 
-  static Future<void> _showLocalNotification(RemoteMessage message) async {
-    final notification = message.notification;
-    if (notification == null) return;
 
-    const androidDetails = AndroidNotificationDetails(
-      'gradex_channel',
-      'Gradex Notifications',
-      channelDescription: 'Timetable and admin notifications',
-      importance: Importance.high,
-      priority: Priority.high,
-      icon: 'ic_notification', // ← added: same custom icon as above
-    );
-    const iosDetails = DarwinNotificationDetails();
-    const details = NotificationDetails(android: androidDetails, iOS: iosDetails);
+  
 
-    await _localNotifications.show(
-      DateTime.now().millisecondsSinceEpoch ~/ 1000,
-      notification.title,
-      notification.body,
-      details,
-    );
+static Future<void> _showLocalNotification(RemoteMessage message) async {
+  final notification = message.notification;
+  if (notification == null) return;
+
+  final courseCode = message.data['courseCode'] ?? '';
+  if (courseCode.isNotEmpty && MutedCoursesStore().isMuted(courseCode)) {
+    return; // user muted this course, skip showing the notification
   }
 
-  /// NEW: saves the incoming push into local notification history
-  /// so it shows up in your in-app Notifications screen + badge count.
-  static Future<void> _storeNotification(RemoteMessage message) async {
-    await NotificationStore().add(
-      title: message.notification?.title ?? 'GradeX',
-      body: message.notification?.body ?? '',
-      type: message.data['type'] ?? 'general',
-    );
+  const androidDetails = AndroidNotificationDetails(
+    'gradex_channel',
+    'Gradex Notifications',
+    channelDescription: 'Timetable and admin notifications',
+    importance: Importance.high,
+    priority: Priority.high,
+    icon: 'ic_notification',
+  );
+  const iosDetails = DarwinNotificationDetails();
+  const details = NotificationDetails(android: androidDetails, iOS: iosDetails);
+
+  await _localNotifications.show(
+    DateTime.now().millisecondsSinceEpoch ~/ 1000,
+    notification.title,
+    notification.body,
+    details,
+  );
+}
+
+static Future<void> _storeNotification(RemoteMessage message) async {
+  final courseCode = message.data['courseCode'] ?? '';
+  if (courseCode.isNotEmpty && MutedCoursesStore().isMuted(courseCode)) {
+    return; // also skip saving to bell/badge history
   }
+
+  await NotificationStore().add(
+    title: message.notification?.title ?? 'GradeX',
+    body: message.notification?.body ?? '',
+    type: message.data['type'] ?? 'general',
+  );
+}
+
 
   static Future<void> _saveToken(String token) async {
     final prefs = await SharedPreferences.getInstance();
@@ -121,4 +135,66 @@ class NotificationService {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString('fcmToken');
   }
+
+
+// ── Study reminder scheduling for bookmarked personal sessions ──
+
+static int _weekdayFor(String day) {
+  const map = {
+    'Monday': DateTime.monday,
+    'Tuesday': DateTime.tuesday,
+    'Wednesday': DateTime.wednesday,
+    'Thursday': DateTime.thursday,
+    'Friday': DateTime.friday,
+    'Saturday': DateTime.saturday,
+    'Sunday': DateTime.sunday,
+  };
+  return map[day] ?? DateTime.monday;
+}
+
+static Future<void> scheduleStudyReminder({
+  required String entryId,
+  required String title,
+  required String day,
+  required String startTime,
+  int minutesBefore = 10,
+}) async {
+  final parts = startTime.split(':');
+  final hour = int.tryParse(parts[0]) ?? 8;
+  final minute = int.tryParse(parts[1]) ?? 0;
+  final weekday = _weekdayFor(day);
+
+  final now = tz.TZDateTime.now(tz.local);
+  var scheduled = tz.TZDateTime(tz.local, now.year, now.month, now.day, hour, minute)
+      .subtract(Duration(minutes: minutesBefore));
+
+  while (scheduled.weekday != weekday || scheduled.isBefore(now)) {
+    scheduled = scheduled.add(const Duration(days: 1));
+  }
+
+  const androidDetails = AndroidNotificationDetails(
+    'study_reminders',
+    'Study Reminders',
+    channelDescription: 'Reminders for bookmarked personal study sessions',
+    importance: Importance.high,
+    priority: Priority.high,
+    icon: 'ic_notification',
+  );
+  const details = NotificationDetails(android: androidDetails, iOS: DarwinNotificationDetails());
+
+  await _localNotifications.zonedSchedule(
+    entryId.hashCode,
+    '📖 Study Time!',
+    'Time to read $title — you\'ve got this!',
+    scheduled,
+    details,
+    androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+    uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+    matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime,
+  );
+}
+
+static Future<void> cancelStudyReminder(String entryId) async {
+  await _localNotifications.cancel(entryId.hashCode);
+}
 }

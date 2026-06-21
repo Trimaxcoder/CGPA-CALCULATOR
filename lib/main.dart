@@ -3,12 +3,15 @@ import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'providers/theme_notifier.dart';
+import 'package:timezone/data/latest.dart' as tzdata;
+import 'package:timezone/timezone.dart' as tz;
 import 'screens/splash_screen.dart';
 import 'firebase_options.dart';
 import 'services/notification_service.dart';
 import 'services/notification_store.dart';
 import 'screens/notifications_screen.dart';
-import 'screens/main_shell.dart'; // adjust if your timetable lives elsewhere
+import 'screens/main_shell.dart';
+import 'services/muted_courses_store.dart';
 
 // Global navigator key — lets us navigate from outside a widget's context
 final navigatorKey = GlobalKey<NavigatorState>();
@@ -17,14 +20,30 @@ final navigatorKey = GlobalKey<NavigatorState>();
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
+  final courseCode = message.data['courseCode'] ?? '';
+  await MutedCoursesStore().load(); // background isolate needs to load fresh
+  if (courseCode.isNotEmpty && MutedCoursesStore().isMuted(courseCode)) {
+    return;
+  }
+
+  await NotificationStore().add(
+    title: message.notification?.title ?? 'GradeX',
+    body: message.notification?.body ?? '',
+    type: message.data['type'] ?? 'general',
+  );
 }
 
 void main() async {
+  tzdata.initializeTimeZones();
+  tz.setLocalLocation(tz.getLocation('Africa/Lagos'));
+
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
   await NotificationStore().load();
+  await MutedCoursesStore().load();
   await NotificationService.init();
 
   runApp(const MyApp());
