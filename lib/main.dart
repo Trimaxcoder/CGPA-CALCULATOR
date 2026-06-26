@@ -9,12 +9,14 @@ import 'screens/splash_screen.dart';
 import 'firebase_options.dart';
 import 'services/notification_service.dart';
 import 'services/notification_store.dart';
-import 'screens/notifications_screen.dart';
-import 'screens/main_shell.dart';
+import 'services/notification_router.dart'; // NEW
+import 'services/navigation_service.dart'; // NEW
 import 'services/muted_courses_store.dart';
 
-// Global navigator key — lets us navigate from outside a widget's context
-final navigatorKey = GlobalKey<NavigatorState>();
+// REMOVED: local `final navigatorKey = GlobalKey<NavigatorState>();`
+// Now using NavigationService.navigatorKey everywhere instead, so
+// NotificationService/NotificationRouter can navigate from outside
+// a widget's context too.
 
 // Handle background messages
 @pragma('vm:entry-point')
@@ -31,7 +33,30 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     title: message.notification?.title ?? 'GradeX',
     body: message.notification?.body ?? '',
     type: message.data['type'] ?? 'general',
+    data: message.data, // NEW — keep courseCode/examId for routing later
   );
+}
+
+/// Wraps NotificationService.init() so that a transient FCM/Play Services
+/// failure (e.g. SERVICE_NOT_AVAILABLE) never crashes app startup.
+/// Retries once in the background after a short delay if the first
+/// attempt fails.
+Future<void> _initNotificationsSafely() async {
+  try {
+    await NotificationService.init();
+  } catch (e, st) {
+    debugPrint('NotificationService.init failed (will retry): $e');
+    debugPrintStack(stackTrace: st);
+
+    // Retry once in the background — don't block app launch on this.
+    Future.delayed(const Duration(seconds: 5), () async {
+      try {
+        await NotificationService.init();
+      } catch (e2) {
+        debugPrint('NotificationService retry also failed: $e2');
+      }
+    });
+  }
 }
 
 void main() async {
@@ -44,7 +69,10 @@ void main() async {
 
   await NotificationStore().load();
   await MutedCoursesStore().load();
-  await NotificationService.init();
+
+  // Don't let push-token failures (e.g. SERVICE_NOT_AVAILABLE on devices
+  // with outdated/missing Play Services) block or crash app startup.
+  await _initNotificationsSafely();
 
   runApp(const MyApp());
 }
@@ -69,38 +97,14 @@ class _MyAppState extends State<MyApp> {
 
     // Wait until the first frame is drawn before navigating
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _routeFromNotification(message.data['type'] ?? 'general');
+      NotificationRouter.routeByType(message.data['type'] ?? 'general'); // CHANGED
     });
   }
 
-  void _routeFromNotification(String type) {
-    switch (type) {
-      case 'class_reminder':
-      case 'emergency_toggle':
-      case 'test_toggle':
-      case 'attendance_toggle':
-      case 'cancelled_toggle':
-      case 'important_class':
-      case 'exam_added':
-        // All timetable-related — open the app to the Timetable tab
-        navigatorKey.currentState?.push(
-          MaterialPageRoute(builder: (_) => const MainShell()),
-        );
-        break;
-      case 'admin_approved':
-      case 'admin_rejected':
-      case 'admin_revoked':
-        // Account/admin-status related — open the Notifications screen
-        navigatorKey.currentState?.push(
-          MaterialPageRoute(builder: (_) => const NotificationsScreen()),
-        );
-        break;
-      default:
-        navigatorKey.currentState?.push(
-          MaterialPageRoute(builder: (_) => const NotificationsScreen()),
-        );
-    }
-  }
+  // REMOVED: _routeFromNotification — logic now lives in
+  // NotificationRouter.routeByType so it's shared with FCM
+  // background-tap and in-app card-tap too, instead of being
+  // duplicated three times.
 
   @override
   Widget build(BuildContext context) {
@@ -111,7 +115,7 @@ class _MyAppState extends State<MyApp> {
       ],
       child: Consumer<ThemeNotifier>(
         builder: (context, theme, _) => MaterialApp(
-          navigatorKey: navigatorKey,
+          navigatorKey: NavigationService.navigatorKey, // CHANGED
           debugShowCheckedModeBanner: false,
           theme: ThemeData(useMaterial3: false, brightness: Brightness.light),
           darkTheme: ThemeData(

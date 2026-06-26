@@ -13,6 +13,7 @@ import '../widgets/snackBar.dart';
 import '../widgets/ui_helpers.dart';
 import '../uniport_courses.dart';
 import '../services/api_service.dart';
+import '../widgets/notification_toggle.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -30,7 +31,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _loadProfile();
   }
 
-   static const Color _primary = Color(0xFF1565C0);
+  static const Color _primary = Color(0xFF1565C0);
 
   Future<void> _loadProfile() async {
     final prefs = await SharedPreferences.getInstance();
@@ -66,7 +67,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final isDark = themeNotifier.isDarkMode;
 
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF0A0A0A) : const Color(0xFFF2F4F8),
+      backgroundColor: isDark
+          ? const Color(0xFF0A0A0A)
+          : const Color(0xFFF2F4F8),
       body: Column(
         children: [
           // ── Unified gradient header: title + profile ──
@@ -75,7 +78,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [Color(0xFF0D47A1), Color(0xFF1565C0), Color(0xFF1E88E5)],
+                colors: [
+                  Color(0xFF0D47A1),
+                  Color(0xFF1565C0),
+                  Color(0xFF1E88E5),
+                ],
               ),
               borderRadius: BorderRadius.vertical(bottom: Radius.circular(28)),
               boxShadow: [
@@ -105,7 +112,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       radius: 42,
                       backgroundColor: Colors.white.withOpacity(0.18),
                       child: Text(
-                        profile.name.isNotEmpty ? profile.name[0].toUpperCase() : '?',
+                        profile.name.isNotEmpty
+                            ? profile.name[0].toUpperCase()
+                            : '?',
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 34,
@@ -127,12 +136,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     Text(
                       profile.email,
                       textAlign: TextAlign.center,
-                      style: const TextStyle(color: Colors.white70, fontSize: 13),
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 13,
+                      ),
                     ),
                     if (profile.department.isNotEmpty) ...[
                       const SizedBox(height: 10),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 4,
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.white.withOpacity(0.15),
                           borderRadius: BorderRadius.circular(20),
@@ -150,17 +165,41 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     const SizedBox(height: 16),
                     Row(
                       children: [
-                        Expanded(child: _profileInfoBox(Icons.account_balance, 'School', profile.school)),
+                        Expanded(
+                          child: _profileInfoBox(
+                            Icons.account_balance,
+                            'School',
+                            profile.school,
+                          ),
+                        ),
                         const SizedBox(width: 10),
-                        Expanded(child: _profileInfoBox(Icons.badge_outlined, 'Matric', profile.matricNumber)),
+                        Expanded(
+                          child: _profileInfoBox(
+                            Icons.badge_outlined,
+                            'Matric',
+                            profile.matricNumber,
+                          ),
+                        ),
                       ],
                     ),
                     const SizedBox(height: 10),
                     Row(
                       children: [
-                        Expanded(child: _profileInfoBox(Icons.account_balance_outlined, 'Faculty', profile.faculty)),
+                        Expanded(
+                          child: _profileInfoBox(
+                            Icons.account_balance_outlined,
+                            'Faculty',
+                            profile.faculty,
+                          ),
+                        ),
                         const SizedBox(width: 10),
-                        Expanded(child: _profileInfoBox(Icons.school_outlined, 'Department', profile.department)),
+                        Expanded(
+                          child: _profileInfoBox(
+                            Icons.school_outlined,
+                            'Department',
+                            profile.department,
+                          ),
+                        ),
                       ],
                     ),
                   ],
@@ -178,7 +217,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 const SizedBox(height: 8),
                 _buildCard(isDark, [
                   _switchTile(
-                    icon: isDark ? Icons.dark_mode_rounded : Icons.light_mode_rounded,
+                    icon: isDark
+                        ? Icons.dark_mode_rounded
+                        : Icons.light_mode_rounded,
                     iconColor: _primary,
                     title: 'Dark Mode',
                     subtitle: isDark ? 'Using dark theme' : 'Using light theme',
@@ -187,6 +228,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     isDark: isDark,
                   ),
                 ]),
+                const SizedBox(height: 20),
+
+                _sectionLabel('Notifications', isDark),
+                const SizedBox(height: 8),
+                _buildCard(isDark, [const NotificationToggle()]),
                 const SizedBox(height: 20),
 
                 _sectionLabel('Account', isDark),
@@ -244,33 +290,40 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _profileInfoBox(IconData icon, String label, String value) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-    decoration: BoxDecoration(
-      color: Colors.white.withOpacity(0.12),
-      borderRadius: BorderRadius.circular(12),
-    ),
-    child: Row(
-      children: [
-        Icon(icon, color: Colors.white70, size: 15),
-        const SizedBox(width: 6),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(label, style: const TextStyle(fontSize: 9, color: Colors.white60)),
-              Text(
-                value.isNotEmpty ? value : '—',
-                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.white),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
-          ),
+  Widget _profileInfoBox(IconData icon, String label, String value) =>
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.12),
+          borderRadius: BorderRadius.circular(12),
         ),
-      ],
-    ),
-  );
-
+        child: Row(
+          children: [
+            Icon(icon, color: Colors.white70, size: 15),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: const TextStyle(fontSize: 9, color: Colors.white60),
+                  ),
+                  Text(
+                    value.isNotEmpty ? value : '—',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
 
   String? _findBestMatch(String input, List<String> options) {
     final query = input.toLowerCase().trim();
@@ -280,15 +333,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (opt.toLowerCase().trim() == query) return opt;
     }
 
-    final substringMatches = options.where(
-      (opt) => opt.toLowerCase().contains(query),
-    ).toList();
+    final substringMatches = options
+        .where((opt) => opt.toLowerCase().contains(query))
+        .toList();
     if (substringMatches.length == 1) return substringMatches.first;
 
     if (substringMatches.isEmpty) {
-      final reverseMatches = options.where(
-        (opt) => query.contains(opt.toLowerCase()),
-      ).toList();
+      final reverseMatches = options
+          .where((opt) => query.contains(opt.toLowerCase()))
+          .toList();
       if (reverseMatches.length == 1) return reverseMatches.first;
     }
 
@@ -321,7 +374,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
         builder: (ctx, setD) => AlertDialog(
           backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
           surfaceTintColor: Colors.transparent,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
           title: Row(
             children: [
               const Icon(Icons.edit, color: Colors.blue),
@@ -335,27 +390,41 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  _editField(nameC, 'Full Name', Icons.person_outline,
-                      textColor, labelColor, fillColor,
-                      (v) => (v == null || v.trim().isEmpty) ? 'Required' : null),
+                  _editField(
+                    nameC,
+                    'Full Name',
+                    Icons.person_outline,
+                    textColor,
+                    labelColor,
+                    fillColor,
+                    (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+                  ),
                   const SizedBox(height: 12),
                   _editField(
-                      emailC, 'Email', Icons.email_outlined, textColor,
-                      labelColor, fillColor, (v) {
-                    if (v == null || v.trim().isEmpty) return 'Required';
-                    if (!v.trim().contains('@')) return 'Email must contain @';
-                    if (!isValidEmail(v.trim())) return 'Invalid email';
-                    return null;
-                  }),
+                    emailC,
+                    'Email',
+                    Icons.email_outlined,
+                    textColor,
+                    labelColor,
+                    fillColor,
+                    (v) {
+                      if (v == null || v.trim().isEmpty) return 'Required';
+                      if (!v.trim().contains('@'))
+                        return 'Email must contain @';
+                      if (!isValidEmail(v.trim())) return 'Invalid email';
+                      return null;
+                    },
+                  ),
                   const SizedBox(height: 12),
                   _editField(
-                      matricC,
-                      'Matric Number',
-                      Icons.badge_outlined,
-                      textColor,
-                      labelColor,
-                      fillColor,
-                      (v) => (v == null || v.trim().isEmpty) ? 'Required' : null),
+                    matricC,
+                    'Matric Number',
+                    Icons.badge_outlined,
+                    textColor,
+                    labelColor,
+                    fillColor,
+                    (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+                  ),
                   const SizedBox(height: 12),
                   ComboField(
                     controller: schoolC,
@@ -414,23 +483,42 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     value: selectedLevel,
                     onChanged: (v) => setD(() => selectedLevel = v!),
                     style: TextStyle(color: textColor),
-                    dropdownColor: isDark ? const Color(0xFF2A2A2A) : Colors.white,
+                    dropdownColor: isDark
+                        ? const Color(0xFF2A2A2A)
+                        : Colors.white,
                     decoration: InputDecoration(
                       labelText: 'Level',
-                      prefixIcon: const Icon(Icons.stairs_outlined, color: Colors.blue),
+                      prefixIcon: const Icon(
+                        Icons.stairs_outlined,
+                        color: Colors.blue,
+                      ),
                       filled: true,
                       fillColor: fillColor,
                       labelStyle: TextStyle(color: labelColor),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                       enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(color: isDark ? Colors.white24 : Colors.black12)),
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(
+                          color: isDark ? Colors.white24 : Colors.black12,
+                        ),
+                      ),
                       focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(color: Colors.blue.shade300, width: 2)),
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(
+                          color: Colors.blue.shade300,
+                          width: 2,
+                        ),
+                      ),
                     ),
                     items: ['100', '200', '300', '400', '500', '600', '700']
-                        .map((l) => DropdownMenuItem(value: l, child: Text('$l Level')))
+                        .map(
+                          (l) => DropdownMenuItem(
+                            value: l,
+                            child: Text('$l Level'),
+                          ),
+                        )
                         .toList(),
                   ),
                 ],
@@ -450,10 +538,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onPressed: () async {
                 if (!fk.currentState!.validate()) return;
 
-                final canonicalSchool = _findBestMatch(schoolC.text, getAllSchools()) ?? schoolC.text.trim();
-                final canonicalFaculty = _findBestMatch(facC.text, getFaculties()) ?? facC.text.trim();
+                final canonicalSchool =
+                    _findBestMatch(schoolC.text, getAllSchools()) ??
+                    schoolC.text.trim();
+                final canonicalFaculty =
+                    _findBestMatch(facC.text, getFaculties()) ??
+                    facC.text.trim();
                 final deptOptions = getDepartments(canonicalFaculty);
-                final canonicalDept = _findBestMatch(deptC.text, deptOptions) ?? deptC.text.trim();
+                final canonicalDept =
+                    _findBestMatch(deptC.text, deptOptions) ??
+                    deptC.text.trim();
 
                 final updated = StudentProfile(
                   name: nameC.text.trim(),
@@ -469,8 +563,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 if (ctx.mounted) Navigator.pop(ctx);
                 ProfileService()
                     .updateProfile(updated.toMap())
-                    .then((_) => AppSnackBar.showSuccess(context, 'Profile updated ✓'))
-                    .catchError((e) => AppSnackBar.showError(context, 'Saved locally. Server: $e'));
+                    .then(
+                      (_) =>
+                          AppSnackBar.showSuccess(context, 'Profile updated ✓'),
+                    )
+                    .catchError(
+                      (e) => AppSnackBar.showError(
+                        context,
+                        'Saved locally. Server: $e',
+                      ),
+                    );
               },
               child: const Text('Save'),
             ),

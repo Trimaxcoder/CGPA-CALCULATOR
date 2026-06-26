@@ -8,17 +8,19 @@ import '../services/notification_store.dart';
 import 'homescreen.dart';
 import 'timetable_screen.dart';
 import 'settings_screen.dart';
-import 'notifications_screen.dart'; 
+import 'notifications_screen.dart';
 
 class MainShell extends StatefulWidget {
-  const MainShell({super.key});
+  final int initialIndex;
+
+  const MainShell({super.key, this.initialIndex = 0});
 
   @override
   State<MainShell> createState() => _MainShellState();
 }
 
 class _MainShellState extends State<MainShell> {
-  int _currentIndex = 0; // 0 = Home (default)
+  late int _currentIndex;
 
   static const _screens = [
     _HomeTab(),
@@ -28,14 +30,18 @@ class _MainShellState extends State<MainShell> {
   ];
 
   @override
+  void initState() {
+    // NEW
+    super.initState();
+    _currentIndex = widget.initialIndex;
+  }
+
+  @override
   Widget build(BuildContext context) {
     final isDark = context.watch<ThemeNotifier>().isDarkMode;
 
     return Scaffold(
-      body: IndexedStack(
-        index: _currentIndex,
-        children: _screens,
-      ),
+      body: IndexedStack(index: _currentIndex, children: _screens),
       bottomNavigationBar: _buildBottomNav(isDark),
     );
   }
@@ -130,10 +136,10 @@ class _HomeTabState extends State<_HomeTab> {
     if (raw != null) {
       final m = jsonDecode(raw) as Map<String, dynamic>;
       setState(() {
-        _name       = m['name']       ?? '';
+        _name = m['name'] ?? '';
         _department = m['department'] ?? '';
-        _level      = m['level']      ?? '';
-        _school     = m['school']     ?? '';
+        _level = m['level'] ?? '';
+        _school = m['school'] ?? '';
       });
     }
   }
@@ -165,7 +171,11 @@ class _HomeTabState extends State<_HomeTab> {
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [Color(0xFF0D47A1), Color(0xFF1565C0), Color(0xFF1E88E5)],
+                colors: [
+                  Color(0xFF0D47A1),
+                  Color(0xFF1565C0),
+                  Color(0xFF1E88E5),
+                ],
               ),
               borderRadius: BorderRadius.vertical(bottom: Radius.circular(32)),
               boxShadow: [
@@ -224,56 +234,80 @@ class _HomeTabState extends State<_HomeTab> {
                         ),
                         const Spacer(),
                         // Notification bell
-                      // Notification bell with badge
-Consumer<NotificationStore>(
-  builder: (context, store, _) {
-    final count = store.unreadCount;
-    return GestureDetector(
-      onTap: () => Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => const NotificationsScreen()),
-      ),
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.15),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Icon(Icons.notifications_outlined, color: Colors.white, size: 22),
-          ),
-          if (count > 0)
-            Positioned(
-              top: -4,
-              right: -4,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
-                decoration: BoxDecoration(
-                  color: Colors.red,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: const Color(0xFF1565C0), width: 1.5),
-                ),
-                child: Text(
-                  count > 99 ? '99+' : '$count',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w800),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  },
-),
+                        // Notification bell with badge
+                        Consumer<NotificationStore>(
+                          builder: (context, store, _) {
+                            final count = store.unreadCount;
+                            return GestureDetector(
+                              onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const NotificationsScreen(),
+                                ),
+                              ),
+                              child: Stack(
+                                clipBehavior: Clip.none,
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withOpacity(0.15),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: const Icon(
+                                      Icons.notifications_outlined,
+                                      color: Colors.white,
+                                      size: 22,
+                                    ),
+                                  ),
+                                  if (count > 0)
+                                    Positioned(
+                                      top: -4,
+                                      right: -4,
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 5,
+                                          vertical: 1,
+                                        ),
+                                        constraints: const BoxConstraints(
+                                          minWidth: 18,
+                                          minHeight: 18,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: Colors.red,
+                                          borderRadius: BorderRadius.circular(
+                                            10,
+                                          ),
+                                          border: Border.all(
+                                            color: const Color(0xFF1565C0),
+                                            width: 1.5,
+                                          ),
+                                        ),
+                                        child: Text(
+                                          count > 99 ? '99+' : '$count',
+                                          textAlign: TextAlign.center,
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
                       ],
                     ),
                     const SizedBox(height: 28),
                     Text(
                       '$_greeting,',
-                      style: const TextStyle(color: Colors.white70, fontSize: 16),
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 16,
+                      ),
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -291,8 +325,10 @@ Consumer<NotificationStore>(
                       spacing: 8,
                       runSpacing: 8,
                       children: [
-                        if (_level.isNotEmpty) _infoChip(Icons.stairs_outlined, '$_level Level'),
-                        if (_department.isNotEmpty) _infoChip(Icons.school_outlined, _department),
+                        if (_level.isNotEmpty)
+                          _infoChip(Icons.stairs_outlined, '$_level Level'),
+                        if (_department.isNotEmpty)
+                          _infoChip(Icons.school_outlined, _department),
                       ],
                     ),
                   ],
@@ -309,7 +345,11 @@ Consumer<NotificationStore>(
                 // ── Quick Actions ───────────────────────────
                 Text(
                   'Quick Actions',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: textPrimary),
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: textPrimary,
+                  ),
                 ),
                 const SizedBox(height: 12),
                 Row(
@@ -320,7 +360,8 @@ Consumer<NotificationStore>(
                       color: const Color(0xFF1565C0),
                       isDark: isDark,
                       onTap: () {
-                        final shell = context.findAncestorStateOfType<_MainShellState>();
+                        final shell = context
+                            .findAncestorStateOfType<_MainShellState>();
                         shell?.setState(() => shell._currentIndex = 1);
                       },
                     ),
@@ -331,7 +372,8 @@ Consumer<NotificationStore>(
                       color: const Color(0xFF0891B2),
                       isDark: isDark,
                       onTap: () {
-                        final shell = context.findAncestorStateOfType<_MainShellState>();
+                        final shell = context
+                            .findAncestorStateOfType<_MainShellState>();
                         shell?.setState(() => shell._currentIndex = 2);
                       },
                     ),
@@ -342,7 +384,8 @@ Consumer<NotificationStore>(
                       color: const Color(0xFF7C3AED),
                       isDark: isDark,
                       onTap: () {
-                        final shell = context.findAncestorStateOfType<_MainShellState>();
+                        final shell = context
+                            .findAncestorStateOfType<_MainShellState>();
                         shell?.setState(() => shell._currentIndex = 3);
                       },
                     ),
@@ -353,7 +396,11 @@ Consumer<NotificationStore>(
                 // ── Academic Info Card ──────────────────────
                 Text(
                   'Academic Info',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: textPrimary),
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: textPrimary,
+                  ),
                 ),
                 const SizedBox(height: 12),
                 Container(
@@ -371,11 +418,26 @@ Consumer<NotificationStore>(
                   ),
                   child: Column(
                     children: [
-                      _infoRow(Icons.account_balance_rounded, 'School', _school.isNotEmpty ? _school : '—', isDark),
+                      _infoRow(
+                        Icons.account_balance_rounded,
+                        'School',
+                        _school.isNotEmpty ? _school : '—',
+                        isDark,
+                      ),
                       const SizedBox(height: 16),
-                      _infoRow(Icons.account_balance_outlined, 'Department', _department.isNotEmpty ? _department : '—', isDark),
+                      _infoRow(
+                        Icons.account_balance_outlined,
+                        'Department',
+                        _department.isNotEmpty ? _department : '—',
+                        isDark,
+                      ),
                       const SizedBox(height: 16),
-                      _infoRow(Icons.stairs_outlined, 'Level', _level.isNotEmpty ? '$_level Level' : '—', isDark),
+                      _infoRow(
+                        Icons.stairs_outlined,
+                        'Level',
+                        _level.isNotEmpty ? '$_level Level' : '—',
+                        isDark,
+                      ),
                     ],
                   ),
                 ),
@@ -384,7 +446,11 @@ Consumer<NotificationStore>(
                 // ── Tips Card ───────────────────────────────
                 Text(
                   'Study Tips',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: textPrimary),
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: textPrimary,
+                  ),
                 ),
                 const SizedBox(height: 12),
                 ..._tips(isDark),
@@ -408,9 +474,14 @@ Consumer<NotificationStore>(
       children: [
         Icon(icon, color: Colors.white70, size: 13),
         const SizedBox(width: 6),
-        Text(label,
-            style: const TextStyle(
-                color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
+        Text(
+          label,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
       ],
     ),
   );
@@ -421,43 +492,44 @@ Consumer<NotificationStore>(
     required Color color,
     required bool isDark,
     required VoidCallback onTap,
-  }) =>
-      Expanded(
-        child: GestureDetector(
-          onTap: onTap,
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 18),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [color, color.withOpacity(0.7)],
-              ),
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: color.withOpacity(0.3),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(icon, color: Colors.white, size: 28),
-                const SizedBox(height: 8),
-                Text(label,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                    )),
-              ],
-            ),
+  }) => Expanded(
+    child: GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 18),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [color, color.withOpacity(0.7)],
           ),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: color.withOpacity(0.3),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
-      );
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: Colors.white, size: 28),
+            const SizedBox(height: 8),
+            Text(
+              label,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
 
   Widget _infoRow(IconData icon, String label, String value, bool isDark) =>
       Row(
@@ -475,20 +547,24 @@ Consumer<NotificationStore>(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label,
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: isDark ? Colors.white38 : Colors.black38,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.5,
-                    )),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: isDark ? Colors.white38 : Colors.black38,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.5,
+                  ),
+                ),
                 const SizedBox(height: 2),
-                Text(value,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: isDark ? Colors.white : Colors.black87,
-                    )),
+                Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: isDark ? Colors.white : Colors.black87,
+                  ),
+                ),
               ],
             ),
           ),
@@ -497,42 +573,57 @@ Consumer<NotificationStore>(
 
   List<Widget> _tips(bool isDark) {
     final tips = [
-      ('📚', 'Review your notes within 24 hours of class to retain 80% more information.'),
+      (
+        '📚',
+        'Review your notes within 24 hours of class to retain 80% more information.',
+      ),
       ('⏰', 'Use the Pomodoro technique: 25 min focused study, 5 min break.'),
-      ('🎯', 'Set specific daily study goals instead of vague "study more" intentions.'),
-      ('💤', 'Sleep at least 7 hours — memory consolidation happens during sleep.'),
+      (
+        '🎯',
+        'Set specific daily study goals instead of vague "study more" intentions.',
+      ),
+      (
+        '💤',
+        'Sleep at least 7 hours — memory consolidation happens during sleep.',
+      ),
     ];
 
-    return tips.map((t) => Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1E293B) : Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+    return tips
+        .map(
+          (t) => Container(
+            margin: const EdgeInsets.only(bottom: 10),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF1E293B) : Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(t.$1, style: const TextStyle(fontSize: 22)),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    t.$2,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: isDark ? Colors.white70 : Colors.black54,
+                      height: 1.5,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
-        ],
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(t.$1, style: const TextStyle(fontSize: 22)),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(t.$2,
-                style: TextStyle(
-                  fontSize: 13,
-                  color: isDark ? Colors.white70 : Colors.black54,
-                  height: 1.5,
-                )),
-          ),
-        ],
-      ),
-    )).toList();
+        )
+        .toList();
   }
 }
 
@@ -562,8 +653,7 @@ class _NavItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final isActive = index == currentIndex;
     final activeColor = const Color(0xFF1565C0);
-    final inactiveColor =
-        isDark ? Colors.white38 : Colors.black38;
+    final inactiveColor = isDark ? Colors.white38 : Colors.black38;
 
     return Expanded(
       child: GestureDetector(
@@ -597,8 +687,7 @@ class _NavItem extends StatelessWidget {
               style: TextStyle(
                 color: isActive ? activeColor : inactiveColor,
                 fontSize: 10,
-                fontWeight:
-                    isActive ? FontWeight.w700 : FontWeight.w400,
+                fontWeight: isActive ? FontWeight.w700 : FontWeight.w400,
               ),
               child: Text(label),
             ),

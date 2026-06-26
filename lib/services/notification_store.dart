@@ -1,4 +1,3 @@
-// lib/services/notification_store.dart
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -31,25 +30,42 @@ class NotificationStore extends ChangeNotifier {
 
   Future<void> _save() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_key, jsonEncode(_items.map((n) => n.toMap()).toList()));
+    await prefs.setString(
+      _key,
+      jsonEncode(_items.map((n) => n.toMap()).toList()),
+    );
   }
 
   Future<void> add({
     required String title,
     required String body,
     String type = 'general',
+    Map<String, dynamic> data = const {},
   }) async {
     final notif = AppNotification(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       title: title,
       body: body,
       type: type,
+      data: data,
       receivedAt: DateTime.now(),
     );
     _items.insert(0, notif);
     if (_items.length > _maxStored) {
       _items = _items.sublist(0, _maxStored);
     }
+    await _save();
+    notifyListeners();
+  }
+
+  // NEW — mark a single notification read (you only had markAllRead)
+  Future<void> markAsRead(String id) async {
+    final notif = _items.firstWhere(
+      (n) => n.id == id,
+      orElse: () => null as dynamic,
+    );
+    if (notif == null) return;
+    notif.isRead = true;
     await _save();
     notifyListeners();
   }

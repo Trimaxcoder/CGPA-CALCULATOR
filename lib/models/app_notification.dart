@@ -3,7 +3,8 @@ class AppNotification {
   final String id;
   final String title;
   final String body;
-  final String type; // e.g. 'lecture', 'exam', 'general', 'admin'
+  final String type;
+  final Map<String, dynamic> data; // NEW — carries courseCode, examId, etc.
   final DateTime receivedAt;
   bool isRead;
 
@@ -12,6 +13,7 @@ class AppNotification {
     required this.title,
     required this.body,
     required this.type,
+    this.data = const {},
     required this.receivedAt,
     this.isRead = false,
   });
@@ -21,16 +23,18 @@ class AppNotification {
         'title': title,
         'body': body,
         'type': type,
+        'data': data,
         'receivedAt': receivedAt.toIso8601String(),
         'isRead': isRead,
       };
 
-  factory AppNotification.fromMap(Map<String, dynamic> m) => AppNotification(
-        id: m['id'],
-        title: m['title'] ?? '',
-        body: m['body'] ?? '',
-        type: m['type'] ?? 'general',
-        receivedAt: DateTime.tryParse(m['receivedAt'] ?? '') ?? DateTime.now(),
-        isRead: m['isRead'] ?? false,
+  factory AppNotification.fromMap(Map<String, dynamic> map) => AppNotification(
+        id: map['id'],
+        title: map['title'],
+        body: map['body'],
+        type: map['type'] ?? 'general',
+        data: map['data'] != null ? Map<String, dynamic>.from(map['data']) : {},
+        receivedAt: DateTime.parse(map['receivedAt']),
+        isRead: map['isRead'] ?? false,
       );
 }
