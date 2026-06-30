@@ -9,9 +9,10 @@ import 'screens/splash_screen.dart';
 import 'firebase_options.dart';
 import 'services/notification_service.dart';
 import 'services/notification_store.dart';
-import 'services/notification_router.dart'; // NEW
-import 'services/navigation_service.dart'; // NEW
+import 'services/notification_router.dart';
+import 'services/navigation_service.dart'; 
 import 'services/muted_courses_store.dart';
+import 'stores/announcement_store.dart';
 
 // REMOVED: local `final navigatorKey = GlobalKey<NavigatorState>();`
 // Now using NavigationService.navigatorKey everywhere instead, so
@@ -73,6 +74,7 @@ void main() async {
   // Don't let push-token failures (e.g. SERVICE_NOT_AVAILABLE on devices
   // with outdated/missing Play Services) block or crash app startup.
   await _initNotificationsSafely();
+  await AnnouncementStore().init();
 
   runApp(const MyApp());
 }
@@ -112,6 +114,7 @@ class _MyAppState extends State<MyApp> {
       providers: [
         ChangeNotifierProvider(create: (_) => ThemeNotifier()),
         ChangeNotifierProvider(create: (_) => NotificationStore()),
+        ChangeNotifierProvider(create: (_) => AnnouncementStore()),
       ],
       child: Consumer<ThemeNotifier>(
         builder: (context, theme, _) => MaterialApp(

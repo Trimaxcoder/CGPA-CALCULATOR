@@ -154,12 +154,12 @@ class _HomeScreenState extends State<HomeScreen>
           .where((c) => !_deletedServerIds.contains(c.serverId))
           .map((c) => c.toMap())
           .toList();
-      print("=== SYNC deletedIds: $_deletedServerIds");
+      // print("=== SYNC deletedIds: $_deletedServerIds");
       final serverCourses = await CourseService().syncCourses(
         localList,
         deletedServerIds: _deletedServerIds.toList(),
       );
-      print("=== SYNC server returned: ${serverCourses.length} courses");
+      // print("=== SYNC server returned: ${serverCourses.length} courses");
       final merged = serverCourses.map((m) => Course.fromServerMap(m)).toList();
 
       setState(() {

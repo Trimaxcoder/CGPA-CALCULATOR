@@ -48,8 +48,8 @@ dependencies:
   provider: ^6.1.2
   firebase_core: ^3.4.0
   firebase_messaging: ^15.1.0
-  flutter_local_notifications: ^17.2.3
-  timezone: ^0.9.4
+  flutter_local_notifications: ^19.0.1
+  timezone: ^0.10.1
 
 dev_dependencies:
   flutter_test:

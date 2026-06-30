@@ -9,7 +9,8 @@ import '../services/timetable_service.dart';
 import 'super_admin_screen.dart';
 import '../services/muted_courses_store.dart';
 import '../widgets/snackBar.dart';
-import '../services/notification_service.dart'; // adjust path
+import '../services/notification_service.dart';
+import 'compose_announcement_screen.dart';
 
 class TimetableScreen extends StatefulWidget {
   const TimetableScreen({super.key});
@@ -264,7 +265,24 @@ class _TimetableScreenState extends State<TimetableScreen>
                           ),
                           onPressed: _loadAll,
                         ),
-                        if (_isAdmin)
+                        if (_isAdmin) ...[
+                          TextButton(
+                            onPressed: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    const ComposeAnnouncementScreen(),
+                              ),
+                            ),
+                            child: const Text(
+                              'Announce',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
                           TextButton(
                             onPressed: () => _confirmResign(isDark),
                             child: const Text(
@@ -276,6 +294,7 @@ class _TimetableScreenState extends State<TimetableScreen>
                               ),
                             ),
                           ),
+                        ],
                         if (!_isAdmin && !_isSuperAdmin)
                           TextButton(
                             onPressed: () => _showAdminRequestSheet(isDark),
@@ -758,8 +777,12 @@ class _TimetableScreenState extends State<TimetableScreen>
                 // ── Mute button (everyone) ──
                 IconButton(
                   icon: Icon(
-                    isMuted ? Icons.notifications_off_rounded : Icons.notifications_active_outlined,
-                    color: isMuted ? Colors.grey : (isDark ? Colors.white38 : Colors.black38),
+                    isMuted
+                        ? Icons.notifications_off_rounded
+                        : Icons.notifications_active_outlined,
+                    color: isMuted
+                        ? Colors.grey
+                        : (isDark ? Colors.white38 : Colors.black38),
                     size: 20,
                   ),
                   onPressed: () async {
@@ -1180,22 +1203,35 @@ class _TimetableScreenState extends State<TimetableScreen>
                     size: 22,
                   ),
                   onPressed: () async {
-  await _svc.toggleBookmark(e.id);
-  await _loadPersonal();
-  setState(() {});
+                    await _svc.toggleBookmark(e.id);
+                    await _loadPersonal();
+                    setState(() {});
 
-  final updated = _personal.firstWhere((p) => p.id == e.id, orElse: () => e);
-  if (updated.isBookmarked) {
-    await NotificationService.scheduleStudyReminder(
-      entryId: updated.id,
-      title: updated.title,
-      day: updated.day,
-      startTime: updated.startTime,
-    );
-  } else {
-    await NotificationService.cancelStudyReminder(updated.id);
-  }
-},
+                    final updated = _personal.firstWhere(
+                      (p) => p.id == e.id,
+                      orElse: () => e,
+                    );
+                    if (updated.isBookmarked) {
+                      final success =
+                          await NotificationService.scheduleStudyReminder(
+                            entryId: updated.id,
+                            title: updated.title,
+                            day: updated.day,
+                            startTime: updated.startTime,
+                          );
+                      if (!success && context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'Reminder permission missing — enable it in Settings.',
+                            ),
+                          ),
+                        );
+                      }
+                    } else {
+                      await NotificationService.cancelStudyReminder(updated.id);
+                    }
+                  },
                 ),
                 PopupMenuButton<String>(
                   icon: Icon(
@@ -2124,26 +2160,29 @@ class _TimetableScreenState extends State<TimetableScreen>
     ),
   );
 
-  Widget _sheetField(String label, TextEditingController ctrl, bool isDark) =>
-      TextField(
-        controller: ctrl,
-        style: TextStyle(color: isDark ? Colors.white : Colors.black87),
-        cursorColor: _primary,
-        decoration: InputDecoration(
-          labelText: label,
-          labelStyle: TextStyle(color: isDark ? Colors.white54 : Colors.black54),
-          filled: true,
-          fillColor: isDark ? Colors.white.withOpacity(0.05) : Colors.grey.shade50,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide.none,
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: _primary, width: 1.5),
-          ),
-        ),
-      );
+  Widget _sheetField(
+    String label,
+    TextEditingController ctrl,
+    bool isDark,
+  ) => TextField(
+    controller: ctrl,
+    style: TextStyle(color: isDark ? Colors.white : Colors.black87),
+    cursorColor: _primary,
+    decoration: InputDecoration(
+      labelText: label,
+      labelStyle: TextStyle(color: isDark ? Colors.white54 : Colors.black54),
+      filled: true,
+      fillColor: isDark ? Colors.white.withOpacity(0.05) : Colors.grey.shade50,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide.none,
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: _primary, width: 1.5),
+      ),
+    ),
+  );
 
   Widget _dropdownField(
     String label,
@@ -2171,7 +2210,12 @@ class _TimetableScreenState extends State<TimetableScreen>
       ),
     ),
     items: items
-        .map((d) => DropdownMenuItem(value: d, child: Text(d[0].toUpperCase() + d.substring(1))))
+        .map(
+          (d) => DropdownMenuItem(
+            value: d,
+            child: Text(d[0].toUpperCase() + d.substring(1)),
+          ),
+        )
         .toList(),
   );
 
@@ -2190,7 +2234,9 @@ class _TimetableScreenState extends State<TimetableScreen>
       );
       final picked = await showTimePicker(context: ctx, initialTime: initial);
       if (picked != null) {
-        onPicked('${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}');
+        onPicked(
+          '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}',
+        );
       }
     },
     child: Container(
@@ -2207,10 +2253,19 @@ class _TimetableScreenState extends State<TimetableScreen>
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(label, style: TextStyle(fontSize: 10, color: isDark ? Colors.white38 : Colors.black38)),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 10,
+                  color: isDark ? Colors.white38 : Colors.black38,
+                ),
+              ),
               Text(
                 current,
-                style: TextStyle(fontWeight: FontWeight.w600, color: isDark ? Colors.white : Colors.black87),
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: isDark ? Colors.white : Colors.black87,
+                ),
               ),
             ],
           ),

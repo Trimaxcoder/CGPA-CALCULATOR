@@ -14,6 +14,7 @@ import '../widgets/ui_helpers.dart';
 import '../uniport_courses.dart';
 import '../services/api_service.dart';
 import '../widgets/notification_toggle.dart';
+import '../widgets/personal_reminders_toggle.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -232,7 +233,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
                 _sectionLabel('Notifications', isDark),
                 const SizedBox(height: 8),
-                _buildCard(isDark, [const NotificationToggle()]),
+                _buildCard(isDark, [
+                  const NotificationToggle(),
+                  const PersonalRemindersToggle(),
+                ]),
                 const SizedBox(height: 20),
 
                 _sectionLabel('Account', isDark),

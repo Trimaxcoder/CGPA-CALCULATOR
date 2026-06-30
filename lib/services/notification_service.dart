@@ -2,13 +2,14 @@ import 'dart:async';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
+import 'package:flutter/foundation.dart' show kIsWeb, debugPrint, debugPrintStack;
 import 'dart:convert';
 import 'package:timezone/timezone.dart' as tz;
 import 'timetable_service.dart';
 import 'muted_courses_store.dart';
 import 'notification_store.dart';
 import 'navigation_service.dart';
+import 'dart:io' show Platform;
 import 'notification_router.dart';
 import '../models/app_notification.dart';
 import 'notification_service_web.dart'
@@ -134,6 +135,7 @@ class NotificationService {
         >();
     if (androidImpl != null) {
       await androidImpl.requestNotificationsPermission();
+      await androidImpl.requestExactAlarmsPermission();
     }
   }
 
@@ -228,59 +230,135 @@ class NotificationService {
     return map[day] ?? DateTime.monday;
   }
 
-  static Future<void> scheduleStudyReminder({
-    required String entryId,
-    required String title,
-    required String day,
-    required String startTime,
-    int minutesBefore = 10,
-  }) async {
-    final parts = startTime.split(':');
-    final hour = int.tryParse(parts[0]) ?? 8;
-    final minute = int.tryParse(parts[1]) ?? 0;
-    final weekday = _weekdayFor(day);
 
-    final now = tz.TZDateTime.now(tz.local);
-    var scheduled = tz.TZDateTime(
-      tz.local,
-      now.year,
-      now.month,
-      now.day,
-      hour,
-      minute,
-    ).subtract(Duration(minutes: minutesBefore));
 
-    while (scheduled.weekday != weekday || scheduled.isBefore(now)) {
-      scheduled = scheduled.add(const Duration(days: 1));
-    }
+  static Future<bool> scheduleStudyReminder({
+  required String entryId,
+  required String title,
+  required String day,
+  required String startTime,
+  int minutesBefore = 10,
+}) async {
+  final hasPermission = await canScheduleExactAlarms();
+  if (!hasPermission) {
+    debugPrint('❌ Cannot schedule — exact alarm permission not granted.');
+    return false; // CHANGED — caller now knows it failed
+  }
 
-    const androidDetails = AndroidNotificationDetails(
-      'study_reminders',
-      'Study Reminders',
-      channelDescription: 'Reminders for bookmarked personal study sessions',
-      importance: Importance.high,
-      priority: Priority.high,
-      icon: 'ic_notification',
-    );
-    const details = NotificationDetails(
-      android: androidDetails,
-      iOS: DarwinNotificationDetails(),
-    );
+  final parts = startTime.split(':');
+  final hour = int.tryParse(parts[0]) ?? 8;
+  final minute = int.tryParse(parts[1]) ?? 0;
+  final weekday = _weekdayFor(day);
 
+  final now = tz.TZDateTime.now(tz.local);
+  var scheduled = tz.TZDateTime(tz.local, now.year, now.month, now.day, hour, minute)
+      .subtract(Duration(minutes: minutesBefore));
+
+  while (scheduled.weekday != weekday || scheduled.isBefore(now)) {
+    scheduled = scheduled.add(const Duration(days: 1));
+  }
+
+  const androidDetails = AndroidNotificationDetails(
+    'study_reminders',
+    'Study Reminders',
+    channelDescription: 'Reminders for bookmarked personal study sessions',
+    importance: Importance.high,
+    priority: Priority.high,
+    icon: 'ic_notification',
+  );
+  const details = NotificationDetails(android: androidDetails, iOS: DarwinNotificationDetails());
+
+  try {
     await _localNotifications.zonedSchedule(
       entryId.hashCode,
       '📖 Study Time!',
-      'Time to read $title — you\'ve got this!',
+      'Time to study $title — you\'ve got this!',
       scheduled,
       details,
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      uiLocalNotificationDateInterpretation:
-          UILocalNotificationDateInterpretation.absoluteTime,
+      androidScheduleMode: AndroidScheduleMode.alarmClock,
       matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime,
     );
+    return true; // CHANGED
+  } catch (e, st) {
+    debugPrint('❌ zonedSchedule FAILED: $e');
+    debugPrintStack(stackTrace: st);
+    return false; // CHANGED
   }
+}
+  
 
   static Future<void> cancelStudyReminder(String entryId) async {
     await _localNotifications.cancel(entryId.hashCode);
   }
+
+    // TEMPORARY — for testing only, remove once confirmed working
+  // static Future<void> testImmediateNotification() async {
+  //   const androidDetails = AndroidNotificationDetails(
+  //     'study_reminders',
+  //     'Study Reminders',
+  //     channelDescription: 'Reminders for bookmarked personal study sessions',
+  //     importance: Importance.high,
+  //     priority: Priority.high,
+  //     icon: 'ic_notification',
+  //   );
+  //   const details = NotificationDetails(android: androidDetails, iOS: DarwinNotificationDetails());
+  //   await _localNotifications.show(888888, '🧪 Immediate Test', 'If you see this, basic notifications work', details);
+  // }
+
+
+  
+
+// ── Personal Reminders toggle support ──
+
+static Future<bool> canScheduleExactAlarms() async {
+  if (!Platform.isAndroid) return true; // iOS doesn't need this check
+  final androidImpl = _localNotifications
+      .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+  return await androidImpl?.canScheduleExactNotifications() ?? false;
 }
+
+static Future<void> openExactAlarmSettings() async {
+  final androidImpl = _localNotifications
+      .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+  await androidImpl?.requestExactAlarmsPermission();
+}
+
+/// Schedules a one-off verification notification ~10 seconds out.
+/// Used right after the user enables Personal Reminders, so they get
+/// immediate proof it works instead of waiting days for a real class.
+
+
+
+
+static Future<void> scheduleVerificationTest() async {
+  const androidDetails = AndroidNotificationDetails(
+    'study_reminders',
+    'Study Reminders',
+    channelDescription: 'Reminders for bookmarked personal study sessions',
+    importance: Importance.high,
+    priority: Priority.high,
+    icon: 'ic_notification',
+  );
+  const details = NotificationDetails(android: androidDetails, iOS: DarwinNotificationDetails());
+
+  final scheduled = tz.TZDateTime.now(tz.local).add(const Duration(seconds: 10));
+  debugPrint('🧪 Verification test scheduled for: $scheduled (now: ${tz.TZDateTime.now(tz.local)})');
+
+  try {
+    await _localNotifications.zonedSchedule(
+      777777,
+      '✅ Reminders are working!',
+      'Personal study reminders are set up correctly.',
+      scheduled,
+      details,
+      androidScheduleMode: AndroidScheduleMode.alarmClock,
+    );
+    debugPrint('✅ Verification test zonedSchedule call completed without error');
+  } catch (e, st) {
+    debugPrint('❌ Verification test FAILED: $e');
+    debugPrintStack(stackTrace: st);
+  }
+}
+   
+}
+
