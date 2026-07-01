@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../providers/theme_notifier.dart';
-
+import '../widgets/update_check_tile.dart';
 import '../models/studentProfile_model.dart';
 import '../services/api_service.dart';
 import '../screens/landing_page.dart';
@@ -285,6 +285,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     isDark: isDark,
                   ),
                 ]),
+                const SizedBox(height: 20),
+                _sectionLabel('App Update', isDark),
+                const SizedBox(height: 8),
+                _buildCard(isDark, [
+                  const UpdateCheckTile(),
+                ]),
+
                 const SizedBox(height: 40),
               ],
             ),
