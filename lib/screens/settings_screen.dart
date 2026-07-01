@@ -280,7 +280,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     icon: Icons.verified_outlined,
                     iconColor: Colors.green,
                     title: 'App Version',
-                    subtitle: 'GradeX v1.0.0',
+                    subtitle: 'GradeX v1.0.1',
                     onTap: null,
                     isDark: isDark,
                   ),

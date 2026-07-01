@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
-
+import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import '../providers/theme_notifier.dart';
 import '../services/notification_store.dart';
 import 'homescreen.dart';
@@ -454,6 +455,9 @@ class _HomeTabState extends State<_HomeTab> {
                 ),
                 const SizedBox(height: 12),
                 ..._tips(isDark),
+
+                // ── Download button (web only) ──────────────
+                if (kIsWeb) _downloadApkButton(isDark),
               ],
             ),
           ),
@@ -570,6 +574,33 @@ class _HomeTabState extends State<_HomeTab> {
           ),
         ],
       );
+
+  Widget _downloadApkButton(bool isDark) => Container(
+    margin: const EdgeInsets.only(top: 28),
+    width: double.infinity,
+    child: ElevatedButton.icon(
+      onPressed: () async {
+        final uri = Uri.parse(
+          'https://gradexbackend.onrender.com/downloads/gradex.apk',
+        );
+        if (await canLaunchUrl(uri)) {
+          await launchUrl(uri, webOnlyWindowName: '_self');
+        }
+      },
+      icon: const Icon(Icons.download_rounded),
+      label: const Text(
+        'Download GradeX for Android',
+        style: TextStyle(fontWeight: FontWeight.w700),
+      ),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: const Color(0xFF1565C0),
+        foregroundColor: Colors.white,
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        elevation: 0,
+      ),
+    ),
+  );
 
   List<Widget> _tips(bool isDark) {
     final tips = [

@@ -1,5 +1,15 @@
 {
   "projects": {
     "default": "cgpa-calculator-8e6ae"
-  }
+  },
+  "targets": {
+    "cgpa-calculator-8e6ae": {
+      "hosting": {
+        "gradexapp": [
+          "gradexapp"
+        ]
+      }
+    }
+  },
+  "etags": {}
 }
