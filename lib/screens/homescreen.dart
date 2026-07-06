@@ -12,11 +12,9 @@ import 'dart:io';
 import 'dart:ui' as ui;
 import 'package:flutter/rendering.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:image_picker/image_picker.dart';
 import 'dart:async';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:google_mlkit_document_scanner/google_mlkit_document_scanner.dart';
-
 import 'package:provider/provider.dart';
 import '../providers/theme_notifier.dart';
 import '../models/grading_model.dart';
@@ -1287,19 +1285,25 @@ class _HomeScreenState extends State<HomeScreen>
                         height: 50,
                         child: ElevatedButton.icon(
                           onPressed: picked.isEmpty
-    ? null
-    : () {
-        final toShow = selectable
-            .where((c) => picked.contains(c.code))
-            .toList();
-        debugPrint('=== ADD SELECTED TAPPED, toShow.length: ${toShow.length}');
-        Navigator.pop(ctx);
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          debugPrint('=== POST FRAME CALLBACK FIRING, mounted: $mounted');
-          if (!mounted) return;
-          _showScoreEntryForPicked(toShow);
-        });
-      },
+                              ? null
+                              : () {
+                                  final toShow = selectable
+                                      .where((c) => picked.contains(c.code))
+                                      .toList();
+                                  debugPrint(
+                                    '=== ADD SELECTED TAPPED, toShow.length: ${toShow.length}',
+                                  );
+                                  Navigator.pop(ctx);
+                                  WidgetsBinding.instance.addPostFrameCallback((
+                                    _,
+                                  ) {
+                                    debugPrint(
+                                      '=== POST FRAME CALLBACK FIRING, mounted: $mounted',
+                                    );
+                                    if (!mounted) return;
+                                    _showScoreEntryForPicked(toShow);
+                                  });
+                                },
                           icon: const Icon(Icons.add),
                           label: Text(
                             'Add ${picked.isEmpty ? '' : picked.length.toString()} Selected',
@@ -1323,9 +1327,6 @@ class _HomeScreenState extends State<HomeScreen>
       ),
     );
   }
-
- 
-
 
   void _showScoreEntryForPicked(List<CourseData> picked) {
     final isDark = context.read<ThemeNotifier>().isDarkMode;
@@ -1614,8 +1615,6 @@ class _HomeScreenState extends State<HomeScreen>
       ),
     );
   }
-
-  
 
   Widget _inputModeToggle({
     required bool useGrade,
@@ -5031,6 +5030,26 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
+  Widget _glassIconButton({
+    required IconData icon,
+    required VoidCallback onPressed,
+  }) {
+    return GestureDetector(
+      onTap: onPressed,
+      child: Container(
+        width: 38,
+        height: 38,
+        margin: const EdgeInsets.symmetric(horizontal: 2),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.15),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.white24),
+        ),
+        child: Icon(icon, color: Colors.white, size: 20),
+      ),
+    );
+  }
+
   // ══════════════════════════════════════════════════════════
   //  MAIN BUILD
   // ══════════════════════════════════════════════════════════
@@ -5043,7 +5062,7 @@ class _HomeScreenState extends State<HomeScreen>
       backgroundColor: isDark ? const Color(0xFF0A0A0A) : Colors.blue.shade50,
       body: Column(
         children: [
-          // ── Unified gradient header: AppBar + CGPA + TabBar ──
+          // ── Full-width gradient header, deep bottom curve ──
           Container(
             decoration: const BoxDecoration(
               gradient: LinearGradient(
@@ -5055,7 +5074,10 @@ class _HomeScreenState extends State<HomeScreen>
                   Color(0xFF1E88E5),
                 ],
               ),
-              borderRadius: BorderRadius.vertical(bottom: Radius.circular(28)),
+              borderRadius: BorderRadius.only(
+                bottomLeft: Radius.circular(60),
+                bottomRight: Radius.circular(60),
+              ),
               boxShadow: [
                 BoxShadow(
                   color: Color(0x331565C0),
@@ -5068,12 +5090,12 @@ class _HomeScreenState extends State<HomeScreen>
               bottom: false,
               child: Column(
                 children: [
-                  // Title row (was AppBar)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+                  // Title row
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(16, 12, 16, 4),
                     child: Row(
                       children: [
-                        const Expanded(
+                        Expanded(
                           child: Text(
                             'CGPA Calculator',
                             textAlign: TextAlign.center,
@@ -5088,6 +5110,7 @@ class _HomeScreenState extends State<HomeScreen>
                     ),
                   ),
                   const SizedBox(height: 8),
+
                   // CGPA row
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -5144,34 +5167,34 @@ class _HomeScreenState extends State<HomeScreen>
                                 ),
                         ),
                         const Spacer(),
-                        IconButton(
-                          icon: Icon(
-                            _cgpaHidden
-                                ? Icons.visibility_off
-                                : Icons.visibility,
-                            color: Colors.white70,
-                            size: 22,
-                          ),
+                        _glassIconButton(
+                          icon: _cgpaHidden
+                              ? Icons.visibility_off
+                              : Icons.visibility,
                           onPressed: () {
                             setState(() => _cgpaHidden = !_cgpaHidden);
                             _savePref('cgpaHidden', _cgpaHidden);
                           },
-                          tooltip: _cgpaHidden ? 'Show CGPA' : 'Hide CGPA',
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(),
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 4),
-                  // TabBar — transparent, sits on the same gradient
+                  const SizedBox(height: 12),
+
+                  // TabBar — contained indicator
                   TabBar(
                     controller: _tabCtrl,
                     isScrollable: false,
                     labelColor: Colors.white,
                     unselectedLabelColor: Colors.white54,
-                    indicatorColor: Colors.white,
-                    indicatorWeight: 3,
+                    indicatorSize: TabBarIndicatorSize.label,
+                    indicator: UnderlineTabIndicator(
+                      borderSide: const BorderSide(
+                        color: Colors.white,
+                        width: 3,
+                      ),
+                      insets: const EdgeInsets.symmetric(horizontal: 8),
+                    ),
                     tabs: const [
                       Tab(
                         icon: Icon(Icons.add_circle_outline, size: 20),
@@ -5196,6 +5219,7 @@ class _HomeScreenState extends State<HomeScreen>
                       ),
                     ],
                   ),
+                  const SizedBox(height: 20),
                 ],
               ),
             ),

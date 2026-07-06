@@ -6,7 +6,6 @@ import '../models/app_notification.dart';
 import '../models/announcement.dart';
 import '../stores/announcement_store.dart';
 import '../services/notification_router.dart';
-import '../services/notification_service.dart';
 import '../providers/theme_notifier.dart';
 import 'announcement_detail_screen.dart';
 
@@ -48,39 +47,53 @@ class _NotificationsScreenState extends State<NotificationsScreen>
 
   String _timeAgo(DateTime t) {
     final diff = DateTime.now().difference(t);
-    if (diff.inMinutes < 1)  return 'Just now';
+    if (diff.inMinutes < 1) return 'Just now';
     if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours   < 24) return '${diff.inHours}h ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
     return '${diff.inDays}d ago';
   }
 
   IconData _iconFor(String type) {
     switch (type) {
-      case 'class_reminder':    return Icons.access_time_filled_rounded;
-      case 'emergency_toggle':  return Icons.warning_amber_rounded;
-      case 'test_toggle':       return Icons.quiz_rounded;
-      case 'attendance_toggle': return Icons.how_to_reg_rounded;
-      case 'cancelled_toggle':  return Icons.block_rounded;
-      case 'important_class':   return Icons.push_pin_rounded;
-      case 'exam_added':        return Icons.event_note_rounded;
-      case 'admin_approved':    return Icons.verified_rounded;
-      case 'admin_rejected':    return Icons.cancel_rounded;
-      case 'admin_revoked':     return Icons.gpp_bad_rounded;
-      case 'morning_digest':    return Icons.wb_sunny_rounded;
-      case 'announcement':      return Icons.campaign_rounded;
-      default:                  return Icons.notifications_rounded;
+      case 'class_reminder':
+        return Icons.access_time_filled_rounded;
+      case 'emergency_toggle':
+        return Icons.warning_amber_rounded;
+      case 'test_toggle':
+        return Icons.quiz_rounded;
+      case 'attendance_toggle':
+        return Icons.how_to_reg_rounded;
+      case 'cancelled_toggle':
+        return Icons.block_rounded;
+      case 'important_class':
+        return Icons.push_pin_rounded;
+      case 'exam_added':
+        return Icons.event_note_rounded;
+      case 'admin_approved':
+        return Icons.verified_rounded;
+      case 'admin_rejected':
+        return Icons.cancel_rounded;
+      case 'admin_revoked':
+        return Icons.gpp_bad_rounded;
+      case 'morning_digest':
+        return Icons.wb_sunny_rounded;
+      case 'announcement':
+        return Icons.campaign_rounded;
+      default:
+        return Icons.notifications_rounded;
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final isDark     = context.watch<ThemeNotifier>().isDarkMode;
+    final isDark = context.watch<ThemeNotifier>().isDarkMode;
     final notifStore = context.watch<NotificationStore>();
-    final annStore   = context.watch<AnnouncementStore>();
+    final annStore = context.watch<AnnouncementStore>();
 
     return Scaffold(
-      backgroundColor:
-          isDark ? const Color(0xFF0A0A0A) : const Color(0xFFF2F4F8),
+      backgroundColor: isDark
+          ? const Color(0xFF0A0A0A)
+          : const Color(0xFFF2F4F8),
       body: Column(
         children: [
           // ── Gradient header ──────────────────────────────────────────────
@@ -95,8 +108,7 @@ class _NotificationsScreenState extends State<NotificationsScreen>
                   Color(0xFF1E88E5),
                 ],
               ),
-              borderRadius:
-                  BorderRadius.vertical(bottom: Radius.circular(28)),
+              borderRadius: BorderRadius.vertical(bottom: Radius.circular(28)),
               boxShadow: [
                 BoxShadow(
                   color: Color(0x331565C0),
@@ -114,8 +126,10 @@ class _NotificationsScreenState extends State<NotificationsScreen>
                     child: Row(
                       children: [
                         IconButton(
-                          icon: const Icon(Icons.arrow_back_ios_new,
-                              color: Colors.white),
+                          icon: const Icon(
+                            Icons.arrow_back_ios_new,
+                            color: Colors.white,
+                          ),
                           onPressed: () => Navigator.pop(context),
                         ),
                         const Expanded(
@@ -140,7 +154,9 @@ class _NotificationsScreenState extends State<NotificationsScreen>
                     labelColor: Colors.white,
                     unselectedLabelColor: Colors.white54,
                     labelStyle: const TextStyle(
-                        fontWeight: FontWeight.w700, fontSize: 14),
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                    ),
                     tabs: [
                       Tab(
                         child: Row(
@@ -230,21 +246,32 @@ class _NotificationsTab extends StatelessWidget {
               children: [
                 Expanded(
                   child: TextButton.icon(
-                    onPressed:
-                        store.unreadCount == 0 ? null : store.markAllRead,
-                    icon: const Icon(Icons.done_all_rounded,
-                        size: 18, color: _primary),
-                    label: const Text('Mark all as read',
-                        style: TextStyle(color: _primary)),
+                    onPressed: store.unreadCount == 0
+                        ? null
+                        : store.markAllRead,
+                    icon: const Icon(
+                      Icons.done_all_rounded,
+                      size: 18,
+                      color: _primary,
+                    ),
+                    label: const Text(
+                      'Mark all as read',
+                      style: TextStyle(color: _primary),
+                    ),
                   ),
                 ),
                 Expanded(
                   child: TextButton.icon(
                     onPressed: () => _confirmClearAll(context),
-                    icon: const Icon(Icons.delete_sweep_rounded,
-                        size: 18, color: Colors.red),
-                    label: const Text('Clear all',
-                        style: TextStyle(color: Colors.red)),
+                    icon: const Icon(
+                      Icons.delete_sweep_rounded,
+                      size: 18,
+                      color: Colors.red,
+                    ),
+                    label: const Text(
+                      'Clear all',
+                      style: TextStyle(color: Colors.red),
+                    ),
                   ),
                 ),
               ],
@@ -293,15 +320,15 @@ class _NotificationsTab extends StatelessWidget {
         content: const Text('This cannot be undone.'),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel')),
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
           TextButton(
             onPressed: () {
               store.clearAll();
               Navigator.pop(ctx);
             },
-            child:
-                const Text('Clear', style: TextStyle(color: Colors.red)),
+            child: const Text('Clear', style: TextStyle(color: Colors.red)),
           ),
         ],
       ),
@@ -341,14 +368,10 @@ class _AnnouncementsTab extends StatelessWidget {
             const SizedBox(height: 12),
             Text(
               'Could not load announcements',
-              style: TextStyle(
-                  color: isDark ? Colors.white70 : Colors.black54),
+              style: TextStyle(color: isDark ? Colors.white70 : Colors.black54),
             ),
             const SizedBox(height: 8),
-            TextButton(
-              onPressed: store.refresh,
-              child: const Text('Retry'),
-            ),
+            TextButton(onPressed: store.refresh, child: const Text('Retry')),
           ],
         ),
       );
@@ -366,21 +389,32 @@ class _AnnouncementsTab extends StatelessWidget {
               children: [
                 Expanded(
                   child: TextButton.icon(
-                    onPressed:
-                        store.unreadCount == 0 ? null : store.markAllRead,
-                    icon: const Icon(Icons.done_all_rounded,
-                        size: 18, color: _primary),
-                    label: const Text('Mark all as read',
-                        style: TextStyle(color: _primary)),
+                    onPressed: store.unreadCount == 0
+                        ? null
+                        : store.markAllRead,
+                    icon: const Icon(
+                      Icons.done_all_rounded,
+                      size: 18,
+                      color: _primary,
+                    ),
+                    label: const Text(
+                      'Mark all as read',
+                      style: TextStyle(color: _primary),
+                    ),
                   ),
                 ),
                 Expanded(
                   child: TextButton.icon(
                     onPressed: () => _confirmClearAll(context),
-                    icon: const Icon(Icons.delete_sweep_rounded,
-                        size: 18, color: Colors.red),
-                    label: const Text('Clear all',
-                        style: TextStyle(color: Colors.red)),
+                    icon: const Icon(
+                      Icons.delete_sweep_rounded,
+                      size: 18,
+                      color: Colors.red,
+                    ),
+                    label: const Text(
+                      'Clear all',
+                      style: TextStyle(color: Colors.red),
+                    ),
                   ),
                 ),
               ],
@@ -441,15 +475,15 @@ class _AnnouncementsTab extends StatelessWidget {
         content: const Text('This removes them from your view only.'),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel')),
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
           TextButton(
             onPressed: () {
               store.hideAllLocal();
               Navigator.pop(ctx);
             },
-            child:
-                const Text('Clear', style: TextStyle(color: Colors.red)),
+            child: const Text('Clear', style: TextStyle(color: Colors.red)),
           ),
         ],
       ),
@@ -467,19 +501,20 @@ class _Badge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-        decoration: BoxDecoration(
-          color: Colors.redAccent,
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Text(
-          count > 99 ? '99+' : '$count',
-          style: const TextStyle(
-              color: Colors.white,
-              fontSize: 11,
-              fontWeight: FontWeight.bold),
-        ),
-      );
+    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+    decoration: BoxDecoration(
+      color: Colors.redAccent,
+      borderRadius: BorderRadius.circular(10),
+    ),
+    child: Text(
+      count > 99 ? '99+' : '$count',
+      style: const TextStyle(
+        color: Colors.white,
+        fontSize: 11,
+        fontWeight: FontWeight.bold,
+      ),
+    ),
+  );
 }
 
 class _DismissBackground extends StatelessWidget {
@@ -487,15 +522,15 @@ class _DismissBackground extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        alignment: Alignment.centerRight,
-        padding: const EdgeInsets.only(right: 20),
-        margin: const EdgeInsets.only(bottom: 10),
-        decoration: BoxDecoration(
-          color: Colors.red.shade400,
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: const Icon(Icons.delete, color: Colors.white),
-      );
+    alignment: Alignment.centerRight,
+    padding: const EdgeInsets.only(right: 20),
+    margin: const EdgeInsets.only(bottom: 10),
+    decoration: BoxDecoration(
+      color: Colors.red.shade400,
+      borderRadius: BorderRadius.circular(14),
+    ),
+    child: const Icon(Icons.delete, color: Colors.white),
+  );
 }
 
 class _EmptyState extends StatelessWidget {
@@ -505,36 +540,38 @@ class _EmptyState extends StatelessWidget {
 
   static const Color _primary = Color(0xFF1565C0);
 
-  const _EmptyState(
-      {required this.isDark, required this.icon, required this.label});
+  const _EmptyState({
+    required this.isDark,
+    required this.icon,
+    required this.label,
+  });
 
   @override
   Widget build(BuildContext context) => Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 96,
-              height: 96,
-              decoration: BoxDecoration(
-                color: _primary.withOpacity(0.08),
-                shape: BoxShape.circle,
-              ),
-              child:
-                  Icon(icon, size: 44, color: _primary.withOpacity(0.5)),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-                color: isDark ? Colors.white70 : Colors.black87,
-              ),
-            ),
-          ],
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 96,
+          height: 96,
+          decoration: BoxDecoration(
+            color: _primary.withOpacity(0.08),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(icon, size: 44, color: _primary.withOpacity(0.5)),
         ),
-      );
+        const SizedBox(height: 16),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+            color: isDark ? Colors.white70 : Colors.black87,
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -560,89 +597,88 @@ class _NotifCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => InkWell(
+    borderRadius: BorderRadius.circular(14),
+    onTap: onTap,
+    child: Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.black : Colors.white,
         borderRadius: BorderRadius.circular(14),
-        onTap: onTap,
-        child: Container(
-          margin: const EdgeInsets.only(bottom: 10),
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: isDark ? Colors.black : Colors.white,
-            borderRadius: BorderRadius.circular(14),
-            border: !n.isRead
-                ? Border.all(color: _primary.withOpacity(0.4), width: 1.2)
-                : null,
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
+        border: !n.isRead
+            ? Border.all(color: _primary.withOpacity(0.4), width: 1.2)
+            : null,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
           ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: _primary.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(icon, color: _primary, size: 20),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+        ],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: _primary.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: _primary, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
                   children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            n.title,
-                            style: TextStyle(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 14,
-                              color:
-                                  isDark ? Colors.white : Colors.black87,
-                            ),
-                          ),
+                    Expanded(
+                      child: Text(
+                        n.title,
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14,
+                          color: isDark ? Colors.white : Colors.black87,
                         ),
-                        if (!n.isRead)
-                          Container(
-                            width: 8,
-                            height: 8,
-                            decoration: const BoxDecoration(
-                              color: _primary,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      n.body,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: isDark ? Colors.white60 : Colors.black54,
                       ),
                     ),
-                    const SizedBox(height: 6),
-                    Text(
-                      timeLabel,
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: isDark ? Colors.white38 : Colors.black38,
+                    if (!n.isRead)
+                      Container(
+                        width: 8,
+                        height: 8,
+                        decoration: const BoxDecoration(
+                          color: _primary,
+                          shape: BoxShape.circle,
+                        ),
                       ),
-                    ),
                   ],
                 ),
-              ),
-            ],
+                const SizedBox(height: 4),
+                Text(
+                  n.body,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: isDark ? Colors.white60 : Colors.black54,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  timeLabel,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: isDark ? Colors.white38 : Colors.black38,
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-      );
+        ],
+      ),
+    ),
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -668,121 +704,125 @@ class _AnnouncementCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => InkWell(
+    borderRadius: BorderRadius.circular(14),
+    onTap: onTap,
+    child: Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.black : Colors.white,
         borderRadius: BorderRadius.circular(14),
-        onTap: onTap,
-        child: Container(
-          margin: const EdgeInsets.only(bottom: 10),
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: isDark ? Colors.black : Colors.white,
-            borderRadius: BorderRadius.circular(14),
-            border: isUnread
-                ? Border.all(color: _primary.withOpacity(0.4), width: 1.2)
-                : null,
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
+        border: isUnread
+            ? Border.all(color: _primary.withOpacity(0.4), width: 1.2)
+            : null,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
           ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: _primary.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(Icons.campaign_rounded,
-                    color: _primary, size: 20),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+        ],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: _primary.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(
+              Icons.campaign_rounded,
+              color: _primary,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
                   children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            a.title,
-                            style: TextStyle(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 14,
-                              color:
-                                  isDark ? Colors.white : Colors.black87,
-                            ),
-                          ),
+                    Expanded(
+                      child: Text(
+                        a.title,
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14,
+                          color: isDark ? Colors.white : Colors.black87,
                         ),
-                        if (isUnread)
-                          Container(
-                            width: 8,
-                            height: 8,
-                            decoration: const BoxDecoration(
-                              color: _primary,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 2),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            a.adminName,
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: _primary.withOpacity(0.8),
-                            ),
-                          ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: _primary.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            a.levelLabel,
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: _primary,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      a.message,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: isDark ? Colors.white60 : Colors.black54,
                       ),
                     ),
-                    const SizedBox(height: 6),
-                    Text(
-                      timeLabel,
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: isDark ? Colors.white38 : Colors.black38,
+                    if (isUnread)
+                      Container(
+                        width: 8,
+                        height: 8,
+                        decoration: const BoxDecoration(
+                          color: _primary,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        a.adminName,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: _primary.withOpacity(0.8),
+                        ),
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: _primary.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        a.levelLabel,
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: _primary,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
                   ],
                 ),
-              ),
-            ],
+                const SizedBox(height: 4),
+                Text(
+                  a.message,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: isDark ? Colors.white60 : Colors.black54,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  timeLabel,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: isDark ? Colors.white38 : Colors.black38,
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-      );
+        ],
+      ),
+    ),
+  );
 }

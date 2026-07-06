@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -10,7 +11,7 @@ import 'firebase_options.dart';
 import 'services/notification_service.dart';
 import 'services/notification_store.dart';
 import 'services/notification_router.dart';
-import 'services/navigation_service.dart'; 
+import 'services/navigation_service.dart';
 import 'services/muted_courses_store.dart';
 import 'stores/announcement_store.dart';
 
@@ -61,6 +62,15 @@ Future<void> _initNotificationsSafely() async {
 }
 
 void main() async {
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.light,
+      systemNavigationBarColor: Colors.transparent,
+    ),
+  );
+
   tzdata.initializeTimeZones();
   tz.setLocalLocation(tz.getLocation('Africa/Lagos'));
 
@@ -99,7 +109,9 @@ class _MyAppState extends State<MyApp> {
 
     // Wait until the first frame is drawn before navigating
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      NotificationRouter.routeByType(message.data['type'] ?? 'general'); // CHANGED
+      NotificationRouter.routeByType(
+        message.data['type'] ?? 'general',
+      ); // CHANGED
     });
   }
 

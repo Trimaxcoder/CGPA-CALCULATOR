@@ -10,7 +10,6 @@ import 'package:google_sign_in/google_sign_in.dart';
 import '../services/api_service.dart';
 import 'registerscreen.dart';
 import 'signinscreen.dart';
-import 'homescreen.dart';
 import '../widgets/google_button.dart';
 import '../models/studentProfile_model.dart';
 import '../widgets/ui_helpers.dart';
@@ -141,6 +140,19 @@ class _LandingPageState extends State<LandingPage>
                           'PDF Export',
                         ),
                         _featurePill(Icons.show_chart, 'GPA Trends'),
+                        _featurePill(
+                          Icons.calendar_month_outlined,
+                          'Timetable',
+                        ),
+                        _featurePill(
+                          Icons.notifications_active_outlined,
+                          'Class Alerts',
+                        ),
+                        _featurePill(
+                          Icons.event_note_outlined,
+                          'Exam Countdown',
+                        ),
+                        _featurePill(Icons.bookmark_outline, 'Study Reminders'),
                       ],
                     ),
 

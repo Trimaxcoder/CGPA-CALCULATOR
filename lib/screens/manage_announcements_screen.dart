@@ -14,8 +14,7 @@ class ManageAnnouncementsScreen extends StatefulWidget {
       _ManageAnnouncementsScreenState();
 }
 
-class _ManageAnnouncementsScreenState
-    extends State<ManageAnnouncementsScreen> {
+class _ManageAnnouncementsScreenState extends State<ManageAnnouncementsScreen> {
   static const Color _primary = Color(0xFF1565C0);
 
   List<Announcement> _mine = [];
@@ -44,7 +43,7 @@ class _ManageAnnouncementsScreenState
   }
 
   Future<void> _editAnnouncement(Announcement a) async {
-    final titleCtrl   = TextEditingController(text: a.title);
+    final titleCtrl = TextEditingController(text: a.title);
     final messageCtrl = TextEditingController(text: a.message);
     bool resend = false;
 
@@ -91,30 +90,32 @@ class _ManageAnnouncementsScreenState
               const SizedBox(height: 16),
               TextField(
                 controller: titleCtrl,
-                style: TextStyle(
-                    color: isDark ? Colors.white : Colors.black87),
+                style: TextStyle(color: isDark ? Colors.white : Colors.black87),
                 decoration: InputDecoration(
                   labelText: 'Title',
                   filled: true,
-                  fillColor:
-                      isDark ? const Color(0xFF0F172A) : Colors.grey.shade50,
+                  fillColor: isDark
+                      ? const Color(0xFF0F172A)
+                      : Colors.grey.shade50,
                   border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12)),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
               ),
               const SizedBox(height: 12),
               TextField(
                 controller: messageCtrl,
                 maxLines: 5,
-                style: TextStyle(
-                    color: isDark ? Colors.white : Colors.black87),
+                style: TextStyle(color: isDark ? Colors.white : Colors.black87),
                 decoration: InputDecoration(
                   labelText: 'Message',
                   filled: true,
-                  fillColor:
-                      isDark ? const Color(0xFF0F172A) : Colors.grey.shade50,
+                  fillColor: isDark
+                      ? const Color(0xFF0F172A)
+                      : Colors.grey.shade50,
                   border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12)),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
               ),
               const SizedBox(height: 8),
@@ -151,18 +152,18 @@ class _ManageAnnouncementsScreenState
                     try {
                       final updated =
                           await AnnouncementService.editAnnouncement(
-                        id: a.id,
-                        title: titleCtrl.text.trim(),
-                        message: messageCtrl.text.trim(),
-                        resend: resend,
-                      );
+                            id: a.id,
+                            title: titleCtrl.text.trim(),
+                            message: messageCtrl.text.trim(),
+                            resend: resend,
+                          );
                       AnnouncementStore().applyEdit(updated);
                       if (ctx.mounted) Navigator.pop(ctx, true);
                     } catch (e) {
                       if (ctx.mounted) {
-                        ScaffoldMessenger.of(ctx).showSnackBar(
-                          SnackBar(content: Text('Error: $e')),
-                        );
+                        ScaffoldMessenger.of(
+                          ctx,
+                        ).showSnackBar(SnackBar(content: Text('Error: $e')));
                       }
                     }
                   },
@@ -198,12 +199,12 @@ class _ManageAnnouncementsScreenState
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel')),
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child:
-                const Text('Delete', style: TextStyle(color: Colors.red)),
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
           ),
         ],
       ),
@@ -225,17 +226,27 @@ class _ManageAnnouncementsScreenState
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     }
   }
 
   String _formatDate(DateTime d) {
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     return '${d.day} ${months[d.month - 1]} ${d.year}';
   }
@@ -245,8 +256,9 @@ class _ManageAnnouncementsScreenState
     final isDark = context.watch<ThemeNotifier>().isDarkMode;
 
     return Scaffold(
-      backgroundColor:
-          isDark ? const Color(0xFF0A0A0A) : const Color(0xFFF2F4F8),
+      backgroundColor: isDark
+          ? const Color(0xFF0A0A0A)
+          : const Color(0xFFF2F4F8),
       body: Column(
         children: [
           // ── Header ───────────────────────────────────────────────────────
@@ -261,8 +273,7 @@ class _ManageAnnouncementsScreenState
                   Color(0xFF1E88E5),
                 ],
               ),
-              borderRadius:
-                  BorderRadius.vertical(bottom: Radius.circular(28)),
+              borderRadius: BorderRadius.vertical(bottom: Radius.circular(28)),
               boxShadow: [
                 BoxShadow(
                   color: Color(0x331565C0),
@@ -278,8 +289,10 @@ class _ManageAnnouncementsScreenState
                 child: Row(
                   children: [
                     IconButton(
-                      icon: const Icon(Icons.arrow_back_ios_new,
-                          color: Colors.white),
+                      icon: const Icon(
+                        Icons.arrow_back_ios_new,
+                        color: Colors.white,
+                      ),
                       onPressed: () => Navigator.pop(context),
                     ),
                     const Expanded(
@@ -294,8 +307,10 @@ class _ManageAnnouncementsScreenState
                       ),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.refresh_rounded,
-                          color: Colors.white),
+                      icon: const Icon(
+                        Icons.refresh_rounded,
+                        color: Colors.white,
+                      ),
                       onPressed: _load,
                     ),
                   ],
@@ -309,176 +324,174 @@ class _ManageAnnouncementsScreenState
             child: _loading
                 ? const Center(child: CircularProgressIndicator())
                 : _error != null
-                    ? Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.wifi_off_rounded,
-                                size: 44, color: Colors.grey),
-                            const SizedBox(height: 12),
-                            Text('Could not load announcements',
-                                style: TextStyle(
-                                    color: isDark
-                                        ? Colors.white70
-                                        : Colors.black54)),
-                            const SizedBox(height: 8),
-                            TextButton(
-                                onPressed: _load, child: const Text('Retry')),
-                          ],
+                ? Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.wifi_off_rounded,
+                          size: 44,
+                          color: Colors.grey,
                         ),
-                      )
-                    : _mine.isEmpty
-                        ? Center(
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.campaign_outlined,
-                                    size: 72,
-                                    color: _primary.withOpacity(0.4)),
-                                const SizedBox(height: 16),
-                                Text(
-                                  'You haven\'t sent any announcements',
-                                  style: TextStyle(
-                                    color: isDark
-                                        ? Colors.white70
-                                        : Colors.black54,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          )
-                        : RefreshIndicator(
-                            onRefresh: _load,
-                            child: ListView.builder(
-                              padding:
-                                  const EdgeInsets.fromLTRB(16, 16, 16, 24),
-                              itemCount: _mine.length,
-                              itemBuilder: (_, i) {
-                                final a = _mine[i];
-                                return Container(
-                                  margin: const EdgeInsets.only(bottom: 10),
-                                  padding: const EdgeInsets.all(14),
-                                  decoration: BoxDecoration(
-                                    color: isDark
-                                        ? Colors.black
-                                        : Colors.white,
-                                    borderRadius:
-                                        BorderRadius.circular(14),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.black
-                                            .withOpacity(isDark ? 0.3 : 0.05),
-                                        blurRadius: 8,
-                                        offset: const Offset(0, 2),
-                                      ),
-                                    ],
-                                  ),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Row(
-                                        children: [
-                                          Expanded(
-                                            child: Text(
-                                              a.title,
-                                              style: TextStyle(
-                                                fontWeight: FontWeight.w700,
-                                                fontSize: 14,
-                                                color: isDark
-                                                    ? Colors.white
-                                                    : Colors.black87,
-                                              ),
-                                            ),
-                                          ),
-                                          Container(
-                                            padding:
-                                                const EdgeInsets.symmetric(
-                                                    horizontal: 6,
-                                                    vertical: 2),
-                                            decoration: BoxDecoration(
-                                              color: _primary
-                                                  .withOpacity(0.1),
-                                              borderRadius:
-                                                  BorderRadius.circular(8),
-                                            ),
-                                            child: Text(
-                                              a.levelLabel,
-                                              style: const TextStyle(
-                                                fontSize: 10,
-                                                color: _primary,
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        a.message,
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: isDark
-                                              ? Colors.white60
-                                              : Colors.black54,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 8),
-                                      Row(
-                                        children: [
-                                          Text(
-                                            _formatDate(a.createdAt),
-                                            style: TextStyle(
-                                              fontSize: 11,
-                                              color: isDark
-                                                  ? Colors.white38
-                                                  : Colors.black38,
-                                            ),
-                                          ),
-                                          if (a.wasEdited) ...[
-                                            const SizedBox(width: 6),
-                                            Text(
-                                              '· edited',
-                                              style: TextStyle(
-                                                fontSize: 11,
-                                                fontStyle: FontStyle.italic,
-                                                color: isDark
-                                                    ? Colors.white38
-                                                    : Colors.black38,
-                                              ),
-                                            ),
-                                          ],
-                                          const Spacer(),
-                                          IconButton(
-                                            icon: const Icon(
-                                                Icons.edit_outlined,
-                                                size: 18),
-                                            color: _primary,
-                                            visualDensity:
-                                                VisualDensity.compact,
-                                            onPressed: () =>
-                                                _editAnnouncement(a),
-                                          ),
-                                          IconButton(
-                                            icon: const Icon(
-                                                Icons.delete_outline,
-                                                size: 18),
-                                            color: Colors.red.shade300,
-                                            visualDensity:
-                                                VisualDensity.compact,
-                                            onPressed: () =>
-                                                _deleteAnnouncement(a),
-                                          ),
-                                        ],
-                                      ),
-                                    ],
-                                  ),
-                                );
-                              },
-                            ),
+                        const SizedBox(height: 12),
+                        Text(
+                          'Could not load announcements',
+                          style: TextStyle(
+                            color: isDark ? Colors.white70 : Colors.black54,
                           ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextButton(
+                          onPressed: _load,
+                          child: const Text('Retry'),
+                        ),
+                      ],
+                    ),
+                  )
+                : _mine.isEmpty
+                ? Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.campaign_outlined,
+                          size: 72,
+                          color: _primary.withOpacity(0.4),
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'You haven\'t sent any announcements',
+                          style: TextStyle(
+                            color: isDark ? Colors.white70 : Colors.black54,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                : RefreshIndicator(
+                    onRefresh: _load,
+                    child: ListView.builder(
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+                      itemCount: _mine.length,
+                      itemBuilder: (_, i) {
+                        final a = _mine[i];
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 10),
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: isDark ? Colors.black : Colors.white,
+                            borderRadius: BorderRadius.circular(14),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(
+                                  isDark ? 0.3 : 0.05,
+                                ),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      a.title,
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 14,
+                                        color: isDark
+                                            ? Colors.white
+                                            : Colors.black87,
+                                      ),
+                                    ),
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 6,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: _primary.withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text(
+                                      a.levelLabel,
+                                      style: const TextStyle(
+                                        fontSize: 10,
+                                        color: _primary,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                a.message,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: isDark
+                                      ? Colors.white60
+                                      : Colors.black54,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  Text(
+                                    _formatDate(a.createdAt),
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: isDark
+                                          ? Colors.white38
+                                          : Colors.black38,
+                                    ),
+                                  ),
+                                  if (a.wasEdited) ...[
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      '· edited',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontStyle: FontStyle.italic,
+                                        color: isDark
+                                            ? Colors.white38
+                                            : Colors.black38,
+                                      ),
+                                    ),
+                                  ],
+                                  const Spacer(),
+                                  IconButton(
+                                    icon: const Icon(
+                                      Icons.edit_outlined,
+                                      size: 18,
+                                    ),
+                                    color: _primary,
+                                    visualDensity: VisualDensity.compact,
+                                    onPressed: () => _editAnnouncement(a),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(
+                                      Icons.delete_outline,
+                                      size: 18,
+                                    ),
+                                    color: Colors.red.shade300,
+                                    visualDensity: VisualDensity.compact,
+                                    onPressed: () => _deleteAnnouncement(a),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ),
           ),
         ],
       ),

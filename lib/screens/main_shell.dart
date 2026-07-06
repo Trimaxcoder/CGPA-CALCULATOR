@@ -154,426 +154,381 @@ class _HomeTabState extends State<_HomeTab> {
 
   String get _firstName => _name.split(' ').first;
 
-  @override
-  Widget build(BuildContext context) {
-    final isDark = context.watch<ThemeNotifier>().isDarkMode;
-    final bg = isDark ? const Color(0xFF0A0A0A) : const Color(0xFFF2F4F8);
-    final cardBg = isDark ? Colors.black : Colors.white;
-    final textPrimary = isDark ? Colors.white : Colors.black87;
-    final textSecondary = isDark ? Colors.white60 : Colors.black54;
 
-    return Scaffold(
-      backgroundColor: bg,
-      body: Column(
+
+@override
+Widget build(BuildContext context) {
+  final isDark = context.watch<ThemeNotifier>().isDarkMode;
+  final bg = isDark ? const Color(0xFF0A0A0A) : const Color(0xFFF7F8FA);
+  final cardBg = isDark ? const Color(0xFF15181D) : Colors.white;
+  final textPrimary = isDark ? Colors.white : Colors.black87;
+  final textSecondary = isDark ? Colors.white54 : Colors.black45;
+
+  return Scaffold(
+    backgroundColor: bg,
+    body: SafeArea(
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 100),
         children: [
-          // ── Fixed gradient header ────────────────────────
-          Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Color(0xFF0D47A1),
-                  Color(0xFF1565C0),
-                  Color(0xFF1E88E5),
-                ],
-              ),
-              borderRadius: BorderRadius.vertical(bottom: Radius.circular(32)),
-              boxShadow: [
-                BoxShadow(
-                  color: Color(0x331565C0),
-                  blurRadius: 16,
-                  offset: Offset(0, 6),
+          // ── Brand + bell ──────────────────────────
+          Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1565C0),
+                  borderRadius: BorderRadius.circular(11),
                 ),
-              ],
-            ),
-            child: SafeArea(
-              bottom: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
+                child: const Center(
+                  child: Text(
+                    'G',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900,
+                      color: Colors.white,
+                      height: 1,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                'GRADEX',
+                style: TextStyle(
+                  color: textPrimary,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 3,
+                ),
+              ),
+              const Spacer(),
+              Consumer<NotificationStore>(
+                builder: (context, store, _) {
+                  final count = store.unreadCount;
+                  return GestureDetector(
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+                    ),
+                    child: Stack(
+                      clipBehavior: Clip.none,
                       children: [
-                        // G logo
                         Container(
                           width: 42,
                           height: 42,
                           decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(12),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.2),
-                                blurRadius: 8,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
+                            color: const Color(0xFF1565C0).withOpacity(isDark ? 0.2 : 0.1),
+                            borderRadius: BorderRadius.circular(14),
                           ),
-                          child: const Center(
-                            child: Text(
-                              'G',
-                              style: TextStyle(
-                                fontSize: 24,
-                                fontWeight: FontWeight.w900,
-                                color: Color(0xFF1565C0),
-                                height: 1,
+                          child: const Icon(
+                            Icons.notifications_outlined,
+                            color: Color(0xFF1565C0),
+                            size: 21,
+                          ),
+                        ),
+                        if (count > 0)
+                          Positioned(
+                            top: -4,
+                            right: -4,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                              constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+                              decoration: BoxDecoration(
+                                color: Colors.red,
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: bg, width: 2),
+                              ),
+                              child: Text(
+                                count > 99 ? '99+' : '$count',
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w800,
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 12),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+
+          // ── Greeting ──────────────────────────────
+          Text(
+            '$_greeting,',
+            style: TextStyle(fontSize: 15, color: textSecondary),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            _firstName.isNotEmpty ? _firstName : 'Student',
+            style: TextStyle(
+              fontSize: 26,
+              fontWeight: FontWeight.w900,
+              color: textPrimary,
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // ── Blue gradient CTA banner ──────────────
+          _TapScale(
+            onTap: () {
+              final shell = context.findAncestorStateOfType<_MainShellState>();
+              shell?.setState(() => shell._currentIndex = 2);
+            },
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [Color(0xFF1E88E5), Color(0xFF0D47A1)],
+                ),
+                borderRadius: BorderRadius.circular(22),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF1565C0).withOpacity(0.35),
+                    blurRadius: 18,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
                         const Text(
-                          'GRADEX',
+                          'Check your grades',
                           style: TextStyle(
                             color: Colors.white,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 4,
+                            fontSize: 17,
+                            fontWeight: FontWeight.w800,
                           ),
                         ),
-                        const Spacer(),
-                        // Notification bell
-                        // Notification bell with badge
-                        Consumer<NotificationStore>(
-                          builder: (context, store, _) {
-                            final count = store.unreadCount;
-                            return GestureDetector(
-                              onTap: () => Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => const NotificationsScreen(),
-                                ),
-                              ),
-                              child: Stack(
-                                clipBehavior: Clip.none,
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.all(8),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white.withOpacity(0.15),
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: const Icon(
-                                      Icons.notifications_outlined,
-                                      color: Colors.white,
-                                      size: 22,
-                                    ),
-                                  ),
-                                  if (count > 0)
-                                    Positioned(
-                                      top: -4,
-                                      right: -4,
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 5,
-                                          vertical: 1,
-                                        ),
-                                        constraints: const BoxConstraints(
-                                          minWidth: 18,
-                                          minHeight: 18,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: Colors.red,
-                                          borderRadius: BorderRadius.circular(
-                                            10,
-                                          ),
-                                          border: Border.all(
-                                            color: const Color(0xFF1565C0),
-                                            width: 1.5,
-                                          ),
-                                        ),
-                                        child: Text(
-                                          count > 99 ? '99+' : '$count',
-                                          textAlign: TextAlign.center,
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.w800,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            );
-                          },
+                        const SizedBox(height: 6),
+                        const Text(
+                          'See your latest results\nand track your progress',
+                          style: TextStyle(color: Colors.white70, fontSize: 13, height: 1.3),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 28),
-                    Text(
-                      '$_greeting,',
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 16,
-                      ),
+                  ),
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      shape: BoxShape.circle,
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      _firstName.isNotEmpty ? _firstName : 'Student',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 32,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    // Student info chips
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        if (_level.isNotEmpty)
-                          _infoChip(Icons.stairs_outlined, '$_level Level'),
-                        if (_department.isNotEmpty)
-                          _infoChip(Icons.school_outlined, _department),
-                      ],
-                    ),
-                  ],
-                ),
+                    child: const Icon(Icons.arrow_forward, color: Colors.white, size: 18),
+                  ),
+                ],
               ),
             ),
           ),
+          const SizedBox(height: 28),
 
-          // ── Scrollable content below the fixed header ────
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(20, 24, 20, 100),
-              children: [
-                // ── Quick Actions ───────────────────────────
-                Text(
-                  'Quick Actions',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                    color: textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    _quickAction(
-                      icon: Icons.calendar_month_rounded,
-                      label: 'Timetable',
-                      color: const Color(0xFF1565C0),
-                      isDark: isDark,
-                      onTap: () {
-                        final shell = context
-                            .findAncestorStateOfType<_MainShellState>();
-                        shell?.setState(() => shell._currentIndex = 1);
-                      },
-                    ),
-                    const SizedBox(width: 12),
-                    _quickAction(
-                      icon: Icons.school_rounded,
-                      label: 'Grades',
-                      color: const Color(0xFF0891B2),
-                      isDark: isDark,
-                      onTap: () {
-                        final shell = context
-                            .findAncestorStateOfType<_MainShellState>();
-                        shell?.setState(() => shell._currentIndex = 2);
-                      },
-                    ),
-                    const SizedBox(width: 12),
-                    _quickAction(
-                      icon: Icons.settings_rounded,
-                      label: 'Settings',
-                      color: const Color(0xFF7C3AED),
-                      isDark: isDark,
-                      onTap: () {
-                        final shell = context
-                            .findAncestorStateOfType<_MainShellState>();
-                        shell?.setState(() => shell._currentIndex = 3);
-                      },
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 28),
-
-                // ── Academic Info Card ──────────────────────
-                Text(
-                  'Academic Info',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                    color: textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: cardBg,
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(isDark ? 0.3 : 0.06),
-                        blurRadius: 12,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    children: [
-                      _infoRow(
-                        Icons.account_balance_rounded,
-                        'School',
-                        _school.isNotEmpty ? _school : '—',
-                        isDark,
-                      ),
-                      const SizedBox(height: 16),
-                      _infoRow(
-                        Icons.account_balance_outlined,
-                        'Department',
-                        _department.isNotEmpty ? _department : '—',
-                        isDark,
-                      ),
-                      const SizedBox(height: 16),
-                      _infoRow(
-                        Icons.stairs_outlined,
-                        'Level',
-                        _level.isNotEmpty ? '$_level Level' : '—',
-                        isDark,
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 28),
-
-                // ── Tips Card ───────────────────────────────
-                Text(
-                  'Study Tips',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                    color: textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                ..._tips(isDark),
-
-                // ── Download button (web only) ──────────────
-                if (kIsWeb) _downloadApkButton(isDark),
-              ],
-            ),
+          // ── Quick Actions (circle style) ──────────
+          Text(
+            'Quick Actions',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: textPrimary),
           ),
+          const SizedBox(height: 14),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              _quickAction(
+                icon: Icons.calendar_month_rounded,
+                label: 'Timetable',
+                color: const Color(0xFF1565C0),
+                textPrimary: textPrimary,
+                onTap: () {
+                  final shell = context.findAncestorStateOfType<_MainShellState>();
+                  shell?.setState(() => shell._currentIndex = 1);
+                },
+              ),
+              _quickAction(
+                icon: Icons.school_rounded,
+                label: 'Grades',
+                color: const Color(0xFF0891B2),
+                textPrimary: textPrimary,
+                onTap: () {
+                  final shell = context.findAncestorStateOfType<_MainShellState>();
+                  shell?.setState(() => shell._currentIndex = 2);
+                },
+              ),
+              _quickAction(
+                icon: Icons.settings_rounded,
+                label: 'Settings',
+                color: const Color(0xFF7C3AED),
+                textPrimary: textPrimary,
+                onTap: () {
+                  final shell = context.findAncestorStateOfType<_MainShellState>();
+                  shell?.setState(() => shell._currentIndex = 3);
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 28),
+
+          // ── Academic Info grid ────────────────────
+          Text(
+            'Academic Info',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: textPrimary),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: _infoCard(
+                  icon: Icons.account_balance_outlined,
+                  label: 'Department',
+                  value: _department.isNotEmpty ? _department : '—',
+                  color: const Color(0xFF0891B2),
+                  cardBg: cardBg,
+                  isDark: isDark,
+                  textPrimary: textPrimary,
+                  textSecondary: textSecondary,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: _infoCard(
+                  icon: Icons.stairs_outlined,
+                  label: 'Level',
+                  value: _level.isNotEmpty ? '$_level Level' : '—',
+                  color: const Color(0xFF7C3AED),
+                  cardBg: cardBg,
+                  isDark: isDark,
+                  textPrimary: textPrimary,
+                  textSecondary: textSecondary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          _infoCard(
+            icon: Icons.account_balance_rounded,
+            label: 'School',
+            value: _school.isNotEmpty ? _school : '—',
+            color: const Color(0xFF1565C0),
+            cardBg: cardBg,
+            isDark: isDark,
+            textPrimary: textPrimary,
+            textSecondary: textSecondary,
+            fullWidth: true,
+          ),
+          const SizedBox(height: 28),
+
+          // ── Tips ───────────────────────────────────
+          Text(
+            'Study Tips',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: textPrimary),
+          ),
+          const SizedBox(height: 12),
+          ..._tips(isDark),
+
+          if (kIsWeb) _downloadApkButton(isDark),
         ],
       ),
-    );
-  }
-
-  Widget _infoChip(IconData icon, String label) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-    decoration: BoxDecoration(
-      color: Colors.white.withOpacity(0.15),
-      borderRadius: BorderRadius.circular(20),
-      border: Border.all(color: Colors.white24),
     ),
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
+  );
+}
+
+
+Widget _quickAction({
+  required IconData icon,
+  required String label,
+  required Color color,
+  required Color textPrimary,
+  required VoidCallback onTap,
+}) {
+  return _TapScale(
+    onTap: onTap,
+    child: Column(
       children: [
-        Icon(icon, color: Colors.white70, size: 13),
-        const SizedBox(width: 6),
+        Container(
+          width: 56,
+          height: 56,
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.12),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(icon, color: color, size: 24),
+        ),
+        const SizedBox(height: 8),
         Text(
           label,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
+          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: textPrimary),
+        ),
+      ],
+    ),
+  );
+}
+
+Widget _infoCard({
+  required IconData icon,
+  required String label,
+  required String value,
+  required Color color,
+  required Color cardBg,
+  required bool isDark,
+  required Color textPrimary,
+  required Color textSecondary,
+  bool fullWidth = false,
+}) {
+  return Container(
+    width: fullWidth ? double.infinity : null,
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: cardBg,
+      borderRadius: BorderRadius.circular(18),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
+          blurRadius: 10,
+          offset: const Offset(0, 3),
+        ),
+      ],
+    ),
+    child: Row(
+      mainAxisSize: fullWidth ? MainAxisSize.max : MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(color: color.withOpacity(0.15), shape: BoxShape.circle),
+          child: Icon(icon, size: 17, color: color),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(label, style: TextStyle(fontSize: 11, color: textSecondary)),
+              const SizedBox(height: 2),
+              Text(
+                value,
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: textPrimary),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
           ),
         ),
       ],
     ),
   );
-
-  Widget _quickAction({
-    required IconData icon,
-    required String label,
-    required Color color,
-    required bool isDark,
-    required VoidCallback onTap,
-  }) => Expanded(
-    child: GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 18),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [color, color.withOpacity(0.7)],
-          ),
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: color.withOpacity(0.3),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, color: Colors.white, size: 28),
-            const SizedBox(height: 8),
-            Text(
-              label,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ],
-        ),
-      ),
-    ),
-  );
-
-  Widget _infoRow(IconData icon, String label, String value, bool isDark) =>
-      Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: const Color(0xFF1565C0).withOpacity(0.1),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(icon, color: const Color(0xFF1565C0), size: 18),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: isDark ? Colors.white38 : Colors.black38,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  value,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: isDark ? Colors.white : Colors.black87,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      );
+}
 
   Widget _downloadApkButton(bool isDark) => Container(
     margin: const EdgeInsets.only(top: 28),
@@ -724,6 +679,35 @@ class _NavItem extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _TapScale extends StatefulWidget {
+  const _TapScale({required this.child, required this.onTap});
+  final Widget child;
+  final VoidCallback onTap;
+
+  @override
+  State<_TapScale> createState() => _TapScaleState();
+}
+
+class _TapScaleState extends State<_TapScale> {
+  double _scale = 1.0;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _scale = 0.95),
+      onTapUp: (_) => setState(() => _scale = 1.0),
+      onTapCancel: () => setState(() => _scale = 1.0),
+      onTap: widget.onTap,
+      child: AnimatedScale(
+        scale: _scale,
+        duration: const Duration(milliseconds: 120),
+        curve: Curves.easeOut,
+        child: widget.child,
       ),
     );
   }

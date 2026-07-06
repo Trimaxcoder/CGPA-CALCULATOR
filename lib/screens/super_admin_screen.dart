@@ -241,13 +241,10 @@ class _SuperAdminScreenState extends State<SuperAdminScreen>
                             ),
                           ),
                         ),
-                        IconButton(
-                          icon: const Icon(Icons.refresh_rounded, color: Colors.white),
-                          onPressed: () {
-                            _loadRequests();
-                            _loadAdmins();
-                          },
-                        ),
+                        _glassIconButton(icon: Icons.refresh_rounded, onPressed: () {
+                          _loadRequests();
+                          _loadAdmins();
+                        } )
                       ],
                     ),
                   ),
@@ -570,4 +567,21 @@ class _SuperAdminScreenState extends State<SuperAdminScreen>
           ),
         ],
       );
+}
+
+Widget _glassIconButton({required IconData icon, required VoidCallback onPressed}) {
+  return GestureDetector(
+    onTap: onPressed,
+    child: Container(
+      width: 38,
+      height: 38,
+      margin: const EdgeInsets.symmetric(horizontal: 2),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white24),
+      ),
+      child: Icon(icon, color: Colors.white, size: 20),
+    ),
+  );
 }

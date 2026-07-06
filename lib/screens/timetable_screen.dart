@@ -68,6 +68,9 @@ class _TimetableScreenState extends State<TimetableScreen>
       vsync: this,
       initialIndex: _todayIndex,
     );
+    _dayTabCtrl.addListener(() {
+      if (!_dayTabCtrl.indexIsChanging) setState(() {});
+    });
     _lecturePageCtrl = PageController(initialPage: _todayIndex); // ← add
     _personalPageCtrl = PageController(initialPage: _todayIndex);
     _loadAll();
@@ -208,163 +211,134 @@ class _TimetableScreenState extends State<TimetableScreen>
 
   // ── Build ─────────────────────────────────────────────────────────────────
   @override
-  Widget build(BuildContext context) {
-    final isDark = context.watch<ThemeNotifier>().isDarkMode;
+Widget build(BuildContext context) {
+  final isDark = context.watch<ThemeNotifier>().isDarkMode;
 
-    return Scaffold(
-      backgroundColor: isDark
-          ? const Color(0xFF0A0A0A)
-          : const Color(0xFFF2F4F8),
-      body: Column(
-        children: [
-          // ── Unified gradient header: title + actions + sub-tabs ──
-          Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Color(0xFF0D47A1),
-                  Color(0xFF1565C0),
-                  Color(0xFF1E88E5),
-                ],
-              ),
-              borderRadius: BorderRadius.vertical(bottom: Radius.circular(28)),
-              boxShadow: [
-                BoxShadow(
-                  color: Color(0x331565C0),
-                  blurRadius: 16,
-                  offset: Offset(0, 6),
-                ),
+  return Scaffold(
+    backgroundColor: isDark ? const Color(0xFF0A0A0A) : const Color(0xFFF2F4F8),
+    body: Column(
+      children: [
+        // ── Full-width gradient header, deep bottom curve ──
+        Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color(0xFF0D47A1),
+                Color(0xFF1565C0),
+                Color(0xFF1E88E5),
               ],
             ),
-            child: SafeArea(
-              bottom: false,
-              child: Column(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(8, 12, 8, 4),
-                    child: Row(
-                      children: [
-                        const SizedBox(width: 8),
-                        const Expanded(
-                          child: Text(
-                            'Timetable',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w800,
-                              fontSize: 18,
-                            ),
-                          ),
-                        ),
-                        IconButton(
-                          icon: const Icon(
-                            Icons.refresh_rounded,
+            borderRadius: BorderRadius.only(
+              bottomLeft: Radius.circular(60),
+              bottomRight: Radius.circular(60),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Color(0x331565C0),
+                blurRadius: 16,
+                offset: Offset(0, 6),
+              ),
+            ],
+          ),
+          child: SafeArea(
+            bottom: false,
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 12, 8, 4),
+                  child: Row(
+                    children: [
+                      const SizedBox(width: 8),
+                      const Expanded(
+                        child: Text(
+                          'Timetable',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
                             color: Colors.white,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 18,
                           ),
-                          onPressed: _loadAll,
                         ),
-                        if (_isAdmin) ...[
-                          TextButton(
-                            onPressed: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) =>
-                                    const ComposeAnnouncementScreen(),
-                              ),
-                            ),
-                            child: const Text(
-                              'Announce',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w600,
-                                fontSize: 12,
-                              ),
-                            ),
+                      ),
+                      _glassIconButton(icon: Icons.refresh_rounded, onPressed: _loadAll),
+                      if (_isAdmin) ...[
+                        TextButton(
+                          onPressed: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const ComposeAnnouncementScreen()),
                           ),
-                          TextButton(
-                            onPressed: () => _confirmResign(isDark),
-                            child: const Text(
-                              'Resign',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w600,
-                                fontSize: 12,
-                              ),
-                            ),
+                          child: const Text(
+                            'Announce',
+                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 12),
                           ),
-                        ],
-                        if (!_isAdmin && !_isSuperAdmin)
-                          TextButton(
-                            onPressed: () => _showAdminRequestSheet(isDark),
-                            child: const Text(
-                              'Be Admin',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w600,
-                                fontSize: 12,
-                              ),
-                            ),
+                        ),
+                        TextButton(
+                          onPressed: () => _confirmResign(isDark),
+                          child: const Text(
+                            'Resign',
+                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 12),
                           ),
-                        if (_isSuperAdmin)
-                          IconButton(
-                            icon: const Icon(
-                              Icons.admin_panel_settings_rounded,
-                              color: Colors.white,
-                            ),
-                            onPressed: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const SuperAdminScreen(),
-                              ),
-                            ),
-                          ),
+                        ),
                       ],
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  TabBar(
-                    controller: _typeTabCtrl,
-                    labelColor: Colors.white,
-                    unselectedLabelColor: Colors.white54,
-                    indicatorColor: Colors.white,
-                    indicatorWeight: 3,
-                    tabs: const [
-                      Tab(
-                        icon: Icon(Icons.cast_for_education_rounded, size: 20),
-                        text: 'Lecture',
-                      ),
-                      Tab(
-                        icon: Icon(Icons.menu_book_rounded, size: 20),
-                        text: 'Personal',
-                      ),
-                      Tab(
-                        icon: Icon(Icons.event_note_rounded, size: 20),
-                        text: 'Exam',
-                      ),
+                      if (!_isAdmin && !_isSuperAdmin)
+                        TextButton(
+                          onPressed: () => _showAdminRequestSheet(isDark),
+                          child: const Text(
+                            'Be Admin',
+                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 12),
+                          ),
+                        ),
+                      if (_isSuperAdmin)
+                        _glassIconButton(
+                          icon: Icons.admin_panel_settings_rounded,
+                          onPressed: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const SuperAdminScreen()),
+                          ),
+                        ),
                     ],
                   ),
-                ],
-              ),
+                ),
+                const SizedBox(height: 4),
+                TabBar(
+                  controller: _typeTabCtrl,
+                  labelColor: Colors.white,
+                  unselectedLabelColor: Colors.white54,
+                  indicatorSize: TabBarIndicatorSize.label,
+                  indicator: UnderlineTabIndicator(
+                    borderSide: const BorderSide(color: Colors.white, width: 3),
+                    insets: const EdgeInsets.symmetric(horizontal: 16),
+                  ),
+                  tabs: const [
+                    Tab(icon: Icon(Icons.cast_for_education_rounded, size: 20), text: 'Lecture'),
+                    Tab(icon: Icon(Icons.menu_book_rounded, size: 20), text: 'Personal'),
+                    Tab(icon: Icon(Icons.event_note_rounded, size: 20), text: 'Exam'),
+                  ],
+                ),
+                const SizedBox(height: 20),
+              ],
             ),
           ),
-          Expanded(
-            child: _loading
-                ? const Center(child: CircularProgressIndicator())
-                : TabBarView(
-                    controller: _typeTabCtrl,
-                    children: [
-                      _buildDayView(isDark, isPersonal: false),
-                      _buildDayView(isDark, isPersonal: true),
-                      _buildExamTab(isDark),
-                    ],
-                  ),
-          ),
-        ],
-      ),
-    );
-  }
+        ),
+        Expanded(
+          child: _loading
+              ? const Center(child: CircularProgressIndicator())
+              : TabBarView(
+                  controller: _typeTabCtrl,
+                  children: [
+                    _buildDayView(isDark, isPersonal: false),
+                    _buildDayView(isDark, isPersonal: true),
+                    _buildExamTab(isDark),
+                  ],
+                ),
+        ),
+      ],
+    ),
+  );
+}
+    
 
   // ══════════════════════════════════════════════════════════
   //  DAY VIEW (shared by Lecture + Personal tabs)
@@ -394,52 +368,74 @@ class _TimetableScreenState extends State<TimetableScreen>
           // Day-of-week sub-bar, now blended to sit flush under the gradient header
           Container(
             color: isDark ? const Color(0xFF111111) : Colors.white,
-            child: TabBar(
-              controller: _dayTabCtrl,
-              isScrollable: true,
-              labelColor: _primary,
-              unselectedLabelColor: isDark ? Colors.white38 : Colors.black38,
-              indicatorColor: _primary,
-              indicatorWeight: 3,
-              onTap: (i) {
-                pageCtrl.animateToPage(
-                  i,
-                  duration: const Duration(milliseconds: 300),
-                  curve: Curves.easeInOut,
-                );
-              },
-              tabs: List.generate(_days.length, (i) {
-                final isToday = i == _todayIndex;
-                return Tab(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          _dayShort[i],
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: isToday
-                                ? FontWeight.w800
-                                : FontWeight.w500,
-                          ),
-                        ),
-                        if (isToday)
-                          Container(
-                            margin: const EdgeInsets.only(top: 2),
-                            width: 5,
-                            height: 5,
-                            decoration: BoxDecoration(
-                              color: _primary,
-                              shape: BoxShape.circle,
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            child: SizedBox(
+              height: 56,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                itemCount: _days.length,
+                itemBuilder: (_, i) {
+                  final isSelected = _dayTabCtrl.index == i;
+                  final isToday = i == _todayIndex;
+                  return GestureDetector(
+                    onTap: () {
+                      _dayTabCtrl.animateTo(i);
+                      pageCtrl.animateToPage(
+                        i,
+                        duration: const Duration(milliseconds: 300),
+                        curve: Curves.easeInOut,
+                      );
+                    },
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      margin: const EdgeInsets.symmetric(horizontal: 4),
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        gradient: isSelected
+                            ? const LinearGradient(
+                                colors: [Color(0xFF1E88E5), Color(0xFF0D47A1)],
+                              )
+                            : null,
+                        color: isSelected
+                            ? null
+                            : (isDark
+                                  ? Colors.white.withOpacity(0.05)
+                                  : Colors.grey.shade100),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            _dayShort[i],
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: isSelected
+                                  ? FontWeight.w800
+                                  : FontWeight.w600,
+                              color: isSelected
+                                  ? Colors.white
+                                  : (isDark ? Colors.white54 : Colors.black54),
                             ),
                           ),
-                      ],
+                          if (isToday && !isSelected)
+                            Container(
+                              margin: const EdgeInsets.only(top: 3),
+                              width: 4,
+                              height: 4,
+                              decoration: const BoxDecoration(
+                                color: _primary,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
-                  ),
-                );
-              }),
+                  );
+                },
+              ),
             ),
           ),
           Expanded(
@@ -622,15 +618,15 @@ class _TimetableScreenState extends State<TimetableScreen>
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
         color: isDark ? Colors.black : Colors.white,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(18),
         border: e.isImportant
             ? Border.all(color: typeColor.withOpacity(0.5), width: 1.5)
             : null,
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(isDark ? 0.3 : 0.06),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
           ),
         ],
       ),
@@ -642,6 +638,19 @@ class _TimetableScreenState extends State<TimetableScreen>
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // ── Icon badge (replaces old colored divider bar) ──
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: typeColor.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(typeIcon, color: typeColor, size: 20),
+                ),
+                const SizedBox(width: 12),
+
+                // ── Time column ──
                 SizedBox(
                   width: 52,
                   child: Column(
@@ -687,24 +696,15 @@ class _TimetableScreenState extends State<TimetableScreen>
                     ],
                   ),
                 ),
-                const SizedBox(width: 4),
-                Container(
-                  width: 2,
-                  height: 60,
-                  decoration: BoxDecoration(
-                    color: typeColor.withOpacity(0.4),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
                 const SizedBox(width: 12),
+
+                // ── Course info ──
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
                         children: [
-                          Icon(typeIcon, color: typeColor, size: 16),
-                          const SizedBox(width: 6),
                           Expanded(
                             child: Text(
                               e.courseCode,
@@ -774,7 +774,8 @@ class _TimetableScreenState extends State<TimetableScreen>
                     ],
                   ),
                 ),
-                // ── Mute button (everyone) ──
+
+                // ── Mute button ──
                 IconButton(
                   icon: Icon(
                     isMuted
@@ -889,6 +890,378 @@ class _TimetableScreenState extends State<TimetableScreen>
     );
   }
 
+  Widget _personalCard(PersonalEntry e, bool isDark) {
+    final color = _hexColor(e.color);
+    final dur = _duration(e.startTime, e.endTime);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.black : Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(isDark ? 0.3 : 0.06),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ── Icon badge ──
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(Icons.menu_book_rounded, color: color, size: 20),
+            ),
+            const SizedBox(width: 12),
+
+            // ── Time column ──
+            SizedBox(
+              width: 52,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    e.startTime,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: isDark ? Colors.white : Colors.black87,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    e.endTime,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: isDark ? Colors.white38 : Colors.black38,
+                    ),
+                  ),
+                  if (dur.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 4,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: color.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        dur,
+                        style: TextStyle(
+                          fontSize: 9,
+                          color: color,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+
+            // ── Title + note ──
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    e.title,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15,
+                      color: isDark ? Colors.white : Colors.black87,
+                    ),
+                  ),
+                  if (e.note.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      e.note,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isDark ? Colors.white54 : Colors.black45,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+
+            // ── Bookmark + menu ──
+            Column(
+              children: [
+                IconButton(
+                  icon: Icon(
+                    e.isBookmarked
+                        ? Icons.bookmark_rounded
+                        : Icons.bookmark_outline,
+                    color: e.isBookmarked ? Colors.amber : Colors.grey,
+                    size: 22,
+                  ),
+                  onPressed: () async {
+                    await _svc.toggleBookmark(e.id);
+                    await _loadPersonal();
+                    setState(() {});
+
+                    final updated = _personal.firstWhere(
+                      (p) => p.id == e.id,
+                      orElse: () => e,
+                    );
+                    if (updated.isBookmarked) {
+                      final success =
+                          await NotificationService.scheduleStudyReminder(
+                            entryId: updated.id,
+                            title: updated.title,
+                            day: updated.day,
+                            startTime: updated.startTime,
+                          );
+                      if (!success && context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'Reminder permission missing — enable it in Settings.',
+                            ),
+                          ),
+                        );
+                      }
+                    } else {
+                      await NotificationService.cancelStudyReminder(updated.id);
+                    }
+                  },
+                ),
+                PopupMenuButton<String>(
+                  icon: Icon(
+                    Icons.more_vert,
+                    color: isDark ? Colors.white38 : Colors.black38,
+                    size: 20,
+                  ),
+                  itemBuilder: (_) => [
+                    const PopupMenuItem(value: 'edit', child: Text('Edit')),
+                    const PopupMenuItem(
+                      value: 'delete',
+                      child: Text(
+                        'Delete',
+                        style: TextStyle(color: Colors.red),
+                      ),
+                    ),
+                  ],
+                  onSelected: (val) async {
+                    if (val == 'delete') {
+                      await _svc.deletePersonal(e.id);
+                      await _loadPersonal();
+                      setState(() {});
+                    } else {
+                      _showAddPersonalSheet(isDark, editing: e);
+                    }
+                  },
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _examCard(LectureEntry e, bool isDark) {
+    final daysLeft = e.date != null
+        ? e.date!.difference(DateTime.now()).inDays
+        : null;
+    final urgent = daysLeft != null && daysLeft <= 7;
+    final dur = _duration(e.startTime, e.endTime);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.black : Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: urgent
+              ? Colors.red.withOpacity(0.5)
+              : Colors.red.withOpacity(0.2),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(isDark ? 0.3 : 0.06),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ── Icon badge ──
+            Container(
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(
+                color: Colors.red.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: const Icon(
+                Icons.event_note_rounded,
+                color: Colors.red,
+                size: 26,
+              ),
+            ),
+            const SizedBox(width: 14),
+
+            // ── Course info ──
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    e.courseCode,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 16,
+                      color: isDark ? Colors.white : Colors.black87,
+                    ),
+                  ),
+                  if (e.courseTitle.isNotEmpty)
+                    Text(
+                      e.courseTitle,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isDark ? Colors.white60 : Colors.black54,
+                      ),
+                    ),
+                  const SizedBox(height: 6),
+                  if (e.date != null)
+                    Text(
+                      '${e.date!.day}/${e.date!.month}/${e.date!.year}  •  ${e.startTime} – ${e.endTime}',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: isDark ? Colors.white70 : Colors.black54,
+                      ),
+                    ),
+                  if (dur.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.timer_outlined,
+                            size: 12,
+                            color: isDark ? Colors.white38 : Colors.black38,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Duration: $dur',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: isDark ? Colors.white54 : Colors.black45,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  if (e.venue.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.location_on_outlined,
+                            size: 12,
+                            color: isDark ? Colors.white38 : Colors.black38,
+                          ),
+                          const SizedBox(width: 2),
+                          Expanded(
+                            child: Text(
+                              e.venue,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: isDark ? Colors.white54 : Colors.black45,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            ),
+
+            // ── Countdown + menu ──
+            Column(
+              children: [
+                if (daysLeft != null)
+                  Column(
+                    children: [
+                      Text(
+                        daysLeft <= 0 ? 'Today!' : '$daysLeft',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w900,
+                          fontSize: daysLeft <= 0 ? 13 : 22,
+                          color: daysLeft <= 3
+                              ? Colors.red
+                              : daysLeft <= 7
+                              ? Colors.orange
+                              : Colors.grey,
+                        ),
+                      ),
+                      if (daysLeft > 0)
+                        Text(
+                          'days',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: isDark ? Colors.white38 : Colors.black38,
+                          ),
+                        ),
+                    ],
+                  ),
+                if (_isAdmin)
+                  PopupMenuButton<String>(
+                    icon: Icon(
+                      Icons.more_vert,
+                      color: isDark ? Colors.white38 : Colors.black38,
+                    ),
+                    itemBuilder: (_) => [
+                      const PopupMenuItem(value: 'edit', child: Text('Edit')),
+                      const PopupMenuItem(
+                        value: 'delete',
+                        child: Text(
+                          'Delete',
+                          style: TextStyle(color: Colors.red),
+                        ),
+                      ),
+                    ],
+                    onSelected: (val) async {
+                      if (val == 'delete') {
+                        await _svc.deleteExam(e.id);
+                        await _loadExams();
+                        setState(() {});
+                      } else {
+                        _showAddExamSheet(isDark, editing: e);
+                      }
+                    },
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _alertChip({
     required IconData icon,
     required bool active,
@@ -942,6 +1315,26 @@ class _TimetableScreenState extends State<TimetableScreen>
               ? _primary
               : (isDark ? Colors.white24 : Colors.black26),
         ),
+      ),
+    );
+  }
+
+  Widget _glassIconButton({
+    required IconData icon,
+    required VoidCallback onPressed,
+  }) {
+    return GestureDetector(
+      onTap: onPressed,
+      child: Container(
+        width: 38,
+        height: 38,
+        margin: const EdgeInsets.symmetric(horizontal: 2),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.15),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.white24),
+        ),
+        child: Icon(icon, color: Colors.white, size: 20),
       ),
     );
   }
@@ -1084,352 +1477,6 @@ class _TimetableScreenState extends State<TimetableScreen>
               ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _personalCard(PersonalEntry e, bool isDark) {
-    final color = _primary;
-    final dur = _duration(e.startTime, e.endTime);
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      decoration: BoxDecoration(
-        color: isDark ? Colors.black : Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border(left: BorderSide(color: color, width: 4)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(isDark ? 0.3 : 0.06),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SizedBox(
-              width: 52,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    e.startTime,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: isDark ? Colors.white : Colors.black87,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    e.endTime,
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: isDark ? Colors.white38 : Colors.black38,
-                    ),
-                  ),
-                  if (dur.isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 4,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: color.withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        dur,
-                        style: TextStyle(
-                          fontSize: 9,
-                          color: color,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            const SizedBox(width: 4),
-            Container(
-              width: 2,
-              height: 50,
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.4),
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    e.title,
-                    style: TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 15,
-                      color: isDark ? Colors.white : Colors.black87,
-                    ),
-                  ),
-                  if (e.note.isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      e.note,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: isDark ? Colors.white54 : Colors.black45,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            Column(
-              children: [
-                IconButton(
-                  icon: Icon(
-                    e.isBookmarked
-                        ? Icons.bookmark_rounded
-                        : Icons.bookmark_outline,
-                    color: e.isBookmarked ? Colors.amber : Colors.grey,
-                    size: 22,
-                  ),
-                  onPressed: () async {
-                    await _svc.toggleBookmark(e.id);
-                    await _loadPersonal();
-                    setState(() {});
-
-                    final updated = _personal.firstWhere(
-                      (p) => p.id == e.id,
-                      orElse: () => e,
-                    );
-                    if (updated.isBookmarked) {
-                      final success =
-                          await NotificationService.scheduleStudyReminder(
-                            entryId: updated.id,
-                            title: updated.title,
-                            day: updated.day,
-                            startTime: updated.startTime,
-                          );
-                      if (!success && context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                              'Reminder permission missing — enable it in Settings.',
-                            ),
-                          ),
-                        );
-                      }
-                    } else {
-                      await NotificationService.cancelStudyReminder(updated.id);
-                    }
-                  },
-                ),
-                PopupMenuButton<String>(
-                  icon: Icon(
-                    Icons.more_vert,
-                    color: isDark ? Colors.white38 : Colors.black38,
-                    size: 20,
-                  ),
-                  itemBuilder: (_) => [
-                    const PopupMenuItem(value: 'edit', child: Text('Edit')),
-                    const PopupMenuItem(
-                      value: 'delete',
-                      child: Text(
-                        'Delete',
-                        style: TextStyle(color: Colors.red),
-                      ),
-                    ),
-                  ],
-                  onSelected: (val) async {
-                    if (val == 'delete') {
-                      await _svc.deletePersonal(e.id);
-                      await _loadPersonal();
-                      setState(() {});
-                    } else {
-                      _showAddPersonalSheet(isDark, editing: e);
-                    }
-                  },
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _examCard(LectureEntry e, bool isDark) {
-    final daysLeft = e.date != null
-        ? e.date!.difference(DateTime.now()).inDays
-        : null;
-    final urgent = daysLeft != null && daysLeft <= 7;
-    final dur = _duration(e.startTime, e.endTime);
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: isDark ? Colors.black : Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: urgent
-              ? Colors.red.withOpacity(0.5)
-              : Colors.red.withOpacity(0.2),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(isDark ? 0.3 : 0.06),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            Container(
-              width: 52,
-              height: 52,
-              decoration: BoxDecoration(
-                color: Colors.red.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Icon(
-                Icons.event_note_rounded,
-                color: Colors.red,
-                size: 28,
-              ),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    e.courseCode,
-                    style: TextStyle(
-                      fontWeight: FontWeight.w800,
-                      fontSize: 16,
-                      color: isDark ? Colors.white : Colors.black87,
-                    ),
-                  ),
-                  if (e.courseTitle.isNotEmpty)
-                    Text(
-                      e.courseTitle,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: isDark ? Colors.white60 : Colors.black54,
-                      ),
-                    ),
-                  const SizedBox(height: 6),
-                  if (e.date != null)
-                    Text(
-                      '${e.date!.day}/${e.date!.month}/${e.date!.year}  •  ${e.startTime} – ${e.endTime}',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: isDark ? Colors.white70 : Colors.black54,
-                      ),
-                    ),
-                  if (dur.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 2),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.timer_outlined,
-                            size: 12,
-                            color: isDark ? Colors.white38 : Colors.black38,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            'Duration: $dur',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: isDark ? Colors.white54 : Colors.black45,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  if (e.venue.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 2),
-                      child: Text(
-                        '📍 ${e.venue}',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: isDark ? Colors.white54 : Colors.black45,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-            Column(
-              children: [
-                if (daysLeft != null)
-                  Column(
-                    children: [
-                      Text(
-                        daysLeft <= 0 ? 'Today!' : '$daysLeft',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w900,
-                          fontSize: daysLeft <= 0 ? 13 : 22,
-                          color: daysLeft <= 3
-                              ? Colors.red
-                              : daysLeft <= 7
-                              ? Colors.orange
-                              : Colors.grey,
-                        ),
-                      ),
-                      if (daysLeft > 0)
-                        Text(
-                          'days',
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: isDark ? Colors.white38 : Colors.black38,
-                          ),
-                        ),
-                    ],
-                  ),
-                if (_isAdmin)
-                  PopupMenuButton<String>(
-                    icon: Icon(
-                      Icons.more_vert,
-                      color: isDark ? Colors.white38 : Colors.black38,
-                    ),
-                    itemBuilder: (_) => [
-                      const PopupMenuItem(value: 'edit', child: Text('Edit')),
-                      const PopupMenuItem(
-                        value: 'delete',
-                        child: Text(
-                          'Delete',
-                          style: TextStyle(color: Colors.red),
-                        ),
-                      ),
-                    ],
-                    onSelected: (val) async {
-                      if (val == 'delete') {
-                        await _svc.deleteExam(e.id);
-                        await _loadExams();
-                        setState(() {});
-                      } else {
-                        _showAddExamSheet(isDark, editing: e);
-                      }
-                    },
-                  ),
-              ],
-            ),
-          ],
         ),
       ),
     );

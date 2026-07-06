@@ -10,9 +10,7 @@ import '../services/api_service.dart';
 import 'signinscreen.dart';
 import 'resetpasswordscreen.dart';
 import 'landing_page.dart';
-import 'homescreen.dart';
 import 'main_shell.dart';
-import '../services/notification_service.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -21,9 +19,11 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late AnimationController _ctrl;
   late Animation<double> fadeAnim, _scale;
+  late AnimationController _pulseCtrl;
+  late Animation<double> _pulse;
 
   @override
   void initState() {
@@ -41,14 +41,21 @@ class _SplashScreenState extends State<SplashScreen>
       end: 1,
     ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOutBack));
     _ctrl.forward();
+
+    _pulseCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1600),
+    )..repeat(reverse: true);
+    _pulse = Tween<double>(
+      begin: 1.0,
+      end: 1.06,
+    ).animate(CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut));
+
     Future.delayed(const Duration(seconds: 2), () async {
       if (!mounted) return;
 
       if (kIsWeb) {
         final token = _getResetTokenFromUrl();
-        print("=== RESET TOKEN: $token");
-        print("=== URL path: ${Uri.base.path}");
-        print("=== URL query: ${Uri.base.query}");
         if (token != null) {
           Navigator.of(
             context,
@@ -61,28 +68,24 @@ class _SplashScreenState extends State<SplashScreen>
       final hasProfile = (prefs.getString('profile') ?? '').isNotEmpty;
       final hasToken = (await TokenStorage.getAccessToken() ?? '').isNotEmpty;
 
-      // First time opening the app
       if (!hasProfile && !hasToken) {
         if (!mounted) return;
         Navigator.of(context).pushReplacement(fadeRoute(LandingPage()));
         return;
       }
 
-      // Returning user — verify token is still valid
       bool tokenValid = false;
       if (hasToken) {
         try {
           await AuthService().getMe();
           tokenValid = true;
         } on UnauthorizedException {
-          await TokenStorage.clearTokens(); // wipe expired tokens
+          await TokenStorage.clearTokens();
           tokenValid = false;
         } catch (_) {
-          // offline — trust cached profile
           tokenValid = hasProfile;
         }
       }
-
 
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
@@ -94,12 +97,12 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   void dispose() {
     _ctrl.dispose();
+    _pulseCtrl.dispose();
     super.dispose();
   }
 
   String? _getResetTokenFromUrl() {
     try {
-      // ignore: undefined_prefixed_name
       final token = Uri.base.queryParameters['token'];
       final path = Uri.base.path;
       if (path == '/reset-password' && token != null && token.isNotEmpty) {
@@ -117,7 +120,7 @@ class _SplashScreenState extends State<SplashScreen>
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-             colors: [Color(0xFF0D47A1), Color(0xFF1565C0), Color(0xFF1E88E5)],
+            colors: [Color(0xFF0D47A1), Color(0xFF1565C0), Color(0xFF1E88E5)],
           ),
         ),
         child: SafeArea(
@@ -129,28 +132,33 @@ class _SplashScreenState extends State<SplashScreen>
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   const Spacer(flex: 3),
-                  Container(
-                    width: 110,
-                    height: 110,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.2),
-                          blurRadius: 30,
-                          offset: const Offset(0, 10),
-                        ),
-                      ],
-                    ),
-                    child: const Center(
-                      child: Text(
-                        'G',
-                        style: TextStyle(
-                          fontSize: 64,
-                          fontWeight: FontWeight.w900,
-                          color: Color(0xFF1565C0),
-                          height: 1,
+                  AnimatedBuilder(
+                    animation: _pulse,
+                    builder: (context, child) =>
+                        Transform.scale(scale: _pulse.value, child: child),
+                    child: Container(
+                      width: 110,
+                      height: 110,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.25),
+                            blurRadius: 36,
+                            offset: const Offset(0, 12),
+                          ),
+                        ],
+                      ),
+                      child: const Center(
+                        child: Text(
+                          'G',
+                          style: TextStyle(
+                            fontSize: 64,
+                            fontWeight: FontWeight.w900,
+                            color: Color(0xFF1565C0),
+                            height: 1,
+                          ),
                         ),
                       ),
                     ),

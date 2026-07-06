@@ -66,52 +66,57 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget build(BuildContext context) {
     final themeNotifier = context.watch<ThemeNotifier>();
     final isDark = themeNotifier.isDarkMode;
+    final bg = isDark ? const Color(0xFF0A0A0A) : const Color(0xFFF7F8FA);
+    final cardBg = isDark ? const Color(0xFF15181D) : Colors.white;
+    final textPrimary = isDark ? Colors.white : Colors.black87;
+    final textSecondary = isDark ? Colors.white54 : Colors.black45;
 
     return Scaffold(
-      backgroundColor: isDark
-          ? const Color(0xFF0A0A0A)
-          : const Color(0xFFF2F4F8),
-      body: Column(
-        children: [
-          // ── Unified gradient header: title + profile ──
-          Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Color(0xFF0D47A1),
-                  Color(0xFF1565C0),
-                  Color(0xFF1E88E5),
+      backgroundColor: bg,
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 40),
+          children: [
+            // ── Flat title ──
+            Text(
+              'Settings',
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w900,
+                color: textPrimary,
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // ── Profile card ──
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: cardBg,
+                borderRadius: BorderRadius.circular(22),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
                 ],
               ),
-              borderRadius: BorderRadius.vertical(bottom: Radius.circular(28)),
-              boxShadow: [
-                BoxShadow(
-                  color: Color(0x331565C0),
-                  blurRadius: 16,
-                  offset: Offset(0, 6),
-                ),
-              ],
-            ),
-            child: SafeArea(
-              bottom: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-                child: Column(
-                  children: [
-                    const Text(
-                      'Settings',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 18,
+              child: Column(
+                children: [
+                  Container(
+                    width: 84,
+                    height: 84,
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [Color(0xFF1E88E5), Color(0xFF0D47A1)],
                       ),
+                      shape: BoxShape.circle,
                     ),
-                    const SizedBox(height: 20),
-                    CircleAvatar(
-                      radius: 42,
-                      backgroundColor: Colors.white.withOpacity(0.18),
+                    child: Center(
                       child: Text(
                         profile.name.isNotEmpty
                             ? profile.name[0].toUpperCase()
@@ -123,218 +128,228 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ),
                       ),
                     ),
-                    const SizedBox(height: 12),
-                    Text(
-                      profile.name.isNotEmpty ? profile.name : 'Your Name',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 20,
-                        fontWeight: FontWeight.w800,
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                    profile.name.isNotEmpty ? profile.name : 'Your Name',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: textPrimary,
+                      fontSize: 19,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    profile.email,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: textSecondary, fontSize: 13),
+                  ),
+                  if (profile.department.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(
+                          0xFF1565C0,
+                        ).withOpacity(isDark ? 0.2 : 0.1),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        profile.department,
+                        style: const TextStyle(
+                          color: Color(0xFF1565C0),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      profile.email,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 13,
+                  ],
+                  const SizedBox(height: 20),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _profileInfoBox(
+                          Icons.account_balance,
+                          'School',
+                          profile.school,
+                          isDark,
+                          textPrimary,
+                          textSecondary,
+                        ),
                       ),
-                    ),
-                    if (profile.department.isNotEmpty) ...[
-                      const SizedBox(height: 10),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          profile.department,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                          ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _profileInfoBox(
+                          Icons.badge_outlined,
+                          'Matric',
+                          profile.matricNumber,
+                          isDark,
+                          textPrimary,
+                          textSecondary,
                         ),
                       ),
                     ],
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _profileInfoBox(
-                            Icons.account_balance,
-                            'School',
-                            profile.school,
-                          ),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _profileInfoBox(
+                          Icons.account_balance_outlined,
+                          'Faculty',
+                          profile.faculty,
+                          isDark,
+                          textPrimary,
+                          textSecondary,
                         ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: _profileInfoBox(
-                            Icons.badge_outlined,
-                            'Matric',
-                            profile.matricNumber,
-                          ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _profileInfoBox(
+                          Icons.school_outlined,
+                          'Department',
+                          profile.department,
+                          isDark,
+                          textPrimary,
+                          textSecondary,
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _profileInfoBox(
-                            Icons.account_balance_outlined,
-                            'Faculty',
-                            profile.faculty,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: _profileInfoBox(
-                            Icons.school_outlined,
-                            'Department',
-                            profile.department,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ),
-          ),
+            const SizedBox(height: 28),
 
-          // ── Settings sections ──
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-              children: [
-                _sectionLabel('Appearance', isDark),
-                const SizedBox(height: 8),
-                _buildCard(isDark, [
-                  _switchTile(
-                    icon: isDark
-                        ? Icons.dark_mode_rounded
-                        : Icons.light_mode_rounded,
-                    iconColor: _primary,
-                    title: 'Dark Mode',
-                    subtitle: isDark ? 'Using dark theme' : 'Using light theme',
-                    value: isDark,
-                    onChanged: (_) => themeNotifier.toggleTheme(),
-                    isDark: isDark,
-                  ),
-                ]),
-                const SizedBox(height: 20),
+            // ── Settings sections ──
+            _sectionLabel('Appearance', isDark),
+            const SizedBox(height: 8),
+            _buildCard(isDark, [
+              _switchTile(
+                icon: isDark
+                    ? Icons.dark_mode_rounded
+                    : Icons.light_mode_rounded,
+                iconColor: _primary,
+                title: 'Dark Mode',
+                subtitle: isDark ? 'Using dark theme' : 'Using light theme',
+                value: isDark,
+                onChanged: (_) => themeNotifier.toggleTheme(),
+                isDark: isDark,
+              ),
+            ]),
+            const SizedBox(height: 20),
 
-                _sectionLabel('Notifications', isDark),
-                const SizedBox(height: 8),
-                _buildCard(isDark, [
-                  const NotificationToggle(),
-                  const PersonalRemindersToggle(),
-                ]),
-                const SizedBox(height: 20),
+            _sectionLabel('Notifications', isDark),
+            const SizedBox(height: 8),
+            _buildCard(isDark, [
+              const NotificationToggle(),
+              const PersonalRemindersToggle(),
+            ]),
+            const SizedBox(height: 20),
 
-                _sectionLabel('Account', isDark),
-                const SizedBox(height: 8),
-                _buildCard(isDark, [
-                  _actionTile(
-                    icon: Icons.edit_outlined,
-                    iconColor: _primary,
-                    title: 'Edit Profile',
-                    subtitle: 'Update your name, school, department',
-                    onTap: () => _showEditProfile(isDark),
-                    isDark: isDark,
-                  ),
-                  _divider(isDark),
-                  _actionTile(
-                    icon: Icons.logout_rounded,
-                    iconColor: Colors.orange,
-                    title: 'Sign Out',
-                    subtitle: 'Log out of your GradeX account',
-                    onTap: _signOut,
-                    isDark: isDark,
-                    textColor: Colors.orange,
-                  ),
-                  _divider(isDark),
-                  _actionTile(
-                    icon: Icons.delete_forever_rounded,
-                    iconColor: Colors.red,
-                    title: 'Delete Account',
-                    subtitle: 'Permanently remove your account and data',
-                    onTap: _deleteAccount,
-                    isDark: isDark,
-                    textColor: Colors.red,
-                  ),
-                ]),
-                const SizedBox(height: 20),
+            _sectionLabel('Account', isDark),
+            const SizedBox(height: 8),
+            _buildCard(isDark, [
+              _actionTile(
+                icon: Icons.edit_outlined,
+                iconColor: _primary,
+                title: 'Edit Profile',
+                subtitle: 'Update your name, school, department',
+                onTap: () => _showEditProfile(isDark),
+                isDark: isDark,
+              ),
+              _divider(isDark),
+              _actionTile(
+                icon: Icons.logout_rounded,
+                iconColor: Colors.orange,
+                title: 'Sign Out',
+                subtitle: 'Log out of your GradeX account',
+                onTap: _signOut,
+                isDark: isDark,
+                textColor: Colors.orange,
+              ),
+              _divider(isDark),
+              _actionTile(
+                icon: Icons.delete_forever_rounded,
+                iconColor: Colors.red,
+                title: 'Delete Account',
+                subtitle: 'Permanently remove your account and data',
+                onTap: _deleteAccount,
+                isDark: isDark,
+                textColor: Colors.red,
+              ),
+            ]),
+            const SizedBox(height: 20),
 
-                _sectionLabel('About', isDark),
-                const SizedBox(height: 8),
-                _buildCard(isDark, [
-                  _actionTile(
-                    icon: Icons.verified_outlined,
-                    iconColor: Colors.green,
-                    title: 'App Version',
-                    subtitle: 'GradeX v1.0.1',
-                    onTap: null,
-                    isDark: isDark,
-                  ),
-                ]),
-                const SizedBox(height: 20),
-                _sectionLabel('App Update', isDark),
-                const SizedBox(height: 8),
-                _buildCard(isDark, [
-                  const UpdateCheckTile(),
-                ]),
+            _sectionLabel('About', isDark),
+            const SizedBox(height: 8),
+            _buildCard(isDark, [
+              _actionTile(
+                icon: Icons.verified_outlined,
+                iconColor: Colors.green,
+                title: 'App Version',
+                subtitle: 'GradeX v1.0.1',
+                onTap: null,
+                isDark: isDark,
+              ),
+            ]),
+            const SizedBox(height: 20),
+            _sectionLabel('App Update', isDark),
+            const SizedBox(height: 8),
+            _buildCard(isDark, [const UpdateCheckTile()]),
+          ],
+        ),
+      ),
+    );
+  }
 
-                const SizedBox(height: 40),
-              ],
+  Widget _profileInfoBox(
+    IconData icon,
+    String label,
+    String value,
+    bool isDark,
+    Color textPrimary,
+    Color textSecondary,
+  ) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: isDark
+            ? Colors.white.withOpacity(0.04)
+            : const Color(0xFFF2F4F8),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 16, color: _primary),
+          const SizedBox(height: 6),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 10,
+              color: textSecondary,
+              fontWeight: FontWeight.w600,
             ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            value.isNotEmpty ? value : '—',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: textPrimary,
+            ),
+            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),
     );
   }
-
-  Widget _profileInfoBox(IconData icon, String label, String value) =>
-      Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.12),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, color: Colors.white70, size: 15),
-            const SizedBox(width: 6),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    label,
-                    style: const TextStyle(fontSize: 9, color: Colors.white60),
-                  ),
-                  Text(
-                    value.isNotEmpty ? value : '—',
-                    style: const TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      );
 
   String? _findBestMatch(String input, List<String> options) {
     final query = input.toLowerCase().trim();
