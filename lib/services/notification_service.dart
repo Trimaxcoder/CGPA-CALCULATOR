@@ -8,7 +8,6 @@ import 'package:timezone/timezone.dart' as tz;
 import 'timetable_service.dart';
 import 'muted_courses_store.dart';
 import 'notification_store.dart';
-import 'navigation_service.dart';
 import 'dart:io' show Platform;
 import 'notification_router.dart';
 import '../models/app_notification.dart';

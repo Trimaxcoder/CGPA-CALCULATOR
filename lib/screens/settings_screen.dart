@@ -12,7 +12,6 @@ import '../widgets/combo_field.dart';
 import '../widgets/snackBar.dart';
 import '../widgets/ui_helpers.dart';
 import '../uniport_courses.dart';
-import '../services/api_service.dart';
 import '../widgets/notification_toggle.dart';
 import '../widgets/personal_reminders_toggle.dart';
 
