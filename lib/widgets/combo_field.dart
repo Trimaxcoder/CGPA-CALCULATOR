@@ -1,9 +1,14 @@
 // ══════════════════════════════════════════════════════════
-//  COMBO FIELD  (unchanged)
+//  COMBO FIELD
+//  Text field with a suggestion list.
+//  NOTE: `dark: true`  = dark text on a LIGHT background (white panel)
+//        `dark: false` = light text on a DARK/gradient background
+//  Desktop: arrow keys move through the list, Enter selects, Esc closes,
+//  and the row under the mouse is highlighted.
 // ══════════════════════════════════════════════════════════
 
-
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 class ComboField extends StatefulWidget {
   final TextEditingController controller;
@@ -15,6 +20,7 @@ class ComboField extends StatefulWidget {
   final void Function(String)? onSuggestionSelected;
 
   const ComboField({
+    super.key,
     required this.controller,
     required this.label,
     required this.icon,
@@ -29,18 +35,22 @@ class ComboField extends StatefulWidget {
 }
 
 class ComboFieldState extends State<ComboField> {
-  final _focusNode = FocusNode();
+  late final FocusNode _focusNode;
   bool _showList = false;
   List<String> _filtered = [];
+  int _highlight = -1; // keyboard / hover highlighted row
+  final Map<int, GlobalKey> _itemKeys = {};
 
   @override
   void initState() {
     super.initState();
+    _focusNode = FocusNode(onKeyEvent: _onKey);
     _focusNode.addListener(() {
       if (_focusNode.hasFocus) {
         setState(() {
           _filtered = _buildFiltered(widget.controller.text);
           _showList = _filtered.isNotEmpty;
+          _highlight = -1;
         });
       } else {
         Future.delayed(const Duration(milliseconds: 150), () {
@@ -55,6 +65,7 @@ class ComboFieldState extends State<ComboField> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.suggestions != widget.suggestions) {
       _filtered = _buildFiltered(widget.controller.text);
+      _highlight = -1;
     }
   }
 
@@ -74,8 +85,56 @@ class ComboFieldState extends State<ComboField> {
   void _pick(String val) {
     widget.controller.text = val;
     _focusNode.unfocus();
-    setState(() => _showList = false);
+    setState(() {
+      _showList = false;
+      _highlight = -1;
+    });
     widget.onSuggestionSelected?.call(val);
+  }
+
+  // ── Keyboard support ───────────────────────────────────────
+  KeyEventResult _onKey(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+      return KeyEventResult.ignored;
+    }
+    final key = event.logicalKey;
+
+    if (key == LogicalKeyboardKey.arrowDown ||
+        key == LogicalKeyboardKey.arrowUp) {
+      if (_filtered.isEmpty) return KeyEventResult.ignored;
+      setState(() {
+        _showList = true;
+        final delta = key == LogicalKeyboardKey.arrowDown ? 1 : -1;
+        _highlight = (_highlight + delta).clamp(0, _filtered.length - 1);
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final ctx = _itemKeys[_highlight]?.currentContext;
+        if (ctx != null) {
+          Scrollable.ensureVisible(
+            ctx,
+            duration: const Duration(milliseconds: 90),
+          );
+        }
+      });
+      return KeyEventResult.handled;
+    }
+
+    if (key == LogicalKeyboardKey.enter && _showList && _highlight >= 0) {
+      if (_highlight < _filtered.length) {
+        _pick(_filtered[_highlight]);
+        return KeyEventResult.handled;
+      }
+    }
+
+    if (key == LogicalKeyboardKey.escape && _showList) {
+      setState(() {
+        _showList = false;
+        _highlight = -1;
+      });
+      return KeyEventResult.handled;
+    }
+
+    return KeyEventResult.ignored;
   }
 
   @override
@@ -101,6 +160,7 @@ class ComboFieldState extends State<ComboField> {
             setState(() {
               _filtered = _buildFiltered(v);
               _showList = _filtered.isNotEmpty;
+              _highlight = -1;
             });
           },
           decoration: InputDecoration(
@@ -148,11 +208,12 @@ class ComboFieldState extends State<ComboField> {
         ),
         if (_showList)
           Container(
-            constraints: const BoxConstraints(maxHeight: 180),
+            constraints: const BoxConstraints(maxHeight: 200),
             margin: const EdgeInsets.only(top: 2),
             decoration: BoxDecoration(
               color: isDark ? Colors.white : Colors.indigo.shade900,
               borderRadius: BorderRadius.circular(12),
+              border: isDark ? Border.all(color: Colors.black12) : null,
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withOpacity(0.15),
@@ -161,29 +222,45 @@ class ComboFieldState extends State<ComboField> {
                 ),
               ],
             ),
-            child: ListView.builder(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              shrinkWrap: true,
-              itemCount: _filtered.length,
-              itemBuilder: (_, i) {
-                final item = _filtered[i];
-                return InkWell(
-                  onTap: () => _pick(item),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 10,
-                    ),
-                    child: Text(
-                      item,
-                      style: TextStyle(
-                        color: isDark ? Colors.black87 : Colors.white,
-                        fontSize: 13,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: ListView.builder(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                shrinkWrap: true,
+                itemCount: _filtered.length,
+                itemBuilder: (_, i) {
+                  final item = _filtered[i];
+                  final highlighted = i == _highlight;
+                  return InkWell(
+                    key: _itemKeys.putIfAbsent(i, () => GlobalKey()),
+                    onTap: () => _pick(item),
+                    onHover: (h) {
+                      if (h && _highlight != i) setState(() => _highlight = i);
+                    },
+                    child: Container(
+                      color: highlighted
+                          ? (isDark
+                                ? Colors.blue.withOpacity(0.1)
+                                : Colors.white.withOpacity(0.14))
+                          : Colors.transparent,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 10,
+                      ),
+                      child: Text(
+                        item,
+                        style: TextStyle(
+                          color: isDark ? Colors.black87 : Colors.white,
+                          fontSize: 13,
+                          fontWeight: highlighted
+                              ? FontWeight.w700
+                              : FontWeight.w400,
+                        ),
                       ),
                     ),
-                  ),
-                );
-              },
+                  );
+                },
+              ),
             ),
           ),
       ],

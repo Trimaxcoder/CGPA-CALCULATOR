@@ -8,6 +8,7 @@ import '../models/timetable_entry.dart';
 import '../services/timetable_service.dart';
 import 'super_admin_screen.dart';
 import '../services/muted_courses_store.dart';
+import '../utils/responsive.dart';
 import '../widgets/snackBar.dart';
 import '../services/notification_service.dart';
 import 'compose_announcement_screen.dart';
@@ -36,6 +37,14 @@ class _TimetableScreenState extends State<TimetableScreen>
 
   static const Color _primary = Color(0xFF1565C0);
 
+  /// Max width of the timetable content on big screens.
+  static const double _contentMaxWidth = 1100;
+
+  /// Bottom sheets stay phone-sized (centered) on wide screens.
+  static const BoxConstraints _sheetConstraints = BoxConstraints(
+    maxWidth: 560,
+  );
+
   Map<String, Map<String, dynamic>> _reminders = {};
 
   String _school = '', _faculty = '', _department = '', _level = '';
@@ -63,6 +72,9 @@ class _TimetableScreenState extends State<TimetableScreen>
   void initState() {
     super.initState();
     _typeTabCtrl = TabController(length: 3, vsync: this);
+    _typeTabCtrl.addListener(() {
+      if (mounted && !_typeTabCtrl.indexIsChanging) setState(() {});
+    });
     _dayTabCtrl = TabController(
       length: _days.length,
       vsync: this,
@@ -71,7 +83,7 @@ class _TimetableScreenState extends State<TimetableScreen>
     _dayTabCtrl.addListener(() {
       if (!_dayTabCtrl.indexIsChanging) setState(() {});
     });
-    _lecturePageCtrl = PageController(initialPage: _todayIndex); // ← add
+    _lecturePageCtrl = PageController(initialPage: _todayIndex);
     _personalPageCtrl = PageController(initialPage: _todayIndex);
     _loadAll();
   }
@@ -209,136 +221,831 @@ class _TimetableScreenState extends State<TimetableScreen>
     }
   }
 
+  /// Scrollable list of cards: 1 column on phones, 2 columns on wide
+  /// content areas, centered and capped at [_contentMaxWidth].
+  Widget _responsiveList(double cw, List<Widget> cards) {
+    final sidePad = responsiveSidePadding(cw, maxWidth: _contentMaxWidth);
+    final cols = cw >= 820 ? 2 : 1;
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: EdgeInsets.fromLTRB(sidePad, 16, sidePad, 100),
+      children: [
+        ResponsiveGrid(
+          columns: cols,
+          spacing: 12,
+          runSpacing: 0,
+          children: cards,
+        ),
+      ],
+    );
+  }
+
   // ── Build ─────────────────────────────────────────────────────────────────
   @override
-Widget build(BuildContext context) {
-  final isDark = context.watch<ThemeNotifier>().isDarkMode;
+  Widget build(BuildContext context) {
+    final isDark = context.watch<ThemeNotifier>().isDarkMode;
 
-  return Scaffold(
-    backgroundColor: isDark ? const Color(0xFF0A0A0A) : const Color(0xFFF2F4F8),
-    body: Column(
-      children: [
-        // ── Full-width gradient header, deep bottom curve ──
-        Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Color(0xFF0D47A1),
-                Color(0xFF1565C0),
-                Color(0xFF1E88E5),
+    // Desktop / large screens get their own layout; phones and tablets
+    // keep the original design below.
+    if (context.isExpanded) return _buildDesktop(isDark);
+
+    return Scaffold(
+      backgroundColor: isDark
+          ? const Color(0xFF0A0A0A)
+          : const Color(0xFFF2F4F8),
+      body: Column(
+        children: [
+          // ── Full-width gradient header, deep bottom curve ──
+          Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Color(0xFF0D47A1),
+                  Color(0xFF1565C0),
+                  Color(0xFF1E88E5),
+                ],
+              ),
+              borderRadius: BorderRadius.only(
+                bottomLeft: Radius.circular(60),
+                bottomRight: Radius.circular(60),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Color(0x331565C0),
+                  blurRadius: 16,
+                  offset: Offset(0, 6),
+                ),
               ],
             ),
-            borderRadius: BorderRadius.only(
-              bottomLeft: Radius.circular(60),
-              bottomRight: Radius.circular(60),
+            child: SafeArea(
+              bottom: false,
+              child: ContentConstrainer(
+                maxWidth: _contentMaxWidth,
+                child: Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(8, 12, 8, 4),
+                      child: Row(
+                        children: [
+                          const SizedBox(width: 8),
+                          const Expanded(
+                            child: Text(
+                              'Timetable',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w800,
+                                fontSize: 18,
+                              ),
+                            ),
+                          ),
+                          _glassIconButton(
+                            icon: Icons.refresh_rounded,
+                            onPressed: _loadAll,
+                          ),
+                          if (_isAdmin) ...[
+                            TextButton(
+                              onPressed: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      const ComposeAnnouncementScreen(),
+                                ),
+                              ),
+                              child: const Text(
+                                'Announce',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                            TextButton(
+                              onPressed: () => _confirmResign(isDark),
+                              child: const Text(
+                                'Resign',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                          ],
+                          if (!_isAdmin && !_isSuperAdmin)
+                            TextButton(
+                              onPressed: () => _showAdminRequestSheet(isDark),
+                              child: const Text(
+                                'Be Admin',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                          if (_isSuperAdmin)
+                            _glassIconButton(
+                              icon: Icons.admin_panel_settings_rounded,
+                              onPressed: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const SuperAdminScreen(),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 560),
+                        child: TabBar(
+                          controller: _typeTabCtrl,
+                          labelColor: Colors.white,
+                          unselectedLabelColor: Colors.white54,
+                          indicatorSize: TabBarIndicatorSize.label,
+                          indicator: UnderlineTabIndicator(
+                            borderSide: const BorderSide(
+                              color: Colors.white,
+                              width: 3,
+                            ),
+                            insets: const EdgeInsets.symmetric(horizontal: 16),
+                          ),
+                          tabs: const [
+                            Tab(
+                              icon: Icon(
+                                Icons.cast_for_education_rounded,
+                                size: 20,
+                              ),
+                              text: 'Lecture',
+                            ),
+                            Tab(
+                              icon: Icon(Icons.menu_book_rounded, size: 20),
+                              text: 'Personal',
+                            ),
+                            Tab(
+                              icon: Icon(Icons.event_note_rounded, size: 20),
+                              text: 'Exam',
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                  ],
+                ),
+              ),
             ),
-            boxShadow: [
-              BoxShadow(
-                color: Color(0x331565C0),
-                blurRadius: 16,
-                offset: Offset(0, 6),
+          ),
+          Expanded(
+            child: _loading
+                ? const Center(child: CircularProgressIndicator())
+                : TabBarView(
+                    controller: _typeTabCtrl,
+                    children: [
+                      _buildDayView(isDark, isPersonal: false),
+                      _buildDayView(isDark, isPersonal: true),
+                      _buildExamTab(isDark),
+                    ],
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════
+  //  DESKTOP LAYOUT (screens >= 1024 px)
+  // ══════════════════════════════════════════════════════════
+  Widget _buildDesktop(bool isDark) {
+    final bg = isDark ? const Color(0xFF0A0A0A) : const Color(0xFFF7F8FA);
+    final tab = _typeTabCtrl.index;
+
+    return Scaffold(
+      backgroundColor: bg,
+      body: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1400),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(32, 26, 32, 0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _desktopHeader(isDark, tab),
+                  const SizedBox(height: 22),
+                  Expanded(
+                    child: _loading
+                        ? const Center(child: CircularProgressIndicator())
+                        : tab == 2
+                        ? _desktopExams(isDark)
+                        : _desktopDays(isDark, isPersonal: tab == 1),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _desktopHeader(bool isDark, int tab) {
+    final textPrimary = isDark ? Colors.white : Colors.black87;
+    final textSecondary = isDark ? Colors.white54 : Colors.black45;
+
+    // Primary "add" action replaces the floating button on desktop
+    Widget? addButton;
+    if (tab == 0 && _isAdmin) {
+      addButton = _deskButton(
+        icon: Icons.add_rounded,
+        label: 'Add class',
+        filled: true,
+        color: _primary,
+        isDark: isDark,
+        onTap: () => _showAddLectureSheet(isDark),
+      );
+    } else if (tab == 1) {
+      addButton = _deskButton(
+        icon: Icons.add_rounded,
+        label: 'Add study',
+        filled: true,
+        color: _primary,
+        isDark: isDark,
+        onTap: () => _showAddPersonalSheet(isDark),
+      );
+    } else if (tab == 2 && _isAdmin) {
+      addButton = _deskButton(
+        icon: Icons.add_rounded,
+        label: 'Add exam',
+        filled: true,
+        color: Colors.red.shade700,
+        isDark: isDark,
+        onTap: () => _showAddExamSheet(isDark),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          runSpacing: 14,
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Timetable',
+                  style: TextStyle(
+                    fontSize: 32,
+                    fontWeight: FontWeight.w900,
+                    color: textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Today is ${_days[_todayIndex]}',
+                  style: TextStyle(fontSize: 14, color: textSecondary),
+                ),
+              ],
+            ),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                _deskButton(
+                  icon: Icons.refresh_rounded,
+                  label: 'Refresh',
+                  isDark: isDark,
+                  onTap: _loadAll,
+                ),
+                if (_isAdmin) ...[
+                  _deskButton(
+                    icon: Icons.campaign_rounded,
+                    label: 'Announce',
+                    isDark: isDark,
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const ComposeAnnouncementScreen(),
+                      ),
+                    ),
+                  ),
+                  _deskButton(
+                    icon: Icons.logout_rounded,
+                    label: 'Resign',
+                    color: Colors.red,
+                    isDark: isDark,
+                    onTap: () => _confirmResign(isDark),
+                  ),
+                ],
+                if (!_isAdmin && !_isSuperAdmin)
+                  _deskButton(
+                    icon: Icons.verified_user_outlined,
+                    label: 'Be Admin',
+                    isDark: isDark,
+                    onTap: () => _showAdminRequestSheet(isDark),
+                  ),
+                if (_isSuperAdmin)
+                  _deskButton(
+                    icon: Icons.admin_panel_settings_rounded,
+                    label: 'Admin panel',
+                    isDark: isDark,
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const SuperAdminScreen(),
+                      ),
+                    ),
+                  ),
+                if (addButton != null) addButton,
+              ],
+            ),
+          ],
+        ),
+        const SizedBox(height: 18),
+        _segmented(isDark, tab),
+      ],
+    );
+  }
+
+  Widget _deskButton({
+    required IconData icon,
+    required String label,
+    required bool isDark,
+    required VoidCallback onTap,
+    bool filled = false,
+    Color? color,
+  }) {
+    final c = color ?? _primary;
+    final fg = filled ? Colors.white : (color ?? (isDark ? Colors.white70 : Colors.black87));
+    return Material(
+      color: filled
+          ? c
+          : (isDark ? Colors.white.withOpacity(0.06) : Colors.white),
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: filled
+                ? null
+                : Border.all(
+                    color: isDark
+                        ? Colors.white.withOpacity(0.1)
+                        : Colors.black.withOpacity(0.08),
+                  ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 18, color: fg),
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: fg,
+                ),
               ),
             ],
           ),
-          child: SafeArea(
-            bottom: false,
-            child: Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(8, 12, 8, 4),
+        ),
+      ),
+    );
+  }
+
+  /// Pill-style segmented control that drives the same [_typeTabCtrl].
+  Widget _segmented(bool isDark, int tab) {
+    const items = [
+      (Icons.cast_for_education_rounded, 'Lecture'),
+      (Icons.menu_book_rounded, 'Personal'),
+      (Icons.event_note_rounded, 'Exam'),
+    ];
+
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.white.withOpacity(0.06) : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (var i = 0; i < items.length; i++)
+            GestureDetector(
+              onTap: () => setState(() => _typeTabCtrl.index = i),
+              child: MouseRegion(
+                cursor: SystemMouseCursors.click,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    gradient: tab == i
+                        ? const LinearGradient(
+                            colors: [Color(0xFF1E88E5), Color(0xFF0D47A1)],
+                          )
+                        : null,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                   child: Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
+                      Icon(
+                        items[i].$1,
+                        size: 18,
+                        color: tab == i
+                            ? Colors.white
+                            : (isDark ? Colors.white54 : Colors.black54),
+                      ),
                       const SizedBox(width: 8),
-                      const Expanded(
-                        child: Text(
-                          'Timetable',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w800,
-                            fontSize: 18,
-                          ),
+                      Text(
+                        items[i].$2,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: tab == i
+                              ? Colors.white
+                              : (isDark ? Colors.white54 : Colors.black54),
                         ),
                       ),
-                      _glassIconButton(icon: Icons.refresh_rounded, onPressed: _loadAll),
-                      if (_isAdmin) ...[
-                        TextButton(
-                          onPressed: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (_) => const ComposeAnnouncementScreen()),
-                          ),
-                          child: const Text(
-                            'Announce',
-                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 12),
-                          ),
-                        ),
-                        TextButton(
-                          onPressed: () => _confirmResign(isDark),
-                          child: const Text(
-                            'Resign',
-                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 12),
-                          ),
-                        ),
-                      ],
-                      if (!_isAdmin && !_isSuperAdmin)
-                        TextButton(
-                          onPressed: () => _showAdminRequestSheet(isDark),
-                          child: const Text(
-                            'Be Admin',
-                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 12),
-                          ),
-                        ),
-                      if (_isSuperAdmin)
-                        _glassIconButton(
-                          icon: Icons.admin_panel_settings_rounded,
-                          onPressed: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (_) => const SuperAdminScreen()),
-                          ),
-                        ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 4),
-                TabBar(
-                  controller: _typeTabCtrl,
-                  labelColor: Colors.white,
-                  unselectedLabelColor: Colors.white54,
-                  indicatorSize: TabBarIndicatorSize.label,
-                  indicator: UnderlineTabIndicator(
-                    borderSide: const BorderSide(color: Colors.white, width: 3),
-                    insets: const EdgeInsets.symmetric(horizontal: 16),
-                  ),
-                  tabs: const [
-                    Tab(icon: Icon(Icons.cast_for_education_rounded, size: 20), text: 'Lecture'),
-                    Tab(icon: Icon(Icons.menu_book_rounded, size: 20), text: 'Personal'),
-                    Tab(icon: Icon(Icons.event_note_rounded, size: 20), text: 'Exam'),
-                  ],
-                ),
-                const SizedBox(height: 20),
-              ],
+              ),
             ),
+        ],
+      ),
+    );
+  }
+
+  int _countFor(String day, bool isPersonal) => isPersonal
+      ? _personal.where((e) => e.day == day).length
+      : _lectures.where((e) => e.day == day).length;
+
+  /// Lecture / Personal: vertical day list on the left, selected day on the right.
+  Widget _desktopDays(bool isDark, {required bool isPersonal}) {
+    final cardBg = isDark ? const Color(0xFF15181D) : Colors.white;
+    final textPrimary = isDark ? Colors.white : Colors.black87;
+    final textSecondary = isDark ? Colors.white54 : Colors.black45;
+    final sel = _dayTabCtrl.index;
+    final day = _days[sel];
+    final noun = isPersonal ? 'session' : 'class';
+
+    final cards = isPersonal
+        ? (_personal.where((e) => e.day == day).toList()
+                ..sort((a, b) => a.startTime.compareTo(b.startTime)))
+            .map((e) => _personalCard(e, isDark))
+            .toList()
+        : (_lectures.where((e) => e.day == day).toList()
+                ..sort((a, b) => a.startTime.compareTo(b.startTime)))
+            .map((e) => _lectureCard(e, isDark))
+            .toList();
+
+    // ── Left: day list ──
+    final dayRail = Container(
+      width: 220,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
+            blurRadius: 12,
+            offset: const Offset(0, 3),
           ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (var i = 0; i < _days.length; i++)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(14),
+                  onTap: () => setState(() => _dayTabCtrl.index = i),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 11,
+                    ),
+                    decoration: BoxDecoration(
+                      gradient: sel == i
+                          ? const LinearGradient(
+                              colors: [Color(0xFF1E88E5), Color(0xFF0D47A1)],
+                            )
+                          : null,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _days[i],
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: sel == i
+                                      ? FontWeight.w800
+                                      : FontWeight.w600,
+                                  color: sel == i ? Colors.white : textPrimary,
+                                ),
+                              ),
+                              const SizedBox(height: 1),
+                              Text(
+                                () {
+                                  final n = _countFor(_days[i], isPersonal);
+                                  return n == 0
+                                      ? 'Free'
+                                      : '$n ${n == 1 ? noun : '${noun}s'}';
+                                }(),
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: sel == i
+                                      ? Colors.white70
+                                      : textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (i == _todayIndex)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 7,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: sel == i
+                                  ? Colors.white.withOpacity(0.2)
+                                  : _primary.withOpacity(0.12),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              'TODAY',
+                              style: TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.w800,
+                                color: sel == i ? Colors.white : _primary,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+
+    // ── Right: selected day ──
+    final detail = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(
+              day,
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                color: textPrimary,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: _primary.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                cards.isEmpty
+                    ? 'Nothing scheduled'
+                    : '${cards.length} ${cards.length == 1 ? noun : '${noun}s'}',
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: _primary,
+                ),
+              ),
+            ),
+          ],
         ),
+        const SizedBox(height: 14),
         Expanded(
-          child: _loading
-              ? const Center(child: CircularProgressIndicator())
-              : TabBarView(
-                  controller: _typeTabCtrl,
-                  children: [
-                    _buildDayView(isDark, isPersonal: false),
-                    _buildDayView(isDark, isPersonal: true),
-                    _buildExamTab(isDark),
-                  ],
+          child: cards.isEmpty
+              ? _dayEntriesList(
+                  isDark: isDark,
+                  isEmpty: true,
+                  day: day,
+                  isPersonal: isPersonal,
+                  child: const SizedBox.shrink(),
+                )
+              : LayoutBuilder(
+                  builder: (context, c) => ListView(
+                    padding: const EdgeInsets.only(bottom: 40),
+                    children: [
+                      ResponsiveGrid(
+                        columns: c.maxWidth >= 780 ? 2 : 1,
+                        spacing: 14,
+                        runSpacing: 0,
+                        children: cards,
+                      ),
+                    ],
+                  ),
                 ),
         ),
       ],
-    ),
-  );
-}
-    
+    );
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SingleChildScrollView(child: dayRail),
+        const SizedBox(width: 26),
+        Expanded(child: detail),
+      ],
+    );
+  }
+
+  /// Exams: summary stats on top, exam cards below.
+  Widget _desktopExams(bool isDark) {
+    final sorted = [..._exams]
+      ..sort((a, b) {
+        if (a.date == null && b.date == null) return 0;
+        if (a.date == null) return 1;
+        if (b.date == null) return -1;
+        final dateCmp = a.date!.compareTo(b.date!);
+        if (dateCmp != 0) return dateCmp;
+        return a.startTime.compareTo(b.startTime);
+      });
+
+    if (sorted.isEmpty) {
+      return _emptyState(
+        icon: Icons.event_note_outlined,
+        title: 'No Exams Scheduled',
+        subtitle: _isAdmin
+            ? 'Use "Add exam" to schedule an exam'
+            : 'No exam timetable has been published yet',
+        isDark: isDark,
+      );
+    }
+
+    final now = DateTime.now();
+    final dated = sorted.where((e) => e.date != null).toList();
+    final upcoming = dated
+        .where((e) => e.date!.difference(now).inDays >= 0)
+        .toList();
+    final nextDays = upcoming.isEmpty
+        ? null
+        : upcoming.first.date!.difference(now).inDays;
+    final thisWeek = upcoming
+        .where((e) => e.date!.difference(now).inDays <= 7)
+        .length;
+
+    final stats = ResponsiveGrid(
+      columns: 3,
+      children: [
+        _statCard(
+          icon: Icons.event_note_rounded,
+          label: 'Total exams',
+          value: '${sorted.length}',
+          color: Colors.red.shade700,
+          isDark: isDark,
+        ),
+        _statCard(
+          icon: Icons.timer_outlined,
+          label: 'Next exam',
+          value: nextDays == null
+              ? '—'
+              : nextDays <= 0
+              ? 'Today'
+              : '$nextDays ${nextDays == 1 ? 'day' : 'days'}',
+          color: Colors.orange.shade700,
+          isDark: isDark,
+        ),
+        _statCard(
+          icon: Icons.warning_amber_rounded,
+          label: 'Within 7 days',
+          value: '$thisWeek',
+          color: _primary,
+          isDark: isDark,
+        ),
+      ],
+    );
+
+    return LayoutBuilder(
+      builder: (context, c) => RefreshIndicator(
+        onRefresh: _loadExams,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.only(bottom: 40),
+          children: [
+            stats,
+            const SizedBox(height: 20),
+            ResponsiveGrid(
+              columns: c.maxWidth >= 860 ? 2 : 1,
+              spacing: 14,
+              runSpacing: 0,
+              children: sorted.map((e) => _examCard(e, isDark)).toList(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _statCard({
+    required IconData icon,
+    required String label,
+    required String value,
+    required Color color,
+    required bool isDark,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF15181D) : Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
+            blurRadius: 12,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 46,
+            height: 46,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.12),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: color, size: 22),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
+                    color: isDark ? Colors.white : Colors.black87,
+                  ),
+                ),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: isDark ? Colors.white54 : Colors.black45,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   // ══════════════════════════════════════════════════════════
   //  DAY VIEW (shared by Lecture + Personal tabs)
@@ -363,126 +1070,152 @@ Widget build(BuildContext context) {
                     backgroundColor: _primary,
                   )
                 : null),
-      body: Column(
-        children: [
-          // Day-of-week sub-bar, now blended to sit flush under the gradient header
-          Container(
-            color: isDark ? const Color(0xFF111111) : Colors.white,
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            child: SizedBox(
-              height: 56,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                itemCount: _days.length,
-                itemBuilder: (_, i) {
-                  final isSelected = _dayTabCtrl.index == i;
-                  final isToday = i == _todayIndex;
-                  return GestureDetector(
-                    onTap: () {
-                      _dayTabCtrl.animateTo(i);
-                      pageCtrl.animateToPage(
-                        i,
-                        duration: const Duration(milliseconds: 300),
-                        curve: Curves.easeInOut,
-                      );
-                    },
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      margin: const EdgeInsets.symmetric(horizontal: 4),
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        gradient: isSelected
-                            ? const LinearGradient(
-                                colors: [Color(0xFF1E88E5), Color(0xFF0D47A1)],
-                              )
-                            : null,
-                        color: isSelected
-                            ? null
-                            : (isDark
-                                  ? Colors.white.withOpacity(0.05)
-                                  : Colors.grey.shade100),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            _dayShort[i],
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: isSelected
-                                  ? FontWeight.w800
-                                  : FontWeight.w600,
-                              color: isSelected
-                                  ? Colors.white
-                                  : (isDark ? Colors.white54 : Colors.black54),
-                            ),
-                          ),
-                          if (isToday && !isSelected)
-                            Container(
-                              margin: const EdgeInsets.only(top: 3),
-                              width: 4,
-                              height: 4,
-                              decoration: const BoxDecoration(
-                                color: _primary,
-                                shape: BoxShape.circle,
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final cw = constraints.maxWidth;
+          final chipPad = cw >= 600 ? 22.0 : 16.0;
+
+          return Column(
+            children: [
+              // Day-of-week sub-bar, flush under the gradient header.
+              // Centered on wide screens, scrolls horizontally when it
+              // doesn't fit.
+              Container(
+                color: isDark ? const Color(0xFF111111) : Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                child: Center(
+                  child: SizedBox(
+                    height: 56,
+                    child: ListView.builder(
+                      shrinkWrap: true,
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      itemCount: _days.length,
+                      itemBuilder: (_, i) {
+                        final isSelected = _dayTabCtrl.index == i;
+                        final isToday = i == _todayIndex;
+                        return GestureDetector(
+                          onTap: () {
+                            _dayTabCtrl.animateTo(i);
+                            pageCtrl.animateToPage(
+                              i,
+                              duration: const Duration(milliseconds: 300),
+                              curve: Curves.easeInOut,
+                            );
+                          },
+                          child: MouseRegion(
+                            cursor: SystemMouseCursors.click,
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
+                              margin: const EdgeInsets.symmetric(
+                                horizontal: 4,
+                              ),
+                              padding: EdgeInsets.symmetric(
+                                horizontal: chipPad,
+                              ),
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                gradient: isSelected
+                                    ? const LinearGradient(
+                                        colors: [
+                                          Color(0xFF1E88E5),
+                                          Color(0xFF0D47A1),
+                                        ],
+                                      )
+                                    : null,
+                                color: isSelected
+                                    ? null
+                                    : (isDark
+                                          ? Colors.white.withOpacity(0.05)
+                                          : Colors.grey.shade100),
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Text(
+                                    _dayShort[i],
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: isSelected
+                                          ? FontWeight.w800
+                                          : FontWeight.w600,
+                                      color: isSelected
+                                          ? Colors.white
+                                          : (isDark
+                                                ? Colors.white54
+                                                : Colors.black54),
+                                    ),
+                                  ),
+                                  if (isToday && !isSelected)
+                                    Container(
+                                      margin: const EdgeInsets.only(top: 3),
+                                      width: 4,
+                                      height: 4,
+                                      decoration: const BoxDecoration(
+                                        color: _primary,
+                                        shape: BoxShape.circle,
+                                      ),
+                                    ),
+                                ],
                               ),
                             ),
-                        ],
-                      ),
+                          ),
+                        );
+                      },
                     ),
-                  );
-                },
+                  ),
+                ),
               ),
-            ),
-          ),
-          Expanded(
-            child: PageView.builder(
-              controller: pageCtrl,
-              itemCount: _days.length,
-              onPageChanged: (i) {
-                if (_dayTabCtrl.index != i) {
-                  _dayTabCtrl.animateTo(i);
-                }
-              },
-              itemBuilder: (_, dayIndex) {
-                final day = _days[dayIndex];
+              Expanded(
+                child: PageView.builder(
+                  controller: pageCtrl,
+                  itemCount: _days.length,
+                  onPageChanged: (i) {
+                    if (_dayTabCtrl.index != i) {
+                      _dayTabCtrl.animateTo(i);
+                    }
+                  },
+                  itemBuilder: (_, dayIndex) {
+                    final day = _days[dayIndex];
 
-                if (isPersonal) {
-                  final entries = _personal.where((e) => e.day == day).toList()
-                    ..sort((a, b) => a.startTime.compareTo(b.startTime));
-                  return _dayEntriesList(
-                    isDark: isDark,
-                    isEmpty: entries.isEmpty,
-                    day: day,
-                    isPersonal: true,
-                    child: ListView.builder(
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-                      itemCount: entries.length,
-                      itemBuilder: (_, i) => _personalCard(entries[i], isDark),
-                    ),
-                  );
-                } else {
-                  final entries = _lectures.where((e) => e.day == day).toList()
-                    ..sort((a, b) => a.startTime.compareTo(b.startTime));
-                  return _dayEntriesList(
-                    isDark: isDark,
-                    isEmpty: entries.isEmpty,
-                    day: day,
-                    isPersonal: false,
-                    child: ListView.builder(
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-                      itemCount: entries.length,
-                      itemBuilder: (_, i) => _lectureCard(entries[i], isDark),
-                    ),
-                  );
-                }
-              },
-            ),
-          ),
-        ],
+                    if (isPersonal) {
+                      final entries =
+                          _personal.where((e) => e.day == day).toList()..sort(
+                            (a, b) => a.startTime.compareTo(b.startTime),
+                          );
+                      return _dayEntriesList(
+                        isDark: isDark,
+                        isEmpty: entries.isEmpty,
+                        day: day,
+                        isPersonal: true,
+                        child: _responsiveList(
+                          cw,
+                          entries.map((e) => _personalCard(e, isDark)).toList(),
+                        ),
+                      );
+                    } else {
+                      final entries =
+                          _lectures.where((e) => e.day == day).toList()..sort(
+                            (a, b) => a.startTime.compareTo(b.startTime),
+                          );
+                      return _dayEntriesList(
+                        isDark: isDark,
+                        isEmpty: entries.isEmpty,
+                        day: day,
+                        isPersonal: false,
+                        child: _responsiveList(
+                          cw,
+                          entries.map((e) => _lectureCard(e, isDark)).toList(),
+                        ),
+                      );
+                    }
+                  },
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -496,49 +1229,51 @@ Widget build(BuildContext context) {
   }) {
     if (isEmpty) {
       return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(40),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 96,
-                height: 96,
-                decoration: BoxDecoration(
-                  color: _primary.withOpacity(0.08),
-                  shape: BoxShape.circle,
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.all(40),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 96,
+                  height: 96,
+                  decoration: BoxDecoration(
+                    color: _primary.withOpacity(0.08),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    isPersonal
+                        ? Icons.menu_book_outlined
+                        : Icons.cast_for_education_outlined,
+                    size: 44,
+                    color: _primary.withOpacity(0.5),
+                  ),
                 ),
-                child: Icon(
+                const SizedBox(height: 16),
+                Text(
+                  'No classes on $day',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? Colors.white70 : Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
                   isPersonal
-                      ? Icons.menu_book_outlined
-                      : Icons.cast_for_education_outlined,
-                  size: 44,
-                  color: _primary.withOpacity(0.5),
+                      ? 'Tap "Add Study" to add a session'
+                      : _isAdmin
+                      ? 'Tap "Add Class" to schedule a lecture'
+                      : 'No lectures scheduled for this day',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: isDark ? Colors.white38 : Colors.black45,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'No classes on $day',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: isDark ? Colors.white70 : Colors.black87,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                isPersonal
-                    ? 'Tap "Add Study" to add a session'
-                    : _isAdmin
-                    ? 'Tap "Add Class" to schedule a lecture'
-                    : 'No lectures scheduled for this day',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 13,
-                  color: isDark ? Colors.white38 : Colors.black45,
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       );
@@ -579,12 +1314,13 @@ Widget build(BuildContext context) {
                   : 'No exam timetable has been published yet',
               isDark: isDark,
             )
-          : RefreshIndicator(
-              onRefresh: _loadExams,
-              child: ListView.builder(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-                itemCount: sorted.length,
-                itemBuilder: (_, i) => _examCard(sorted[i], isDark),
+          : LayoutBuilder(
+              builder: (context, constraints) => RefreshIndicator(
+                onRefresh: _loadExams,
+                child: _responsiveList(
+                  constraints.maxWidth,
+                  sorted.map((e) => _examCard(e, isDark)).toList(),
+                ),
               ),
             ),
     );
@@ -638,7 +1374,7 @@ Widget build(BuildContext context) {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ── Icon badge (replaces old colored divider bar) ──
+                // ── Icon badge ──
                 Container(
                   width: 44,
                   height: 44,
@@ -1271,20 +2007,25 @@ Widget build(BuildContext context) {
   }) {
     return GestureDetector(
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(6),
-        decoration: BoxDecoration(
-          color: active
-              ? color.withOpacity(0.15)
-              : (isDark
-                    ? Colors.white.withOpacity(0.04)
-                    : Colors.black.withOpacity(0.03)),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Icon(
-          icon,
-          size: 18,
-          color: active ? color : (isDark ? Colors.white24 : Colors.black26),
+      child: MouseRegion(
+        cursor: onTap != null
+            ? SystemMouseCursors.click
+            : SystemMouseCursors.basic,
+        child: Container(
+          padding: const EdgeInsets.all(6),
+          decoration: BoxDecoration(
+            color: active
+                ? color.withOpacity(0.15)
+                : (isDark
+                      ? Colors.white.withOpacity(0.04)
+                      : Colors.black.withOpacity(0.03)),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(
+            icon,
+            size: 18,
+            color: active ? color : (isDark ? Colors.white24 : Colors.black26),
+          ),
         ),
       ),
     );
@@ -1296,24 +2037,27 @@ Widget build(BuildContext context) {
 
     return GestureDetector(
       onTap: () => _showReminderSheet(e, isDark),
-      child: Container(
-        padding: const EdgeInsets.all(6),
-        decoration: BoxDecoration(
-          color: enabled
-              ? _primary.withOpacity(0.15)
-              : (isDark
-                    ? Colors.white.withOpacity(0.04)
-                    : Colors.black.withOpacity(0.03)),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Icon(
-          enabled
-              ? Icons.notifications_active_rounded
-              : Icons.notifications_none_rounded,
-          size: 18,
-          color: enabled
-              ? _primary
-              : (isDark ? Colors.white24 : Colors.black26),
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: Container(
+          padding: const EdgeInsets.all(6),
+          decoration: BoxDecoration(
+            color: enabled
+                ? _primary.withOpacity(0.15)
+                : (isDark
+                      ? Colors.white.withOpacity(0.04)
+                      : Colors.black.withOpacity(0.03)),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(
+            enabled
+                ? Icons.notifications_active_rounded
+                : Icons.notifications_none_rounded,
+            size: 18,
+            color: enabled
+                ? _primary
+                : (isDark ? Colors.white24 : Colors.black26),
+          ),
         ),
       ),
     );
@@ -1325,16 +2069,19 @@ Widget build(BuildContext context) {
   }) {
     return GestureDetector(
       onTap: onPressed,
-      child: Container(
-        width: 38,
-        height: 38,
-        margin: const EdgeInsets.symmetric(horizontal: 2),
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.15),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.white24),
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: Container(
+          width: 38,
+          height: 38,
+          margin: const EdgeInsets.symmetric(horizontal: 2),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.15),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.white24),
+          ),
+          child: Icon(icon, color: Colors.white, size: 20),
         ),
-        child: Icon(icon, color: Colors.white, size: 20),
       ),
     );
   }
@@ -1347,6 +2094,7 @@ Widget build(BuildContext context) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      constraints: _sheetConstraints,
       backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
@@ -1404,6 +2152,7 @@ Widget build(BuildContext context) {
               const SizedBox(height: 8),
               Wrap(
                 spacing: 8,
+                runSpacing: 8,
                 children: [5, 10, 15, 30, 60].map((min) {
                   final selected = minutesBefore == min;
                   return GestureDetector(
@@ -1491,45 +2240,47 @@ Widget build(BuildContext context) {
     required String subtitle,
     required bool isDark,
   }) => Center(
-    child: Padding(
-      padding: const EdgeInsets.all(40),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 96,
-            height: 96,
-            decoration: BoxDecoration(
-              color: _primary.withOpacity(0.08),
-              shape: BoxShape.circle,
+    child: SingleChildScrollView(
+      child: Padding(
+        padding: const EdgeInsets.all(40),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 96,
+              height: 96,
+              decoration: BoxDecoration(
+                color: _primary.withOpacity(0.08),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, size: 44, color: _primary.withOpacity(0.5)),
             ),
-            child: Icon(icon, size: 44, color: _primary.withOpacity(0.5)),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: isDark ? Colors.white70 : Colors.black87,
+            const SizedBox(height: 16),
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: isDark ? Colors.white70 : Colors.black87,
+              ),
             ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            subtitle,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 13,
-              color: isDark ? Colors.white38 : Colors.black45,
+            const SizedBox(height: 8),
+            Text(
+              subtitle,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 13,
+                color: isDark ? Colors.white38 : Colors.black45,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     ),
   );
 
   // ══════════════════════════════════════════════════════════
-  //  BOTTOM SHEETS (keep all existing ones)
+  //  BOTTOM SHEETS
   // ══════════════════════════════════════════════════════════
   void _showAddLectureSheet(bool isDark, {LectureEntry? editing}) {
     final codeCtrl = TextEditingController(text: editing?.courseCode ?? '');
@@ -1545,6 +2296,7 @@ Widget build(BuildContext context) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      constraints: _sheetConstraints,
       backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
@@ -1719,6 +2471,7 @@ Widget build(BuildContext context) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      constraints: _sheetConstraints,
       backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
@@ -1789,13 +2542,15 @@ Widget build(BuildContext context) {
                   ),
                 ),
                 const SizedBox(height: 8),
-                Row(
+                // Wrap (not Row) so the swatches never overflow narrow screens
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
                   children: colors.map((c) {
                     final selected = c == color;
                     return GestureDetector(
                       onTap: () => setS(() => color = c),
                       child: Container(
-                        margin: const EdgeInsets.only(right: 8),
                         width: 30,
                         height: 30,
                         decoration: BoxDecoration(
@@ -1882,6 +2637,7 @@ Widget build(BuildContext context) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      constraints: _sheetConstraints,
       backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
@@ -2046,6 +2802,7 @@ Widget build(BuildContext context) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      constraints: _sheetConstraints,
       backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
@@ -2057,85 +2814,89 @@ Widget build(BuildContext context) {
           top: 20,
           bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _sheetHandle(isDark),
-            const SizedBox(height: 16),
-            Text(
-              'Request Admin Access',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: isDark ? Colors.white : Colors.black87,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Your school/faculty/department/level from your profile will be used. '
-              'Tell us why you should be a course rep admin.',
-              style: TextStyle(
-                fontSize: 13,
-                color: isDark ? Colors.white54 : Colors.black45,
-              ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: reasonCtrl,
-              maxLines: 3,
-              style: TextStyle(color: isDark ? Colors.white : Colors.black87),
-              decoration: InputDecoration(
-                hintText: 'e.g. I am the elected course rep for 300L CSC...',
-                hintStyle: TextStyle(
-                  color: isDark ? Colors.white38 : Colors.black38,
-                ),
-                filled: true,
-                fillColor: isDark
-                    ? const Color(0xFF0F172A)
-                    : Colors.grey.shade50,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _sheetHandle(isDark),
+              const SizedBox(height: 16),
+              Text(
+                'Request Admin Access',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: isDark ? Colors.white : Colors.black87,
                 ),
               ),
-            ),
-            const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue.shade700,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 24),
-                  shape: RoundedRectangleBorder(
+              const SizedBox(height: 8),
+              Text(
+                'Your school/faculty/department/level from your profile will be used. '
+                'Tell us why you should be a course rep admin.',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: isDark ? Colors.white54 : Colors.black45,
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: reasonCtrl,
+                maxLines: 3,
+                style: TextStyle(color: isDark ? Colors.white : Colors.black87),
+                decoration: InputDecoration(
+                  hintText: 'e.g. I am the elected course rep for 300L CSC...',
+                  hintStyle: TextStyle(
+                    color: isDark ? Colors.white38 : Colors.black38,
+                  ),
+                  filled: true,
+                  fillColor: isDark
+                      ? const Color(0xFF0F172A)
+                      : Colors.grey.shade50,
+                  border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                onPressed: () async {
-                  if (reasonCtrl.text.trim().isEmpty) return;
-                  try {
-                    await _svc.requestAdmin({'reason': reasonCtrl.text.trim()});
-                    if (ctx.mounted) {
-                      Navigator.pop(ctx);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                            '✅ Request submitted! You\'ll be notified when reviewed.',
-                          ),
-                        ),
-                      );
-                    }
-                  } catch (e) {
-                    if (ctx.mounted)
-                      ScaffoldMessenger.of(
-                        context,
-                      ).showSnackBar(SnackBar(content: Text('Error: $e')));
-                  }
-                },
-                child: const Text('Submit Request'),
               ),
-            ),
-          ],
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue.shade700,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 24),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  onPressed: () async {
+                    if (reasonCtrl.text.trim().isEmpty) return;
+                    try {
+                      await _svc.requestAdmin({
+                        'reason': reasonCtrl.text.trim(),
+                      });
+                      if (ctx.mounted) {
+                        Navigator.pop(ctx);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              '✅ Request submitted! You\'ll be notified when reviewed.',
+                            ),
+                          ),
+                        );
+                      }
+                    } catch (e) {
+                      if (ctx.mounted)
+                        ScaffoldMessenger.of(
+                          context,
+                        ).showSnackBar(SnackBar(content: Text('Error: $e')));
+                    }
+                  },
+                  child: const Text('Submit Request'),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -2286,37 +3047,40 @@ Widget build(BuildContext context) {
         );
       }
     },
-    child: Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-      decoration: BoxDecoration(
-        color: isDark ? Colors.white.withOpacity(0.05) : Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: isDark ? Colors.white24 : Colors.black12),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.access_time_rounded, size: 18, color: _primary),
-          const SizedBox(width: 8),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 10,
-                  color: isDark ? Colors.white38 : Colors.black38,
+    child: MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        decoration: BoxDecoration(
+          color: isDark ? Colors.white.withOpacity(0.05) : Colors.grey.shade50,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: isDark ? Colors.white24 : Colors.black12),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.access_time_rounded, size: 18, color: _primary),
+            const SizedBox(width: 8),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: isDark ? Colors.white38 : Colors.black38,
+                  ),
                 ),
-              ),
-              Text(
-                current,
-                style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  color: isDark ? Colors.white : Colors.black87,
+                Text(
+                  current,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: isDark ? Colors.white : Colors.black87,
+                  ),
                 ),
-              ),
-            ],
-          ),
-        ],
+              ],
+            ),
+          ],
+        ),
       ),
     ),
   );

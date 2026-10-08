@@ -6,6 +6,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'providers/theme_notifier.dart';
 import 'package:timezone/data/latest.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
+
 import 'screens/splash_screen.dart';
 import 'firebase_options.dart';
 import 'services/notification_service.dart';

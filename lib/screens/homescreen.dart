@@ -25,7 +25,8 @@ import '../models/studentProfile_model.dart';
 import '../screens/signinscreen.dart';
 import '../widgets/ui_helpers.dart';
 import '../widgets/snackBar.dart';
-
+import '../utils/responsive.dart';
+part 'homescreen_desktop.dart';
 // ══════════════════════════════════════════════════════════
 //  HOME SCREEN
 // ══════════════════════════════════════════════════════════
@@ -198,6 +199,7 @@ class _HomeScreenState extends State<HomeScreen>
                         },
                       )
                       .toList(),
+                      
                 )
                 .catchError((e) => debugPrint('Grading sync failed: $e'));
           }
@@ -5057,6 +5059,7 @@ class _HomeScreenState extends State<HomeScreen>
   @override
   Widget build(BuildContext context) {
     final isDark = context.watch<ThemeNotifier>().isDarkMode;
+    if (context.isExpanded) return _GradesDesktop(s: this);
 
     return Scaffold(
       backgroundColor: isDark ? const Color(0xFF0A0A0A) : Colors.blue.shade50,

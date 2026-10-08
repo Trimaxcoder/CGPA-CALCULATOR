@@ -12,6 +12,7 @@ import '../widgets/combo_field.dart';
 import '../widgets/snackBar.dart';
 import '../widgets/ui_helpers.dart';
 import '../uniport_courses.dart';
+import '../utils/responsive.dart';
 import '../widgets/notification_toggle.dart';
 import '../widgets/personal_reminders_toggle.dart';
 
@@ -25,6 +26,9 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   StudentProfile profile = StudentProfile();
 
+  /// Selected category on desktop (0 Profile … 4 About)
+  int _section = 0;
+
   @override
   void initState() {
     super.initState();
@@ -37,6 +41,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final prefs = await SharedPreferences.getInstance();
     final pd = prefs.getString('profile');
     if (pd != null) {
+      if (!mounted) return;
       setState(
         () => profile = StudentProfile.fromMap(
           Map<String, dynamic>.from(jsonDecode(pd)),
@@ -50,6 +55,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         final fresh = StudentProfile.fromMap(
           Map<String, dynamic>.from(userData['profile'] as Map),
         );
+        if (!mounted) return;
         setState(() => profile = fresh);
         await prefs.setString('profile', jsonEncode(fresh.toMap()));
       }
@@ -65,6 +71,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget build(BuildContext context) {
     final themeNotifier = context.watch<ThemeNotifier>();
     final isDark = themeNotifier.isDarkMode;
+
+    // Desktop / large screens get their own layout; phones and tablets
+    // keep the original design below.
+    if (context.isExpanded) return _buildDesktop(themeNotifier, isDark);
+
     final bg = isDark ? const Color(0xFF0A0A0A) : const Color(0xFFF7F8FA);
     final cardBg = isDark ? const Color(0xFF15181D) : Colors.white;
     final textPrimary = isDark ? Colors.white : Colors.black87;
@@ -73,36 +84,635 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Scaffold(
       backgroundColor: bg,
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 40),
-          children: [
-            // ── Flat title ──
-            Text(
-              'Settings',
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.w900,
-                color: textPrimary,
-              ),
-            ),
-            const SizedBox(height: 20),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final sidePad = responsiveSidePadding(
+              constraints.maxWidth,
+              maxWidth: 760,
+            );
+            return ListView(
+              padding: EdgeInsets.fromLTRB(sidePad, 16, sidePad, 40),
+              children: [
+                // ── Flat title ──
+                Text(
+                  'Settings',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
+                    color: textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 20),
 
-            // ── Profile card ──
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: cardBg,
-                borderRadius: BorderRadius.circular(22),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
+                // ── Profile card ──
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: cardBg,
+                    borderRadius: BorderRadius.circular(22),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    children: [
+                      Container(
+                        width: 84,
+                        height: 84,
+                        decoration: const BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [Color(0xFF1E88E5), Color(0xFF0D47A1)],
+                          ),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Center(
+                          child: Text(
+                            profile.name.isNotEmpty
+                                ? profile.name[0].toUpperCase()
+                                : '?',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 34,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      Text(
+                        profile.name.isNotEmpty ? profile.name : 'Your Name',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: textPrimary,
+                          fontSize: 19,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        profile.email,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: textSecondary, fontSize: 13),
+                      ),
+                      if (profile.department.isNotEmpty) ...[
+                        const SizedBox(height: 10),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(
+                              0xFF1565C0,
+                            ).withOpacity(isDark ? 0.2 : 0.1),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            profile.department,
+                            style: const TextStyle(
+                              color: Color(0xFF1565C0),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 20),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _profileInfoBox(
+                              Icons.account_balance,
+                              'School',
+                              profile.school,
+                              isDark,
+                              textPrimary,
+                              textSecondary,
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: _profileInfoBox(
+                              Icons.badge_outlined,
+                              'Matric',
+                              profile.matricNumber,
+                              isDark,
+                              textPrimary,
+                              textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _profileInfoBox(
+                              Icons.account_balance_outlined,
+                              'Faculty',
+                              profile.faculty,
+                              isDark,
+                              textPrimary,
+                              textSecondary,
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: _profileInfoBox(
+                              Icons.school_outlined,
+                              'Department',
+                              profile.department,
+                              isDark,
+                              textPrimary,
+                              textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 28),
+
+                // ── Settings sections ──
+                _sectionLabel('Appearance', isDark),
+                const SizedBox(height: 8),
+                _buildCard(isDark, [
+                  _switchTile(
+                    icon: isDark
+                        ? Icons.dark_mode_rounded
+                        : Icons.light_mode_rounded,
+                    iconColor: _primary,
+                    title: 'Dark Mode',
+                    subtitle: isDark ? 'Using dark theme' : 'Using light theme',
+                    value: isDark,
+                    onChanged: (_) => themeNotifier.toggleTheme(),
+                    isDark: isDark,
+                  ),
+                ]),
+                const SizedBox(height: 20),
+
+                _sectionLabel('Notifications', isDark),
+                const SizedBox(height: 8),
+                _buildCard(isDark, [
+                  const NotificationToggle(),
+                  const PersonalRemindersToggle(),
+                ]),
+                const SizedBox(height: 20),
+
+                _sectionLabel('Account', isDark),
+                const SizedBox(height: 8),
+                _buildCard(isDark, [
+                  _actionTile(
+                    icon: Icons.edit_outlined,
+                    iconColor: _primary,
+                    title: 'Edit Profile',
+                    subtitle: 'Update your name, school, department',
+                    onTap: () => _showEditProfile(isDark),
+                    isDark: isDark,
+                  ),
+                  _divider(isDark),
+                  _actionTile(
+                    icon: Icons.logout_rounded,
+                    iconColor: Colors.orange,
+                    title: 'Sign Out',
+                    subtitle: 'Log out of your SchoolLife account',
+                    onTap: _signOut,
+                    isDark: isDark,
+                    textColor: Colors.orange,
+                  ),
+                  _divider(isDark),
+                  _actionTile(
+                    icon: Icons.delete_forever_rounded,
+                    iconColor: Colors.red,
+                    title: 'Delete Account',
+                    subtitle: 'Permanently remove your account and data',
+                    onTap: _deleteAccount,
+                    isDark: isDark,
+                    textColor: Colors.red,
+                  ),
+                ]),
+                const SizedBox(height: 20),
+
+                _sectionLabel('About', isDark),
+                const SizedBox(height: 8),
+                _buildCard(isDark, [
+                  _actionTile(
+                    icon: Icons.verified_outlined,
+                    iconColor: Colors.green,
+                    title: 'App Version',
+                    subtitle: 'SchoolLife v1.0.1',
+                    onTap: null,
+                    isDark: isDark,
+                  ),
+                ]),
+                const SizedBox(height: 20),
+                _sectionLabel('App Update', isDark),
+                const SizedBox(height: 8),
+                _buildCard(isDark, [const UpdateCheckTile()]),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════
+  //  DESKTOP LAYOUT (screens >= 1024 px)
+  //  Category list on the left, selected category on the right.
+  // ══════════════════════════════════════════════════════════
+  static const _sections = [
+    (Icons.person_outline_rounded, 'Profile', 'Your personal and academic details'),
+    (Icons.palette_outlined, 'Appearance', 'Choose how SchoolLife looks'),
+    (Icons.notifications_outlined, 'Notifications', 'Class and study reminders'),
+    (Icons.manage_accounts_outlined, 'Account', 'Edit your profile, sign out or delete'),
+    (Icons.info_outline_rounded, 'About', 'Version and app updates'),
+  ];
+
+  Widget _buildDesktop(ThemeNotifier themeNotifier, bool isDark) {
+    final bg = isDark ? const Color(0xFF0A0A0A) : const Color(0xFFF7F8FA);
+    final cardBg = isDark ? const Color(0xFF15181D) : Colors.white;
+    final textPrimary = isDark ? Colors.white : Colors.black87;
+    final textSecondary = isDark ? Colors.white54 : Colors.black45;
+
+    return Scaffold(
+      backgroundColor: bg,
+      body: SafeArea(
+        child: LayoutBuilder(
+          builder: (context, c) {
+            final cw = c.maxWidth;
+            final side = responsiveSidePadding(cw, maxWidth: 1200);
+            final stacked = cw < 820;
+
+            final pane = ListView(
+              padding: const EdgeInsets.only(bottom: 30),
+              children: [
+                Align(
+                  alignment: Alignment.topLeft,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 820),
+                    child: _desktopPane(
+                      themeNotifier,
+                      isDark,
+                      cardBg,
+                      textPrimary,
+                      textSecondary,
+                    ),
+                  ),
+                ),
+              ],
+            );
+
+            return Padding(
+              padding: EdgeInsets.fromLTRB(side, 26, side, 0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Settings',
+                    style: TextStyle(
+                      fontSize: 32,
+                      fontWeight: FontWeight.w900,
+                      color: textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Manage your profile, appearance and account',
+                    style: TextStyle(fontSize: 14, color: textSecondary),
+                  ),
+                  const SizedBox(height: 22),
+                  Expanded(
+                    child: stacked
+                        ? Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              SingleChildScrollView(
+                                scrollDirection: Axis.horizontal,
+                                child: Row(
+                                  children: [
+                                    for (var i = 0; i < _sections.length; i++)
+                                      Padding(
+                                        padding: const EdgeInsets.only(
+                                          right: 8,
+                                        ),
+                                        child: _navPill(
+                                          i,
+                                          isDark,
+                                          textPrimary,
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 18),
+                              Expanded(child: pane),
+                            ],
+                          )
+                        : Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              SizedBox(
+                                width: 250,
+                                child: Container(
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    color: cardBg,
+                                    borderRadius: BorderRadius.circular(22),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withOpacity(
+                                          isDark ? 0.3 : 0.05,
+                                        ),
+                                        blurRadius: 12,
+                                        offset: const Offset(0, 3),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      for (var i = 0; i < _sections.length; i++)
+                                        _navRow(
+                                          i,
+                                          isDark,
+                                          textPrimary,
+                                          textSecondary,
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 28),
+                              Expanded(child: pane),
+                            ],
+                          ),
                   ),
                 ],
               ),
-              child: Column(
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _navRow(
+    int i,
+    bool isDark,
+    Color textPrimary,
+    Color textSecondary,
+  ) {
+    final selected = _section == i;
+    final item = _sections[i];
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: () => setState(() => _section = i),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              gradient: selected
+                  ? const LinearGradient(
+                      colors: [Color(0xFF1E88E5), Color(0xFF0D47A1)],
+                    )
+                  : null,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  item.$1,
+                  size: 20,
+                  color: selected ? Colors.white : textSecondary,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    item.$2,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                      color: selected ? Colors.white : textPrimary,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _navPill(int i, bool isDark, Color textPrimary) {
+    final selected = _section == i;
+    final item = _sections[i];
+    return GestureDetector(
+      onTap: () => setState(() => _section = i),
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: BoxDecoration(
+            gradient: selected
+                ? const LinearGradient(
+                    colors: [Color(0xFF1E88E5), Color(0xFF0D47A1)],
+                  )
+                : null,
+            color: selected
+                ? null
+                : (isDark ? Colors.white.withOpacity(0.06) : Colors.white),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                item.$1,
+                size: 18,
+                color: selected ? Colors.white : textPrimary,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                item.$2,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: selected ? Colors.white : textPrimary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _desktopPane(
+    ThemeNotifier themeNotifier,
+    bool isDark,
+    Color cardBg,
+    Color textPrimary,
+    Color textSecondary,
+  ) {
+    final item = _sections[_section];
+
+    final Widget body;
+    switch (_section) {
+      case 0:
+        body = _profilePane(isDark, cardBg, textPrimary, textSecondary);
+        break;
+      case 1:
+        body = _appearancePane(
+          themeNotifier,
+          isDark,
+          cardBg,
+          textPrimary,
+          textSecondary,
+        );
+        break;
+      case 2:
+        body = _buildCard(isDark, [
+          const NotificationToggle(),
+          _divider(isDark),
+          const PersonalRemindersToggle(),
+        ]);
+        break;
+      case 3:
+        body = _accountPane(isDark, textSecondary);
+        break;
+      default:
+        body = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildCard(isDark, [
+              _actionTile(
+                icon: Icons.verified_outlined,
+                iconColor: Colors.green,
+                title: 'App Version',
+                subtitle: 'SchoolLife v1.0.1',
+                onTap: null,
+                isDark: isDark,
+              ),
+            ]),
+            const SizedBox(height: 20),
+            _sectionLabel('App Update', isDark),
+            const SizedBox(height: 8),
+            _buildCard(isDark, [const UpdateCheckTile()]),
+          ],
+        );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          item.$2,
+          style: TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.w900,
+            color: textPrimary,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(item.$3, style: TextStyle(fontSize: 13, color: textSecondary)),
+        const SizedBox(height: 20),
+        body,
+      ],
+    );
+  }
+
+  // ── Profile ──
+  Widget _profilePane(
+    bool isDark,
+    Color cardBg,
+    Color textPrimary,
+    Color textSecondary,
+  ) {
+    Widget infoTile(IconData icon, String label, String value) => Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _iconBox(icon, _primary),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  value.isNotEmpty ? value : '—',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: textPrimary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: cardBg,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Wrap(
+            spacing: 22,
+            runSpacing: 18,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   Container(
                     width: 84,
@@ -128,181 +738,289 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                     ),
                   ),
+                  const SizedBox(width: 20),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 330),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          profile.name.isNotEmpty ? profile.name : 'Your Name',
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: textPrimary,
+                            fontSize: 22,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          profile.email,
+                          style: TextStyle(color: textSecondary, fontSize: 13),
+                        ),
+                        if (profile.department.isNotEmpty) ...[
+                          const SizedBox(height: 10),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 5,
+                            ),
+                            decoration: BoxDecoration(
+                              color: _primary.withOpacity(isDark ? 0.2 : 0.1),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text(
+                              profile.department,
+                              style: const TextStyle(
+                                color: _primary,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              ElevatedButton.icon(
+                onPressed: () => _showEditProfile(isDark),
+                icon: const Icon(Icons.edit_outlined, size: 18),
+                label: const Text(
+                  'Edit profile',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _primary,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 14,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 18),
+        ResponsiveGrid(
+          minItemWidth: 240,
+          spacing: 14,
+          runSpacing: 14,
+          children: [
+            infoTile(Icons.account_balance, 'School', profile.school),
+            infoTile(Icons.badge_outlined, 'Matric number', profile.matricNumber),
+            infoTile(
+              Icons.account_balance_outlined,
+              'Faculty',
+              profile.faculty,
+            ),
+            infoTile(Icons.school_outlined, 'Department', profile.department),
+            infoTile(
+              Icons.stairs_outlined,
+              'Level',
+              profile.level.isNotEmpty ? '${profile.level} Level' : '',
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  // ── Appearance: theme preview cards ──
+  Widget _appearancePane(
+    ThemeNotifier themeNotifier,
+    bool isDark,
+    Color cardBg,
+    Color textPrimary,
+    Color textSecondary,
+  ) {
+    Widget themeCard(String label, bool dark) {
+      final selected = isDark == dark;
+      final pBg = dark ? const Color(0xFF0A0A0A) : const Color(0xFFF7F8FA);
+      final pCard = dark ? const Color(0xFF15181D) : Colors.white;
+      final pSide = dark ? const Color(0xFF0D1B2A) : const Color(0xFFE9EDF4);
+
+      return Expanded(
+        child: GestureDetector(
+          onTap: () {
+            if (!selected) themeNotifier.toggleTheme();
+          },
+          child: MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: cardBg,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: selected ? _primary : Colors.transparent,
+                  width: 2,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: Column(
+                children: [
+                  // mini preview of the app in this theme
+                  Container(
+                    height: 120,
+                    decoration: BoxDecoration(
+                      color: pSide,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: Colors.grey.withOpacity(0.25),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        const SizedBox(width: 10),
+                        Container(
+                          width: 24,
+                          height: 24,
+                          decoration: BoxDecoration(
+                            color: _primary,
+                            borderRadius: BorderRadius.circular(7),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Container(
+                            margin: const EdgeInsets.fromLTRB(0, 8, 8, 8),
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: pBg,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Container(
+                                  height: 10,
+                                  width: 60,
+                                  decoration: BoxDecoration(
+                                    color: _primary,
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Expanded(
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      color: pCard,
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                   const SizedBox(height: 14),
-                  Text(
-                    profile.name.isNotEmpty ? profile.name : 'Your Name',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: textPrimary,
-                      fontSize: 19,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    profile.email,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: textSecondary, fontSize: 13),
-                  ),
-                  if (profile.department.isNotEmpty) ...[
-                    const SizedBox(height: 10),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 5,
-                      ),
-                      decoration: BoxDecoration(
-                        color: const Color(
-                          0xFF1565C0,
-                        ).withOpacity(isDark ? 0.2 : 0.1),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        profile.department,
-                        style: const TextStyle(
-                          color: Color(0xFF1565C0),
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 20),
                   Row(
                     children: [
-                      Expanded(
-                        child: _profileInfoBox(
-                          Icons.account_balance,
-                          'School',
-                          profile.school,
-                          isDark,
-                          textPrimary,
-                          textSecondary,
+                      Icon(
+                        dark ? Icons.dark_mode_rounded : Icons.light_mode_rounded,
+                        size: 18,
+                        color: selected ? _primary : textSecondary,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        label,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                          color: textPrimary,
                         ),
                       ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: _profileInfoBox(
-                          Icons.badge_outlined,
-                          'Matric',
-                          profile.matricNumber,
-                          isDark,
-                          textPrimary,
-                          textSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _profileInfoBox(
-                          Icons.account_balance_outlined,
-                          'Faculty',
-                          profile.faculty,
-                          isDark,
-                          textPrimary,
-                          textSecondary,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: _profileInfoBox(
-                          Icons.school_outlined,
-                          'Department',
-                          profile.department,
-                          isDark,
-                          textPrimary,
-                          textSecondary,
-                        ),
+                      const Spacer(),
+                      Icon(
+                        selected
+                            ? Icons.check_circle_rounded
+                            : Icons.circle_outlined,
+                        size: 20,
+                        color: selected ? _primary : textSecondary,
                       ),
                     ],
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 28),
-
-            // ── Settings sections ──
-            _sectionLabel('Appearance', isDark),
-            const SizedBox(height: 8),
-            _buildCard(isDark, [
-              _switchTile(
-                icon: isDark
-                    ? Icons.dark_mode_rounded
-                    : Icons.light_mode_rounded,
-                iconColor: _primary,
-                title: 'Dark Mode',
-                subtitle: isDark ? 'Using dark theme' : 'Using light theme',
-                value: isDark,
-                onChanged: (_) => themeNotifier.toggleTheme(),
-                isDark: isDark,
-              ),
-            ]),
-            const SizedBox(height: 20),
-
-            _sectionLabel('Notifications', isDark),
-            const SizedBox(height: 8),
-            _buildCard(isDark, [
-              const NotificationToggle(),
-              const PersonalRemindersToggle(),
-            ]),
-            const SizedBox(height: 20),
-
-            _sectionLabel('Account', isDark),
-            const SizedBox(height: 8),
-            _buildCard(isDark, [
-              _actionTile(
-                icon: Icons.edit_outlined,
-                iconColor: _primary,
-                title: 'Edit Profile',
-                subtitle: 'Update your name, school, department',
-                onTap: () => _showEditProfile(isDark),
-                isDark: isDark,
-              ),
-              _divider(isDark),
-              _actionTile(
-                icon: Icons.logout_rounded,
-                iconColor: Colors.orange,
-                title: 'Sign Out',
-                subtitle: 'Log out of your GradeX account',
-                onTap: _signOut,
-                isDark: isDark,
-                textColor: Colors.orange,
-              ),
-              _divider(isDark),
-              _actionTile(
-                icon: Icons.delete_forever_rounded,
-                iconColor: Colors.red,
-                title: 'Delete Account',
-                subtitle: 'Permanently remove your account and data',
-                onTap: _deleteAccount,
-                isDark: isDark,
-                textColor: Colors.red,
-              ),
-            ]),
-            const SizedBox(height: 20),
-
-            _sectionLabel('About', isDark),
-            const SizedBox(height: 8),
-            _buildCard(isDark, [
-              _actionTile(
-                icon: Icons.verified_outlined,
-                iconColor: Colors.green,
-                title: 'App Version',
-                subtitle: 'GradeX v1.0.1',
-                onTap: null,
-                isDark: isDark,
-              ),
-            ]),
-            const SizedBox(height: 20),
-            _sectionLabel('App Update', isDark),
-            const SizedBox(height: 8),
-            _buildCard(isDark, [const UpdateCheckTile()]),
-          ],
+          ),
         ),
-      ),
+      );
+    }
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        themeCard('Light', false),
+        const SizedBox(width: 16),
+        themeCard('Dark', true),
+      ],
+    );
+  }
+
+  // ── Account ──
+  Widget _accountPane(bool isDark, Color textSecondary) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildCard(isDark, [
+          _actionTile(
+            icon: Icons.edit_outlined,
+            iconColor: _primary,
+            title: 'Edit Profile',
+            subtitle: 'Update your name, school, department',
+            onTap: () => _showEditProfile(isDark),
+            isDark: isDark,
+          ),
+          _divider(isDark),
+          _actionTile(
+            icon: Icons.logout_rounded,
+            iconColor: Colors.orange,
+            title: 'Sign Out',
+            subtitle: 'Log out of your SchoolLife account',
+            onTap: _signOut,
+            isDark: isDark,
+            textColor: Colors.orange,
+          ),
+        ]),
+        const SizedBox(height: 26),
+        _sectionLabel('Danger zone', isDark),
+        const SizedBox(height: 8),
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.red.withOpacity(isDark ? 0.08 : 0.04),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.red.withOpacity(0.3)),
+          ),
+          child: _actionTile(
+            icon: Icons.delete_forever_rounded,
+            iconColor: Colors.red,
+            title: 'Delete Account',
+            subtitle: 'Permanently remove your account and data',
+            onTap: _deleteAccount,
+            isDark: isDark,
+            textColor: Colors.red,
+          ),
+        ),
+      ],
     );
   }
 
@@ -409,144 +1127,150 @@ class _SettingsScreenState extends State<SettingsScreen> {
               Text('Edit Profile', style: TextStyle(color: textColor)),
             ],
           ),
-          content: SingleChildScrollView(
-            child: Form(
-              key: fk,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _editField(
-                    nameC,
-                    'Full Name',
-                    Icons.person_outline,
-                    textColor,
-                    labelColor,
-                    fillColor,
-                    (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
-                  ),
-                  const SizedBox(height: 12),
-                  _editField(
-                    emailC,
-                    'Email',
-                    Icons.email_outlined,
-                    textColor,
-                    labelColor,
-                    fillColor,
-                    (v) {
-                      if (v == null || v.trim().isEmpty) return 'Required';
-                      if (!v.trim().contains('@'))
-                        return 'Email must contain @';
-                      if (!isValidEmail(v.trim())) return 'Invalid email';
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  _editField(
-                    matricC,
-                    'Matric Number',
-                    Icons.badge_outlined,
-                    textColor,
-                    labelColor,
-                    fillColor,
-                    (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
-                  ),
-                  const SizedBox(height: 12),
-                  ComboField(
-                    controller: schoolC,
-                    label: 'School / University',
-                    icon: Icons.account_balance,
-                    suggestions: getAllSchools(),
-                    dark: !isDark,
-                    validator: (v) {
-                      if (v == null || v.trim().isEmpty) return 'Required';
-                      if (_findBestMatch(v, getAllSchools()) == null) {
-                        return 'Please select a valid school from the list';
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  ComboField(
-                    controller: facC,
-                    label: 'Faculty',
-                    icon: Icons.account_balance_outlined,
-                    suggestions: getFaculties(),
-                    dark: !isDark,
-                    onSuggestionSelected: (_) => setD(() => deptC.clear()),
-                    validator: (v) {
-                      if (v == null || v.trim().isEmpty) return 'Required';
-                      if (_findBestMatch(v, getFaculties()) == null) {
-                        return 'Please select a valid faculty from the list';
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  StatefulBuilder(
-                    builder: (_, setSub) {
-                      final deptOptions = facC.text.trim().isNotEmpty
-                          ? getDepartments(facC.text.trim())
-                          : <String>[];
-                      return ComboField(
-                        controller: deptC,
-                        label: 'Department',
-                        icon: Icons.school_outlined,
-                        suggestions: deptOptions,
-                        dark: !isDark,
-                        validator: (v) {
-                          if (v == null || v.trim().isEmpty) return 'Required';
-                          if (_findBestMatch(v, deptOptions) == null) {
-                            return 'Please select a valid department from the list';
-                          }
-                          return null;
-                        },
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    value: selectedLevel,
-                    onChanged: (v) => setD(() => selectedLevel = v!),
-                    style: TextStyle(color: textColor),
-                    dropdownColor: isDark
-                        ? const Color(0xFF2A2A2A)
-                        : Colors.white,
-                    decoration: InputDecoration(
-                      labelText: 'Level',
-                      prefixIcon: const Icon(
-                        Icons.stairs_outlined,
-                        color: Colors.blue,
-                      ),
-                      filled: true,
-                      fillColor: fillColor,
-                      labelStyle: TextStyle(color: labelColor),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(
-                          color: isDark ? Colors.white24 : Colors.black12,
-                        ),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(
-                          color: Colors.blue.shade300,
-                          width: 2,
-                        ),
-                      ),
+          content: SizedBox(
+            width: 480,
+            child: SingleChildScrollView(
+              child: Form(
+                key: fk,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _editField(
+                      nameC,
+                      'Full Name',
+                      Icons.person_outline,
+                      textColor,
+                      labelColor,
+                      fillColor,
+                      (v) =>
+                          (v == null || v.trim().isEmpty) ? 'Required' : null,
                     ),
-                    items: ['100', '200', '300', '400', '500', '600', '700']
-                        .map(
-                          (l) => DropdownMenuItem(
-                            value: l,
-                            child: Text('$l Level'),
+                    const SizedBox(height: 12),
+                    _editField(
+                      emailC,
+                      'Email',
+                      Icons.email_outlined,
+                      textColor,
+                      labelColor,
+                      fillColor,
+                      (v) {
+                        if (v == null || v.trim().isEmpty) return 'Required';
+                        if (!v.trim().contains('@'))
+                          return 'Email must contain @';
+                        if (!isValidEmail(v.trim())) return 'Invalid email';
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    _editField(
+                      matricC,
+                      'Matric Number',
+                      Icons.badge_outlined,
+                      textColor,
+                      labelColor,
+                      fillColor,
+                      (v) =>
+                          (v == null || v.trim().isEmpty) ? 'Required' : null,
+                    ),
+                    const SizedBox(height: 12),
+                    ComboField(
+                      controller: schoolC,
+                      label: 'School / University',
+                      icon: Icons.account_balance,
+                      suggestions: getAllSchools(),
+                      dark: !isDark,
+                      validator: (v) {
+                        if (v == null || v.trim().isEmpty) return 'Required';
+                        if (_findBestMatch(v, getAllSchools()) == null) {
+                          return 'Please select a valid school from the list';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    ComboField(
+                      controller: facC,
+                      label: 'Faculty',
+                      icon: Icons.account_balance_outlined,
+                      suggestions: getFaculties(),
+                      dark: !isDark,
+                      onSuggestionSelected: (_) => setD(() => deptC.clear()),
+                      validator: (v) {
+                        if (v == null || v.trim().isEmpty) return 'Required';
+                        if (_findBestMatch(v, getFaculties()) == null) {
+                          return 'Please select a valid faculty from the list';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    StatefulBuilder(
+                      builder: (_, setSub) {
+                        final deptOptions = facC.text.trim().isNotEmpty
+                            ? getDepartments(facC.text.trim())
+                            : <String>[];
+                        return ComboField(
+                          controller: deptC,
+                          label: 'Department',
+                          icon: Icons.school_outlined,
+                          suggestions: deptOptions,
+                          dark: !isDark,
+                          validator: (v) {
+                            if (v == null || v.trim().isEmpty)
+                              return 'Required';
+                            if (_findBestMatch(v, deptOptions) == null) {
+                              return 'Please select a valid department from the list';
+                            }
+                            return null;
+                          },
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      value: selectedLevel,
+                      onChanged: (v) => setD(() => selectedLevel = v!),
+                      style: TextStyle(color: textColor),
+                      dropdownColor: isDark
+                          ? const Color(0xFF2A2A2A)
+                          : Colors.white,
+                      decoration: InputDecoration(
+                        labelText: 'Level',
+                        prefixIcon: const Icon(
+                          Icons.stairs_outlined,
+                          color: Colors.blue,
+                        ),
+                        filled: true,
+                        fillColor: fillColor,
+                        labelStyle: TextStyle(color: labelColor),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(
+                            color: isDark ? Colors.white24 : Colors.black12,
                           ),
-                        )
-                        .toList(),
-                  ),
-                ],
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(
+                            color: Colors.blue.shade300,
+                            width: 2,
+                          ),
+                        ),
+                      ),
+                      items: ['100', '200', '300', '400', '500', '600', '700']
+                          .map(
+                            (l) => DropdownMenuItem(
+                              value: l,
+                              child: Text('$l Level'),
+                            ),
+                          )
+                          .toList(),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
