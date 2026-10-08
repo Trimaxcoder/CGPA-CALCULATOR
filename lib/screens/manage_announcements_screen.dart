@@ -5,6 +5,8 @@ import '../models/announcement.dart';
 import '../services/announcement_service.dart';
 import '../stores/announcement_store.dart';
 import '../providers/theme_notifier.dart';
+import '../utils/responsive.dart';
+import '../widgets/desktop_page.dart';
 
 class ManageAnnouncementsScreen extends StatefulWidget {
   const ManageAnnouncementsScreen({super.key});
@@ -52,6 +54,8 @@ class _ManageAnnouncementsScreenState extends State<ManageAnnouncementsScreen> {
     final saved = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
+      // stays phone-sized (and centered) on wide screens
+      constraints: const BoxConstraints(maxWidth: 560),
       backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
@@ -64,113 +68,119 @@ class _ManageAnnouncementsScreenState extends State<ManageAnnouncementsScreen> {
             top: 20,
             bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade400,
-                    borderRadius: BorderRadius.circular(2),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade400,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'Edit Announcement',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: isDark ? Colors.white : Colors.black87,
-                ),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: titleCtrl,
-                style: TextStyle(color: isDark ? Colors.white : Colors.black87),
-                decoration: InputDecoration(
-                  labelText: 'Title',
-                  filled: true,
-                  fillColor: isDark
-                      ? const Color(0xFF0F172A)
-                      : Colors.grey.shade50,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: messageCtrl,
-                maxLines: 5,
-                style: TextStyle(color: isDark ? Colors.white : Colors.black87),
-                decoration: InputDecoration(
-                  labelText: 'Message',
-                  filled: true,
-                  fillColor: isDark
-                      ? const Color(0xFF0F172A)
-                      : Colors.grey.shade50,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
-              CheckboxListTile(
-                value: resend,
-                onChanged: (v) => setSheetState(() => resend = v ?? false),
-                contentPadding: EdgeInsets.zero,
-                controlAffinity: ListTileControlAffinity.leading,
-                title: Text(
-                  'Re-notify everyone about this update',
+                const SizedBox(height: 16),
+                Text(
+                  'Edit Announcement',
                   style: TextStyle(
-                    fontSize: 13,
-                    color: isDark ? Colors.white70 : Colors.black54,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? Colors.white : Colors.black87,
                   ),
                 ),
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _primary,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
+                const SizedBox(height: 16),
+                TextField(
+                  controller: titleCtrl,
+                  style: TextStyle(
+                    color: isDark ? Colors.white : Colors.black87,
+                  ),
+                  decoration: InputDecoration(
+                    labelText: 'Title',
+                    filled: true,
+                    fillColor: isDark
+                        ? const Color(0xFF0F172A)
+                        : Colors.grey.shade50,
+                    border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  onPressed: () async {
-                    if (titleCtrl.text.trim().isEmpty ||
-                        messageCtrl.text.trim().isEmpty) {
-                      return;
-                    }
-                    try {
-                      final updated =
-                          await AnnouncementService.editAnnouncement(
-                            id: a.id,
-                            title: titleCtrl.text.trim(),
-                            message: messageCtrl.text.trim(),
-                            resend: resend,
-                          );
-                      AnnouncementStore().applyEdit(updated);
-                      if (ctx.mounted) Navigator.pop(ctx, true);
-                    } catch (e) {
-                      if (ctx.mounted) {
-                        ScaffoldMessenger.of(
-                          ctx,
-                        ).showSnackBar(SnackBar(content: Text('Error: $e')));
-                      }
-                    }
-                  },
-                  child: const Text('Save Changes'),
                 ),
-              ),
-            ],
+                const SizedBox(height: 12),
+                TextField(
+                  controller: messageCtrl,
+                  maxLines: 5,
+                  style: TextStyle(
+                    color: isDark ? Colors.white : Colors.black87,
+                  ),
+                  decoration: InputDecoration(
+                    labelText: 'Message',
+                    filled: true,
+                    fillColor: isDark
+                        ? const Color(0xFF0F172A)
+                        : Colors.grey.shade50,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                CheckboxListTile(
+                  value: resend,
+                  onChanged: (v) => setSheetState(() => resend = v ?? false),
+                  contentPadding: EdgeInsets.zero,
+                  controlAffinity: ListTileControlAffinity.leading,
+                  title: Text(
+                    'Re-notify everyone about this update',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: isDark ? Colors.white70 : Colors.black54,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _primary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    onPressed: () async {
+                      if (titleCtrl.text.trim().isEmpty ||
+                          messageCtrl.text.trim().isEmpty) {
+                        return;
+                      }
+                      try {
+                        final updated =
+                            await AnnouncementService.editAnnouncement(
+                              id: a.id,
+                              title: titleCtrl.text.trim(),
+                              message: messageCtrl.text.trim(),
+                              resend: resend,
+                            );
+                        AnnouncementStore().applyEdit(updated);
+                        if (ctx.mounted) Navigator.pop(ctx, true);
+                      } catch (e) {
+                        if (ctx.mounted) {
+                          ScaffoldMessenger.of(
+                            ctx,
+                          ).showSnackBar(SnackBar(content: Text('Error: $e')));
+                        }
+                      }
+                    },
+                    child: const Text('Save Changes'),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -251,10 +261,232 @@ class _ManageAnnouncementsScreenState extends State<ManageAnnouncementsScreen> {
     return '${d.day} ${months[d.month - 1]} ${d.year}';
   }
 
+  // ── One announcement card (shared by phone + desktop) ──────────────────
+  Widget _announcementCard(Announcement a, bool isDark, {bool desktop = false}) {
+    return Container(
+      margin: desktop ? EdgeInsets.zero : const EdgeInsets.only(bottom: 10),
+      padding: EdgeInsets.all(desktop ? 18 : 14),
+      decoration: BoxDecoration(
+        color: isDark
+            ? (desktop ? const Color(0xFF15181D) : Colors.black)
+            : Colors.white,
+        borderRadius: BorderRadius.circular(desktop ? 20 : 14),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
+            blurRadius: desktop ? 12 : 8,
+            offset: Offset(0, desktop ? 3 : 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  a.title,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: desktop ? 15 : 14,
+                    color: isDark ? Colors.white : Colors.black87,
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 6,
+                  vertical: 2,
+                ),
+                decoration: BoxDecoration(
+                  color: _primary.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  a.levelLabel,
+                  style: const TextStyle(
+                    fontSize: 10,
+                    color: _primary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            a.message,
+            maxLines: desktop ? 3 : 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 12,
+              height: desktop ? 1.5 : null,
+              color: isDark ? Colors.white60 : Colors.black54,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Text(
+                _formatDate(a.createdAt),
+                style: TextStyle(
+                  fontSize: 11,
+                  color: isDark ? Colors.white38 : Colors.black38,
+                ),
+              ),
+              if (a.wasEdited) ...[
+                const SizedBox(width: 6),
+                Text(
+                  '· edited',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontStyle: FontStyle.italic,
+                    color: isDark ? Colors.white38 : Colors.black38,
+                  ),
+                ),
+              ],
+              const Spacer(),
+              if (desktop) ...[
+                TextButton.icon(
+                  onPressed: () => _editAnnouncement(a),
+                  icon: const Icon(Icons.edit_outlined, size: 16),
+                  label: const Text('Edit'),
+                  style: TextButton.styleFrom(foregroundColor: _primary),
+                ),
+                TextButton.icon(
+                  onPressed: () => _deleteAnnouncement(a),
+                  icon: const Icon(Icons.delete_outline, size: 16),
+                  label: const Text('Delete'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: Colors.red.shade400,
+                  ),
+                ),
+              ] else ...[
+                IconButton(
+                  icon: const Icon(Icons.edit_outlined, size: 18),
+                  color: _primary,
+                  visualDensity: VisualDensity.compact,
+                  onPressed: () => _editAnnouncement(a),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.delete_outline, size: 18),
+                  color: Colors.red.shade300,
+                  visualDensity: VisualDensity.compact,
+                  onPressed: () => _deleteAnnouncement(a),
+                ),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Loading / error / empty / list (shared) ────────────────────────────
+  Widget _body(bool isDark, {required bool desktop}) {
+    if (_loading) return const Center(child: CircularProgressIndicator());
+
+    if (_error != null) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.wifi_off_rounded, size: 44, color: Colors.grey),
+            const SizedBox(height: 12),
+            Text(
+              'Could not load announcements',
+              style: TextStyle(
+                color: isDark ? Colors.white70 : Colors.black54,
+              ),
+            ),
+            const SizedBox(height: 8),
+            TextButton(onPressed: _load, child: const Text('Retry')),
+          ],
+        ),
+      );
+    }
+
+    if (_mine.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.campaign_outlined,
+              size: 72,
+              color: _primary.withOpacity(0.4),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'You haven\'t sent any announcements',
+              style: TextStyle(
+                color: isDark ? Colors.white70 : Colors.black54,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (desktop) {
+      return ListView(
+        padding: const EdgeInsets.only(bottom: 40),
+        children: [
+          ResponsiveGrid(
+            minItemWidth: 420,
+            spacing: 14,
+            runSpacing: 14,
+            children: [
+              for (final a in _mine)
+                _announcementCard(a, isDark, desktop: true),
+            ],
+          ),
+        ],
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: ListView.builder(
+        padding: EdgeInsets.symmetric(
+          horizontal: responsiveSidePadding(
+            MediaQuery.sizeOf(context).width,
+            maxWidth: 720,
+          ),
+          vertical: 16,
+        ),
+        itemCount: _mine.length,
+        itemBuilder: (_, i) => _announcementCard(_mine[i], isDark),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = context.watch<ThemeNotifier>().isDarkMode;
 
+    // ── Desktop ────────────────────────────────────────────
+    if (context.isExpanded) {
+      return DesktopPage(
+        title: 'My Announcements',
+        subtitle: _loading
+            ? 'Loading…'
+            : '${_mine.length} sent · edit or delete anytime',
+        maxWidth: 1200,
+        actions: [
+          DeskButton(
+            icon: Icons.refresh_rounded,
+            label: 'Refresh',
+            isDark: isDark,
+            onTap: _load,
+          ),
+        ],
+        child: _body(isDark, desktop: true),
+      );
+    }
+
+    // ── Phone / tablet (original design) ───────────────────
     return Scaffold(
       backgroundColor: isDark
           ? const Color(0xFF0A0A0A)
@@ -320,179 +552,7 @@ class _ManageAnnouncementsScreenState extends State<ManageAnnouncementsScreen> {
           ),
 
           // ── Body ─────────────────────────────────────────────────────────
-          Expanded(
-            child: _loading
-                ? const Center(child: CircularProgressIndicator())
-                : _error != null
-                ? Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.wifi_off_rounded,
-                          size: 44,
-                          color: Colors.grey,
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          'Could not load announcements',
-                          style: TextStyle(
-                            color: isDark ? Colors.white70 : Colors.black54,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        TextButton(
-                          onPressed: _load,
-                          child: const Text('Retry'),
-                        ),
-                      ],
-                    ),
-                  )
-                : _mine.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.campaign_outlined,
-                          size: 72,
-                          color: _primary.withOpacity(0.4),
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'You haven\'t sent any announcements',
-                          style: TextStyle(
-                            color: isDark ? Colors.white70 : Colors.black54,
-                          ),
-                        ),
-                      ],
-                    ),
-                  )
-                : RefreshIndicator(
-                    onRefresh: _load,
-                    child: ListView.builder(
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-                      itemCount: _mine.length,
-                      itemBuilder: (_, i) {
-                        final a = _mine[i];
-                        return Container(
-                          margin: const EdgeInsets.only(bottom: 10),
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            color: isDark ? Colors.black : Colors.white,
-                            borderRadius: BorderRadius.circular(14),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(
-                                  isDark ? 0.3 : 0.05,
-                                ),
-                                blurRadius: 8,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      a.title,
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w700,
-                                        fontSize: 14,
-                                        color: isDark
-                                            ? Colors.white
-                                            : Colors.black87,
-                                      ),
-                                    ),
-                                  ),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 6,
-                                      vertical: 2,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: _primary.withOpacity(0.1),
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: Text(
-                                      a.levelLabel,
-                                      style: const TextStyle(
-                                        fontSize: 10,
-                                        color: _primary,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                a.message,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: isDark
-                                      ? Colors.white60
-                                      : Colors.black54,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Row(
-                                children: [
-                                  Text(
-                                    _formatDate(a.createdAt),
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: isDark
-                                          ? Colors.white38
-                                          : Colors.black38,
-                                    ),
-                                  ),
-                                  if (a.wasEdited) ...[
-                                    const SizedBox(width: 6),
-                                    Text(
-                                      '· edited',
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        fontStyle: FontStyle.italic,
-                                        color: isDark
-                                            ? Colors.white38
-                                            : Colors.black38,
-                                      ),
-                                    ),
-                                  ],
-                                  const Spacer(),
-                                  IconButton(
-                                    icon: const Icon(
-                                      Icons.edit_outlined,
-                                      size: 18,
-                                    ),
-                                    color: _primary,
-                                    visualDensity: VisualDensity.compact,
-                                    onPressed: () => _editAnnouncement(a),
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(
-                                      Icons.delete_outline,
-                                      size: 18,
-                                    ),
-                                    color: Colors.red.shade300,
-                                    visualDensity: VisualDensity.compact,
-                                    onPressed: () => _deleteAnnouncement(a),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-          ),
+          Expanded(child: _body(isDark, desktop: false)),
         ],
       ),
     );

@@ -7,6 +7,8 @@ import '../models/announcement.dart';
 import '../stores/announcement_store.dart';
 import '../services/notification_router.dart';
 import '../providers/theme_notifier.dart';
+import '../utils/responsive.dart';
+import '../widgets/desktop_page.dart';
 import 'announcement_detail_screen.dart';
 
 class NotificationsScreen extends StatefulWidget {
@@ -33,6 +35,10 @@ class _NotificationsScreenState extends State<NotificationsScreen>
       vsync: this,
       initialIndex: widget.initialTab,
     );
+    // lets the desktop segmented control follow the controller
+    _tab.addListener(() {
+      if (mounted && !_tab.indexIsChanging) setState(() {});
+    });
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       AnnouncementStore().refresh();
@@ -89,6 +95,35 @@ class _NotificationsScreenState extends State<NotificationsScreen>
     final isDark = context.watch<ThemeNotifier>().isDarkMode;
     final notifStore = context.watch<NotificationStore>();
     final annStore = context.watch<AnnouncementStore>();
+
+    // ── Desktop: title + segmented switch, centered list ────
+    if (context.isExpanded) {
+      final unreadN = notifStore.unreadCount;
+      final unreadA = annStore.unreadCount;
+      return DesktopPage(
+        title: 'Notifications',
+        subtitle: (unreadN + unreadA) == 0
+            ? 'You\'re all caught up'
+            : '$unreadN unread notification${unreadN == 1 ? '' : 's'} · '
+                  '$unreadA unread announcement${unreadA == 1 ? '' : 's'}',
+        maxWidth: 1100,
+        actions: [_segmented(isDark, unreadN, unreadA)],
+        child: _tab.index == 0
+            ? _NotificationsTab(
+                isDark: isDark,
+                store: notifStore,
+                iconFor: _iconFor,
+                timeAgo: _timeAgo,
+                desktop: true,
+              )
+            : _AnnouncementsTab(
+                isDark: isDark,
+                store: annStore,
+                timeAgo: _timeAgo,
+                desktop: true,
+              ),
+      );
+    }
 
     return Scaffold(
       backgroundColor: isDark
@@ -212,7 +247,113 @@ class _NotificationsScreenState extends State<NotificationsScreen>
       ),
     );
   }
+
+  Widget _segmented(bool isDark, int unreadN, int unreadA) {
+    final items = [
+      (Icons.notifications_rounded, 'Notifications', unreadN),
+      (Icons.campaign_rounded, 'Announcements', unreadA),
+    ];
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.white.withOpacity(0.06) : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (var i = 0; i < items.length; i++)
+            GestureDetector(
+              onTap: () => setState(() => _tab.index = i),
+              child: MouseRegion(
+                cursor: SystemMouseCursors.click,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    gradient: _tab.index == i
+                        ? const LinearGradient(
+                            colors: [Color(0xFF1E88E5), Color(0xFF0D47A1)],
+                          )
+                        : null,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        items[i].$1,
+                        size: 18,
+                        color: _tab.index == i
+                            ? Colors.white
+                            : (isDark ? Colors.white54 : Colors.black54),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        items[i].$2,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: _tab.index == i
+                              ? Colors.white
+                              : (isDark ? Colors.white54 : Colors.black54),
+                        ),
+                      ),
+                      if (items[i].$3 > 0) ...[
+                        const SizedBox(width: 8),
+                        _Badge(items[i].$3),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Desktop action row (mark all read / clear all)
+// ─────────────────────────────────────────────────────────────────────────────
+
+Widget _desktopActions({
+  required bool isDark,
+  required VoidCallback? onMarkAll,
+  required VoidCallback onClear,
+}) => Padding(
+  padding: const EdgeInsets.only(bottom: 16),
+  child: Row(
+    mainAxisAlignment: MainAxisAlignment.end,
+    children: [
+      DeskButton(
+        icon: Icons.done_all_rounded,
+        label: 'Mark all as read',
+        isDark: isDark,
+        onTap: onMarkAll,
+      ),
+      const SizedBox(width: 10),
+      DeskButton(
+        icon: Icons.delete_sweep_rounded,
+        label: 'Clear all',
+        color: Colors.red,
+        isDark: isDark,
+        onTap: onClear,
+      ),
+    ],
+  ),
+);
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Tab 1 — Notifications
@@ -223,6 +364,7 @@ class _NotificationsTab extends StatelessWidget {
   final NotificationStore store;
   final IconData Function(String) iconFor;
   final String Function(DateTime) timeAgo;
+  final bool desktop;
 
   static const Color _primary = Color(0xFF1565C0);
 
@@ -231,11 +373,58 @@ class _NotificationsTab extends StatelessWidget {
     required this.store,
     required this.iconFor,
     required this.timeAgo,
+    this.desktop = false,
   });
 
   @override
   Widget build(BuildContext context) {
     final items = store.items;
+
+    // ── Desktop: grid of cards with hover-friendly remove button ──
+    if (desktop) {
+      return Column(
+        children: [
+          if (items.isNotEmpty)
+            _desktopActions(
+              isDark: isDark,
+              onMarkAll: store.unreadCount == 0 ? null : store.markAllRead,
+              onClear: () => _confirmClearAll(context),
+            ),
+          Expanded(
+            child: items.isEmpty
+                ? _EmptyState(
+                    isDark: isDark,
+                    icon: Icons.notifications_none_rounded,
+                    label: 'No notifications yet',
+                  )
+                : ListView(
+                    padding: const EdgeInsets.only(bottom: 40),
+                    children: [
+                      ResponsiveGrid(
+                        minItemWidth: 440,
+                        spacing: 14,
+                        runSpacing: 0,
+                        children: [
+                          for (final n in items)
+                            _NotifCard(
+                              n: n,
+                              isDark: isDark,
+                              icon: iconFor(n.type),
+                              timeLabel: timeAgo(n.receivedAt),
+                              onTap: () {
+                                store.markAsRead(n.id);
+                                NotificationRouter.route(n);
+                              },
+                              onDelete: () => store.remove(n.id),
+                            ),
+                        ],
+                      ),
+                    ],
+                  ),
+          ),
+        ],
+      );
+    }
 
     return Column(
       children: [
@@ -285,7 +474,13 @@ class _NotificationsTab extends StatelessWidget {
                   label: 'No notifications yet',
                 )
               : ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                  padding: EdgeInsets.symmetric(
+                    horizontal: responsiveSidePadding(
+                      MediaQuery.sizeOf(context).width,
+                      maxWidth: 720,
+                    ),
+                    vertical: 8,
+                  ),
                   itemCount: items.length,
                   itemBuilder: (_, i) {
                     final n = items[i];
@@ -344,6 +539,7 @@ class _AnnouncementsTab extends StatelessWidget {
   final bool isDark;
   final AnnouncementStore store;
   final String Function(DateTime) timeAgo;
+  final bool desktop;
 
   static const Color _primary = Color(0xFF1565C0);
 
@@ -351,7 +547,18 @@ class _AnnouncementsTab extends StatelessWidget {
     required this.isDark,
     required this.store,
     required this.timeAgo,
+    this.desktop = false,
   });
+
+  void _open(BuildContext context, Announcement a) {
+    store.markRead(a.id);
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AnnouncementDetailScreen(announcement: a),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -378,6 +585,49 @@ class _AnnouncementsTab extends StatelessWidget {
     }
 
     final items = store.items;
+
+    // ── Desktop ────────────────────────────────────────────
+    if (desktop) {
+      return Column(
+        children: [
+          if (items.isNotEmpty)
+            _desktopActions(
+              isDark: isDark,
+              onMarkAll: store.unreadCount == 0 ? null : store.markAllRead,
+              onClear: () => _confirmClearAll(context),
+            ),
+          Expanded(
+            child: items.isEmpty
+                ? _EmptyState(
+                    isDark: isDark,
+                    icon: Icons.campaign_outlined,
+                    label: 'No announcements yet',
+                  )
+                : ListView(
+                    padding: const EdgeInsets.only(bottom: 40),
+                    children: [
+                      ResponsiveGrid(
+                        minItemWidth: 440,
+                        spacing: 14,
+                        runSpacing: 0,
+                        children: [
+                          for (final a in items)
+                            _AnnouncementCard(
+                              a: a,
+                              isDark: isDark,
+                              isUnread: store.isUnread(a.id),
+                              timeLabel: timeAgo(a.createdAt),
+                              onTap: () => _open(context, a),
+                              onDelete: () => store.hideLocal(a.id),
+                            ),
+                        ],
+                      ),
+                    ],
+                  ),
+          ),
+        ],
+      );
+    }
 
     return Column(
       children: [
@@ -432,7 +682,13 @@ class _AnnouncementsTab extends StatelessWidget {
               : RefreshIndicator(
                   onRefresh: store.refresh,
                   child: ListView.builder(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: responsiveSidePadding(
+                        MediaQuery.sizeOf(context).width,
+                        maxWidth: 720,
+                      ),
+                      vertical: 8,
+                    ),
                     itemCount: items.length,
                     itemBuilder: (_, i) {
                       final a = items[i];
@@ -447,16 +703,7 @@ class _AnnouncementsTab extends StatelessWidget {
                           isDark: isDark,
                           isUnread: unread,
                           timeLabel: timeAgo(a.createdAt),
-                          onTap: () {
-                            store.markRead(a.id);
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) =>
-                                    AnnouncementDetailScreen(announcement: a),
-                              ),
-                            );
-                          },
+                          onTap: () => _open(context, a),
                         ),
                       );
                     },
@@ -585,6 +832,9 @@ class _NotifCard extends StatelessWidget {
   final String timeLabel;
   final VoidCallback onTap;
 
+  /// Desktop only: shows a remove button (mobile uses swipe to dismiss).
+  final VoidCallback? onDelete;
+
   static const Color _primary = Color(0xFF1565C0);
 
   const _NotifCard({
@@ -593,6 +843,7 @@ class _NotifCard extends StatelessWidget {
     required this.icon,
     required this.timeLabel,
     required this.onTap,
+    this.onDelete,
   });
 
   @override
@@ -675,6 +926,17 @@ class _NotifCard extends StatelessWidget {
               ],
             ),
           ),
+          if (onDelete != null)
+            IconButton(
+              tooltip: 'Remove',
+              icon: Icon(
+                Icons.close_rounded,
+                size: 18,
+                color: isDark ? Colors.white38 : Colors.black38,
+              ),
+              visualDensity: VisualDensity.compact,
+              onPressed: onDelete,
+            ),
         ],
       ),
     ),
@@ -692,6 +954,9 @@ class _AnnouncementCard extends StatelessWidget {
   final String timeLabel;
   final VoidCallback onTap;
 
+  /// Desktop only: shows a remove button (mobile uses swipe to dismiss).
+  final VoidCallback? onDelete;
+
   static const Color _primary = Color(0xFF1565C0);
 
   const _AnnouncementCard({
@@ -700,6 +965,7 @@ class _AnnouncementCard extends StatelessWidget {
     required this.isUnread,
     required this.timeLabel,
     required this.onTap,
+    this.onDelete,
   });
 
   @override
@@ -791,7 +1057,7 @@ class _AnnouncementCard extends StatelessWidget {
                       ),
                       child: Text(
                         a.levelLabel,
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontSize: 10,
                           color: _primary,
                           fontWeight: FontWeight.w600,
@@ -821,6 +1087,17 @@ class _AnnouncementCard extends StatelessWidget {
               ],
             ),
           ),
+          if (onDelete != null)
+            IconButton(
+              tooltip: 'Remove',
+              icon: Icon(
+                Icons.close_rounded,
+                size: 18,
+                color: isDark ? Colors.white38 : Colors.black38,
+              ),
+              visualDensity: VisualDensity.compact,
+              onPressed: onDelete,
+            ),
         ],
       ),
     ),

@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 import '../providers/theme_notifier.dart';
 import '../services/announcement_service.dart';
 import '../stores/announcement_store.dart';
+import '../utils/responsive.dart';
+import '../widgets/desktop_page.dart';
 import 'manage_announcements_screen.dart';
 
 class ComposeAnnouncementScreen extends StatefulWidget {
@@ -33,6 +35,18 @@ class _ComposeAnnouncementScreenState
     (value: '400', label: '400 Level'),
     (value: '500', label: '500 Level'),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    // keeps the desktop live preview in sync while typing
+    _titleCtrl.addListener(_refresh);
+    _messageCtrl.addListener(_refresh);
+  }
+
+  void _refresh() {
+    if (mounted) setState(() {});
+  }
 
   @override
   void dispose() {
@@ -76,9 +90,51 @@ class _ComposeAnnouncementScreenState
     }
   }
 
+  void _openManage() => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const ManageAnnouncementsScreen()),
+      );
+
+  // ── "Send to" level chips (shared) ─────────────────────────────────────
+  Widget _levelChips() => Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: _levels.map((l) {
+          final selected = _level == l.value;
+          return GestureDetector(
+            onTap: () => setState(() => _level = l.value),
+            child: MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  color: selected ? _primary : _primary.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(20),
+                  border: selected
+                      ? null
+                      : Border.all(color: _primary.withOpacity(0.3)),
+                ),
+                child: Text(
+                  l.label,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: selected ? Colors.white : _primary,
+                  ),
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      );
+
   @override
   Widget build(BuildContext context) {
     final isDark = context.watch<ThemeNotifier>().isDarkMode;
+
+    if (context.isExpanded) return _buildDesktop(isDark);
 
     return Scaffold(
       backgroundColor:
@@ -129,17 +185,12 @@ class _ComposeAnnouncementScreenState
                         ),
                       ),
                     ),
-                    // NEW — quick access to edit/delete sent announcements
+                    // quick access to edit/delete sent announcements
                     IconButton(
                       icon: const Icon(Icons.list_alt_rounded,
                           color: Colors.white),
                       tooltip: 'Manage my announcements',
-                      onPressed: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const ManageAnnouncementsScreen(),
-                        ),
-                      ),
+                      onPressed: _openManage,
                     ),
                   ],
                 ),
@@ -152,7 +203,13 @@ class _ComposeAnnouncementScreenState
             child: Form(
               key: _formKey,
               child: ListView(
-                padding: const EdgeInsets.all(20),
+                padding: EdgeInsets.symmetric(
+                  horizontal: responsiveSidePadding(
+                    MediaQuery.sizeOf(context).width,
+                    maxWidth: 640,
+                  ),
+                  vertical: 20,
+                ),
                 children: [
                   Text(
                     'Send to',
@@ -163,39 +220,7 @@ class _ComposeAnnouncementScreenState
                     ),
                   ),
                   const SizedBox(height: 10),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: _levels.map((l) {
-                      final selected = _level == l.value;
-                      return GestureDetector(
-                        onTap: () => setState(() => _level = l.value),
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 200),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 14, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: selected
-                                ? _primary
-                                : _primary.withOpacity(0.08),
-                            borderRadius: BorderRadius.circular(20),
-                            border: selected
-                                ? null
-                                : Border.all(
-                                    color: _primary.withOpacity(0.3)),
-                          ),
-                          child: Text(
-                            l.label,
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: selected ? Colors.white : _primary,
-                            ),
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                  ),
+                  _levelChips(),
 
                   const SizedBox(height: 24),
 
@@ -256,12 +281,7 @@ class _ComposeAnnouncementScreenState
 
                   // Secondary entry point too, in case the icon is missed
                   TextButton.icon(
-                    onPressed: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const ManageAnnouncementsScreen(),
-                      ),
-                    ),
+                    onPressed: _openManage,
                     icon: const Icon(Icons.list_alt_rounded,
                         size: 18, color: _primary),
                     label: const Text(
@@ -274,6 +294,233 @@ class _ComposeAnnouncementScreenState
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════
+  //  DESKTOP: form on the left, live preview on the right
+  // ══════════════════════════════════════════════════════════
+  Widget _buildDesktop(bool isDark) {
+    final cardBg = isDark ? const Color(0xFF15181D) : Colors.white;
+    final textPrimary = isDark ? Colors.white : Colors.black87;
+    final textSecondary = isDark ? Colors.white54 : Colors.black45;
+
+    final shadow = [
+      BoxShadow(
+        color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
+        blurRadius: 12,
+        offset: const Offset(0, 3),
+      ),
+    ];
+
+    Widget label(String t) => Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: Text(
+            t.toUpperCase(),
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1.4,
+              color: textSecondary,
+            ),
+          ),
+        );
+
+    final form = Container(
+      padding: const EdgeInsets.all(26),
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: shadow,
+      ),
+      child: Form(
+        key: _formKey,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            label('Send to'),
+            _levelChips(),
+            const SizedBox(height: 26),
+            _Field(
+              controller: _titleCtrl,
+              label: 'Title',
+              hint: 'e.g. Exam timetable update',
+              icon: Icons.title_rounded,
+              isDark: isDark,
+              maxLines: 1,
+              validator: (v) => (v == null || v.trim().isEmpty)
+                  ? 'Title is required'
+                  : null,
+            ),
+            const SizedBox(height: 16),
+            _Field(
+              controller: _messageCtrl,
+              label: 'Message',
+              hint: 'Write your announcement here…',
+              icon: Icons.message_rounded,
+              isDark: isDark,
+              maxLines: 10,
+              validator: (v) => (v == null || v.trim().isEmpty)
+                  ? 'Message is required'
+                  : null,
+            ),
+            const SizedBox(height: 24),
+            Align(
+              alignment: Alignment.centerRight,
+              child: ElevatedButton.icon(
+                onPressed: _sending ? null : _send,
+                icon: _sending
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Icon(Icons.send_rounded, size: 18),
+                label: Text(_sending ? 'Sending…' : 'Send Announcement'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _primary,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 26, vertical: 18),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  textStyle: const TextStyle(
+                      fontWeight: FontWeight.w700, fontSize: 15),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    // ── Live preview ──
+    final levelLabel =
+        _levels.firstWhere((l) => l.value == _level).label;
+    final title = _titleCtrl.text.trim();
+    final message = _messageCtrl.text.trim();
+
+    final preview = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        label('Preview'),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(22),
+          decoration: BoxDecoration(
+            color: cardBg,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: shadow,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: _primary.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(11),
+                    ),
+                    child: const Icon(Icons.campaign_rounded,
+                        color: _primary, size: 19),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'How students will see it',
+                      style: TextStyle(fontSize: 12, color: textSecondary),
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: _primary,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      levelLabel,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              Text(
+                title.isEmpty ? 'Your title appears here' : title,
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                  color: title.isEmpty
+                      ? textSecondary.withOpacity(0.6)
+                      : textPrimary,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                message.isEmpty
+                    ? 'Your message appears here as you type…'
+                    : message,
+                style: TextStyle(
+                  fontSize: 14,
+                  height: 1.6,
+                  color: message.isEmpty
+                      ? textSecondary.withOpacity(0.6)
+                      : (isDark ? Colors.white70 : Colors.black87),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+
+    return DesktopPage(
+      title: 'New Announcement',
+      subtitle: 'Send an update to your students',
+      maxWidth: 1200,
+      actions: [
+        DeskButton(
+          icon: Icons.list_alt_rounded,
+          label: 'My announcements',
+          isDark: isDark,
+          onTap: _openManage,
+        ),
+      ],
+      child: LayoutBuilder(
+        builder: (context, c) {
+          final twoCol = c.maxWidth >= 860;
+          return ListView(
+            padding: const EdgeInsets.only(bottom: 40),
+            children: [
+              if (twoCol)
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(flex: 6, child: form),
+                    const SizedBox(width: 24),
+                    Expanded(flex: 4, child: preview),
+                  ],
+                )
+              else ...[
+                form,
+                const SizedBox(height: 24),
+                preview,
+              ],
+            ],
+          );
+        },
       ),
     );
   }
