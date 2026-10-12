@@ -6,8 +6,8 @@ class Breakpoints {
   /// Below this width: phone layout (bottom navigation).
   static const double medium = 600;
 
-  /// At or above this width: desktop/web layout (extended sidebar).
-  static const double expanded = 1024;
+  /// At or above this width: desktop/web layouts (dedicated wide designs).
+  static const double expanded = 900;
 
   /// Content never stretches wider than this on big screens.
   static const double contentMaxWidth = 1000;

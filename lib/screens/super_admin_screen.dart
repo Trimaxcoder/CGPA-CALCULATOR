@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/theme_notifier.dart';
 import '../services/timetable_service.dart';
+import '../utils/responsive.dart';
+import '../widgets/desktop_page.dart';
 
 class SuperAdminScreen extends StatefulWidget {
   const SuperAdminScreen({super.key});
@@ -15,6 +17,8 @@ class _SuperAdminScreenState extends State<SuperAdminScreen>
   final _svc = TimetableService();
   late TabController _tabCtrl;
 
+  static const Color _primary = Color(0xFF1565C0);
+
   List<Map<String, dynamic>> _requests = [];
   List<Map<String, dynamic>> _admins   = [];
   bool _loadingRequests = true;
@@ -24,6 +28,10 @@ class _SuperAdminScreenState extends State<SuperAdminScreen>
   void initState() {
     super.initState();
     _tabCtrl = TabController(length: 2, vsync: this);
+    // keeps the desktop segmented control in sync
+    _tabCtrl.addListener(() {
+      if (mounted && !_tabCtrl.indexIsChanging) setState(() {});
+    });
     _loadRequests();
     _loadAdmins();
   }
@@ -38,7 +46,7 @@ class _SuperAdminScreenState extends State<SuperAdminScreen>
     setState(() => _loadingRequests = true);
     try {
       final list = await _svc.getPendingRequests();
-      setState(() => _requests = list);
+      if (mounted) setState(() => _requests = list);
     } catch (e) {
       if (mounted)
         ScaffoldMessenger.of(context)
@@ -52,7 +60,7 @@ class _SuperAdminScreenState extends State<SuperAdminScreen>
     setState(() => _loadingAdmins = true);
     try {
       final list = await _svc.getAllAdmins();
-      setState(() => _admins = list);
+      if (mounted) setState(() => _admins = list);
     } catch (e) {
       if (mounted)
         ScaffoldMessenger.of(context)
@@ -60,6 +68,11 @@ class _SuperAdminScreenState extends State<SuperAdminScreen>
     } finally {
       if (mounted) setState(() => _loadingAdmins = false);
     }
+  }
+
+  void _refreshAll() {
+    _loadRequests();
+    _loadAdmins();
   }
 
   Future<void> _review(String id, String status, bool isDark) async {
@@ -77,38 +90,41 @@ class _SuperAdminScreenState extends State<SuperAdminScreen>
               fontSize: 16,
               fontWeight: FontWeight.bold),
         ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              status == 'approved'
-                  ? 'This user will become a course rep admin.'
-                  : 'Provide a reason for rejection.',
-              style: TextStyle(
-                  color: isDark ? Colors.white60 : Colors.black54,
-                  fontSize: 13),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: noteCtrl,
-              style:
-                  TextStyle(color: isDark ? Colors.white : Colors.black87),
-              decoration: InputDecoration(
-                hintText: status == 'approved'
-                    ? 'Optional note...'
-                    : 'Reason for rejection...',
-                hintStyle: TextStyle(
-                    color: isDark ? Colors.white38 : Colors.black38),
-                filled: true,
-                fillColor: isDark
-                    ? const Color(0xFF2A2A2A)
-                    : Colors.grey.shade50,
-                border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12)),
+        content: SizedBox(
+          width: 420,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                status == 'approved'
+                    ? 'This user will become a course rep admin.'
+                    : 'Provide a reason for rejection.',
+                style: TextStyle(
+                    color: isDark ? Colors.white60 : Colors.black54,
+                    fontSize: 13),
               ),
-              maxLines: 2,
-            ),
-          ],
+              const SizedBox(height: 12),
+              TextField(
+                controller: noteCtrl,
+                style:
+                    TextStyle(color: isDark ? Colors.white : Colors.black87),
+                decoration: InputDecoration(
+                  hintText: status == 'approved'
+                      ? 'Optional note...'
+                      : 'Reason for rejection...',
+                  hintStyle: TextStyle(
+                      color: isDark ? Colors.white38 : Colors.black38),
+                  filled: true,
+                  fillColor: isDark
+                      ? const Color(0xFF2A2A2A)
+                      : Colors.grey.shade50,
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
+                maxLines: 2,
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(
@@ -197,6 +213,8 @@ class _SuperAdminScreenState extends State<SuperAdminScreen>
   Widget build(BuildContext context) {
     final isDark = context.watch<ThemeNotifier>().isDarkMode;
 
+    if (context.isExpanded) return _buildDesktop(isDark);
+
     return Scaffold(
       backgroundColor: isDark ? const Color(0xFF0A0A0A) : const Color(0xFFF2F4F8),
       body: Column(
@@ -241,24 +259,31 @@ class _SuperAdminScreenState extends State<SuperAdminScreen>
                             ),
                           ),
                         ),
-                        _glassIconButton(icon: Icons.refresh_rounded, onPressed: () {
-                          _loadRequests();
-                          _loadAdmins();
-                        } )
+                        _glassIconButton(
+                            icon: Icons.refresh_rounded,
+                            onPressed: _refreshAll)
                       ],
                     ),
                   ),
                   const SizedBox(height: 4),
-                  TabBar(
-                    controller: _tabCtrl,
-                    labelColor: Colors.white,
-                    unselectedLabelColor: Colors.white54,
-                    indicatorColor: Colors.white,
-                    indicatorWeight: 3,
-                    tabs: const [
-                      Tab(icon: Icon(Icons.pending_actions_rounded, size: 20), text: 'Pending'),
-                      Tab(icon: Icon(Icons.verified_user_rounded, size: 20), text: 'Admins'),
-                    ],
+                  // Padded + label-sized indicator keeps the underline inside
+                  // the curved header corners
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 14),
+                    child: TabBar(
+                      controller: _tabCtrl,
+                      labelColor: Colors.white,
+                      unselectedLabelColor: Colors.white54,
+                      indicatorSize: TabBarIndicatorSize.label,
+                      indicator: const UnderlineTabIndicator(
+                        borderSide: BorderSide(color: Colors.white, width: 3),
+                        insets: EdgeInsets.symmetric(horizontal: 6),
+                      ),
+                      tabs: const [
+                        Tab(icon: Icon(Icons.pending_actions_rounded, size: 20), text: 'Pending'),
+                        Tab(icon: Icon(Icons.verified_user_rounded, size: 20), text: 'Admins'),
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -278,7 +303,218 @@ class _SuperAdminScreenState extends State<SuperAdminScreen>
     );
   }
 
-  // ── Pending Requests Tab ─────────────────────────────────────────────────
+  // ══════════════════════════════════════════════════════════
+  //  DESKTOP: segmented switch + two-column cards
+  // ══════════════════════════════════════════════════════════
+  Widget _buildDesktop(bool isDark) {
+    return DesktopPage(
+      title: 'Super Admin',
+      subtitle: 'Review admin requests and manage course reps',
+      maxWidth: 1200,
+      actions: [
+        DeskButton(
+          icon: Icons.refresh_rounded,
+          label: 'Refresh',
+          isDark: isDark,
+          onTap: _refreshAll,
+        ),
+        _segmented(isDark),
+      ],
+      child: _tabCtrl.index == 0
+          ? _desktopPending(isDark)
+          : _desktopAdmins(isDark),
+    );
+  }
+
+  Widget _segmented(bool isDark) {
+    final items = [
+      (Icons.pending_actions_rounded, 'Pending', _requests.length),
+      (Icons.verified_user_rounded, 'Admins', _admins.length),
+    ];
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.white.withOpacity(0.06) : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (var i = 0; i < items.length; i++)
+            GestureDetector(
+              onTap: () => setState(() => _tabCtrl.index = i),
+              child: MouseRegion(
+                cursor: SystemMouseCursors.click,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 18, vertical: 10),
+                  decoration: BoxDecoration(
+                    gradient: _tabCtrl.index == i
+                        ? const LinearGradient(
+                            colors: [Color(0xFF1E88E5), Color(0xFF0D47A1)],
+                          )
+                        : null,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        items[i].$1,
+                        size: 18,
+                        color: _tabCtrl.index == i
+                            ? Colors.white
+                            : (isDark ? Colors.white54 : Colors.black54),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        '${items[i].$2} (${items[i].$3})',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: _tabCtrl.index == i
+                              ? Colors.white
+                              : (isDark ? Colors.white54 : Colors.black54),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// Equal-width wrapped grid (cards may have different heights).
+  Widget _cardGrid(List<Widget> cards) => LayoutBuilder(
+        builder: (context, c) {
+          final cols = c.maxWidth >= 760 ? 2 : 1;
+          const gap = 16.0;
+          final w = (c.maxWidth - gap * (cols - 1)) / cols;
+          return ListView(
+            padding: const EdgeInsets.only(bottom: 40),
+            children: [
+              Wrap(
+                spacing: gap,
+                runSpacing: gap,
+                children: [for (final c in cards) SizedBox(width: w, child: c)],
+              ),
+            ],
+          );
+        },
+      );
+
+  Widget _desktopPending(bool isDark) {
+    if (_loadingRequests) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_requests.isEmpty) {
+      return _emptyState(Icons.inbox_rounded, 'No Pending Requests',
+          'All admin requests will appear here', isDark);
+    }
+    return _cardGrid([
+      for (final r in _requests)
+        _requestCard(
+          r,
+          r['user'] as Map<String, dynamic>? ?? {},
+          (r['user'] as Map<String, dynamic>? ?? {})['profile']
+                  as Map<String, dynamic>? ??
+              {},
+          isDark,
+          desktop: true,
+        ),
+    ]);
+  }
+
+  Widget _desktopAdmins(bool isDark) {
+    if (_loadingAdmins) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_admins.isEmpty) {
+      return _emptyState(Icons.verified_user_outlined, 'No Admins Yet',
+          'Approved admins will appear here', isDark);
+    }
+    return _cardGrid([
+      for (final a in _admins)
+        _adminCardDesktop(
+            a, a['profile'] as Map<String, dynamic>? ?? {}, isDark),
+    ]);
+  }
+
+  // Admin card without ListTile, with a labeled revoke button
+  Widget _adminCardDesktop(Map admin, Map profile, bool isDark) => Container(
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF15181D) : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
+              blurRadius: 12,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            CircleAvatar(
+              radius: 22,
+              backgroundColor: Colors.green.withOpacity(0.15),
+              child: Icon(Icons.verified_user_rounded,
+                  color: Colors.green.shade400),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    profile['name'] ?? admin['email'] ?? 'Unknown',
+                    style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 15,
+                        color: isDark ? Colors.white : Colors.black87),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(admin['email'] ?? '',
+                      style: TextStyle(
+                          fontSize: 12,
+                          color: isDark ? Colors.white54 : Colors.black45)),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${profile['department'] ?? '—'} • ${profile['level'] ?? '—'} Level',
+                    style: TextStyle(
+                        fontSize: 12,
+                        color: isDark ? Colors.white38 : Colors.black38),
+                  ),
+                ],
+              ),
+            ),
+            TextButton.icon(
+              onPressed: () => _revoke(
+                admin['_id'],
+                profile['name'] ?? admin['email'] ?? 'This user',
+                isDark,
+              ),
+              icon: const Icon(Icons.person_remove_rounded, size: 18),
+              label: const Text('Revoke'),
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
+            ),
+          ],
+        ),
+      );
+
+  // ── Pending Requests Tab (phone) ─────────────────────────────────────────
   Widget _buildPendingTab(bool isDark) {
     if (_loadingRequests) return const Center(child: CircularProgressIndicator());
     if (_requests.isEmpty)
@@ -289,7 +525,12 @@ class _SuperAdminScreenState extends State<SuperAdminScreen>
     return RefreshIndicator(
       onRefresh: _loadRequests,
       child: ListView.builder(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.symmetric(
+          horizontal: responsiveSidePadding(
+              MediaQuery.sizeOf(context).width,
+              maxWidth: 720),
+          vertical: 16,
+        ),
         itemCount: _requests.length,
         itemBuilder: (_, i) {
           final r       = _requests[i];
@@ -301,7 +542,7 @@ class _SuperAdminScreenState extends State<SuperAdminScreen>
     );
   }
 
-  // ── Current Admins Tab ───────────────────────────────────────────────────
+  // ── Current Admins Tab (phone) ───────────────────────────────────────────
   Widget _buildAdminsTab(bool isDark) {
     if (_loadingAdmins) return const Center(child: CircularProgressIndicator());
     if (_admins.isEmpty)
@@ -311,7 +552,12 @@ class _SuperAdminScreenState extends State<SuperAdminScreen>
     return RefreshIndicator(
       onRefresh: _loadAdmins,
       child: ListView.builder(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.symmetric(
+          horizontal: responsiveSidePadding(
+              MediaQuery.sizeOf(context).width,
+              maxWidth: 720),
+          vertical: 16,
+        ),
         itemCount: _admins.length,
         itemBuilder: (_, i) {
           final a       = _admins[i];
@@ -322,22 +568,25 @@ class _SuperAdminScreenState extends State<SuperAdminScreen>
     );
   }
 
-  Widget _requestCard(Map r, Map user, Map profile, bool isDark) =>
+  Widget _requestCard(Map r, Map user, Map profile, bool isDark,
+          {bool desktop = false}) =>
       Container(
-        margin: const EdgeInsets.only(bottom: 14),
+        margin: desktop ? EdgeInsets.zero : const EdgeInsets.only(bottom: 14),
         decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF1E293B) : Colors.white,
-          borderRadius: BorderRadius.circular(16),
+          color: isDark
+              ? (desktop ? const Color(0xFF15181D) : const Color(0xFF1E293B))
+              : Colors.white,
+          borderRadius: BorderRadius.circular(desktop ? 20 : 16),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(isDark ? 0.3 : 0.06),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
+              blurRadius: desktop ? 12 : 8,
+              offset: Offset(0, desktop ? 3 : 2),
             ),
           ],
         ),
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.all(desktop ? 20 : 16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [

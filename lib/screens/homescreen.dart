@@ -26,7 +26,11 @@ import '../screens/signinscreen.dart';
 import '../widgets/ui_helpers.dart';
 import '../widgets/snackBar.dart';
 import '../utils/responsive.dart';
+import '../widgets/animations.dart';
+
 part 'homescreen_desktop.dart';
+part 'homescreen_modern.dart';
+part 'homescreen_mobile.dart';
 // ══════════════════════════════════════════════════════════
 //  HOME SCREEN
 // ══════════════════════════════════════════════════════════
@@ -199,7 +203,6 @@ class _HomeScreenState extends State<HomeScreen>
                         },
                       )
                       .toList(),
-                      
                 )
                 .catchError((e) => debugPrint('Grading sync failed: $e'));
           }
@@ -5058,189 +5061,7 @@ class _HomeScreenState extends State<HomeScreen>
 
   @override
   Widget build(BuildContext context) {
-    final isDark = context.watch<ThemeNotifier>().isDarkMode;
     if (context.isExpanded) return _GradesDesktop(s: this);
-
-    return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF0A0A0A) : Colors.blue.shade50,
-      body: Column(
-        children: [
-          // ── Full-width gradient header, deep bottom curve ──
-          Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Color(0xFF0D47A1),
-                  Color(0xFF1565C0),
-                  Color(0xFF1E88E5),
-                ],
-              ),
-              borderRadius: BorderRadius.only(
-                bottomLeft: Radius.circular(60),
-                bottomRight: Radius.circular(60),
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Color(0x331565C0),
-                  blurRadius: 16,
-                  offset: Offset(0, 6),
-                ),
-              ],
-            ),
-            child: SafeArea(
-              bottom: false,
-              child: Column(
-                children: [
-                  // Title row
-                  const Padding(
-                    padding: EdgeInsets.fromLTRB(16, 12, 16, 4),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            'CGPA Calculator',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w800,
-                              fontSize: 18,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-
-                  // CGPA row
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Row(
-                      children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Overall CGPA',
-                              style: TextStyle(
-                                color: Colors.white60,
-                                fontSize: 11,
-                              ),
-                            ),
-                            Text(
-                              _cgpaHidden ? '••••' : cgpa.toStringAsFixed(2),
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 26,
-                                fontWeight: FontWeight.w900,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(width: 10),
-                        SizedBox(
-                          width: 160,
-                          child: _cgpaHidden
-                              ? const SizedBox()
-                              : Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 10,
-                                    vertical: 5,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white.withOpacity(0.18),
-                                    borderRadius: BorderRadius.circular(20),
-                                    border: Border.all(
-                                      color: Colors.white.withOpacity(0.35),
-                                    ),
-                                  ),
-                                  child: Text(
-                                    getDegreeClass(cgpa, maxGP),
-                                    textAlign: TextAlign.center,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ),
-                        ),
-                        const Spacer(),
-                        _glassIconButton(
-                          icon: _cgpaHidden
-                              ? Icons.visibility_off
-                              : Icons.visibility,
-                          onPressed: () {
-                            setState(() => _cgpaHidden = !_cgpaHidden);
-                            _savePref('cgpaHidden', _cgpaHidden);
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-
-                  // TabBar — contained indicator
-                  TabBar(
-                    controller: _tabCtrl,
-                    isScrollable: false,
-                    labelColor: Colors.white,
-                    unselectedLabelColor: Colors.white54,
-                    indicatorSize: TabBarIndicatorSize.label,
-                    indicator: UnderlineTabIndicator(
-                      borderSide: const BorderSide(
-                        color: Colors.white,
-                        width: 3,
-                      ),
-                      insets: const EdgeInsets.symmetric(horizontal: 8),
-                    ),
-                    tabs: const [
-                      Tab(
-                        icon: Icon(Icons.add_circle_outline, size: 20),
-                        text: 'Add',
-                      ),
-                      Tab(
-                        icon: Icon(Icons.list_alt, size: 20),
-                        text: 'Courses',
-                      ),
-                      Tab(
-                        icon: Icon(Icons.show_chart, size: 20),
-                        text: 'Chart',
-                      ),
-                      Tab(
-                        icon: Icon(Icons.dashboard, size: 20),
-                        text: 'Summary',
-                      ),
-                      Tab(
-                        icon: Icon(Icons.delete_forever, size: 20),
-                        text: 'Clear All',
-                        iconMargin: EdgeInsets.zero,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-                ],
-              ),
-            ),
-          ),
-          Expanded(
-            child: TabBarView(
-              controller: _tabCtrl,
-              children: [
-                _buildAddTab(),
-                _buildCourses(),
-                _buildChart(),
-                _buildSummary(),
-                _buildClearAllTab(),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
+    return _GradesMobile(s: this);
   }
 }

@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../widgets/ui_helpers.dart';
 import '../services/api_service.dart';
+import '../utils/responsive.dart';
 import 'signinscreen.dart';
 import 'resetpasswordscreen.dart';
 import 'landing_page.dart';
@@ -113,110 +114,137 @@ class _SplashScreenState extends State<SplashScreen>
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    body: SizedBox.expand(
-      child: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFF0D47A1), Color(0xFF1565C0), Color(0xFF1E88E5)],
+  Widget build(BuildContext context) {
+    final big = context.isExpanded;
+    final logo = big ? 132.0 : 110.0;
+
+    return Scaffold(
+      body: SizedBox.expand(
+        child: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFF0D47A1), Color(0xFF1565C0), Color(0xFF1E88E5)],
+            ),
           ),
-        ),
-        child: SafeArea(
-          child: FadeTransition(
-            opacity: fadeAnim,
-            child: ScaleTransition(
-              scale: _scale,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Spacer(flex: 3),
-                  AnimatedBuilder(
-                    animation: _pulse,
-                    builder: (context, child) =>
-                        Transform.scale(scale: _pulse.value, child: child),
-                    child: Container(
-                      width: 110,
-                      height: 110,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.25),
-                            blurRadius: 36,
-                            offset: const Offset(0, 12),
-                          ),
-                        ],
-                      ),
-                      child: const Center(
-                        child: Text(
-                          'G',
-                          style: TextStyle(
-                            fontSize: 64,
-                            fontWeight: FontWeight.w900,
-                            color: Color(0xFF1565C0),
-                            height: 1,
-                          ),
+          child: SafeArea(
+            child: LayoutBuilder(
+              builder: (context, c) {
+                // scrolls instead of overflowing on very short windows
+                final h = c.maxHeight < 520 ? 520.0 : c.maxHeight;
+                return SingleChildScrollView(
+                  physics: const NeverScrollableScrollPhysics(),
+                  child: SizedBox(
+                    height: h,
+                    child: FadeTransition(
+                      opacity: fadeAnim,
+                      child: ScaleTransition(
+                        scale: _scale,
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Spacer(flex: 3),
+                            AnimatedBuilder(
+                              animation: _pulse,
+                              builder: (context, child) => Transform.scale(
+                                scale: _pulse.value,
+                                child: child,
+                              ),
+                              child: Container(
+                                width: logo,
+                                height: logo,
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  shape: BoxShape.circle,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.25),
+                                      blurRadius: 36,
+                                      offset: const Offset(0, 12),
+                                    ),
+                                  ],
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    'S',
+                                    style: TextStyle(
+                                      fontSize: logo * 0.58,
+                                      fontWeight: FontWeight.w900,
+                                      color: const Color(0xFF1565C0),
+                                      height: 1,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 28),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 24,
+                              ),
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(
+                                  'SCHOOLLIFE',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: big ? 44 : 36,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 6,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.15),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: const Text(
+                                'Track your academic performance',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 13,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ),
+                            const Spacer(flex: 3),
+                            const SizedBox(
+                              width: 28,
+                              height: 28,
+                              child: CircularProgressIndicator(
+                                color: Colors.white,
+                                strokeWidth: 2.5,
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            const Text(
+                              'Developed by TRIMAX',
+                              style: TextStyle(
+                                color: Colors.white60,
+                                fontSize: 12,
+                                letterSpacing: 1,
+                              ),
+                            ),
+                            const SizedBox(height: 32),
+                          ],
                         ),
                       ),
                     ),
                   ),
-                  const SizedBox(height: 28),
-                  const Text(
-                    'GRADEX',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 36,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 6,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: const Text(
-                      'Track your academic performance',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 13,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                  ),
-                  const Spacer(flex: 3),
-                  const SizedBox(
-                    width: 28,
-                    height: 28,
-                    child: CircularProgressIndicator(
-                      color: Colors.white,
-                      strokeWidth: 2.5,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'Developed by TRIMAX',
-                    style: TextStyle(
-                      color: Colors.white60,
-                      fontSize: 12,
-                      letterSpacing: 1,
-                    ),
-                  ),
-                  const SizedBox(height: 32),
-                ],
-              ),
+                );
+              },
             ),
           ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }

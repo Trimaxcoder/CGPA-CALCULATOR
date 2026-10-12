@@ -1,6 +1,8 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../providers/theme_notifier.dart';
@@ -8,13 +10,14 @@ import '../widgets/update_check_tile.dart';
 import '../models/studentProfile_model.dart';
 import '../services/api_service.dart';
 import '../screens/landing_page.dart';
-import '../widgets/combo_field.dart';
+import '../widgets/animations.dart';
+import '../widgets/app_dialog.dart';
 import '../widgets/snackBar.dart';
 import '../widgets/ui_helpers.dart';
-import '../uniport_courses.dart';
 import '../utils/responsive.dart';
 import '../widgets/notification_toggle.dart';
 import '../widgets/personal_reminders_toggle.dart';
+import '../widgets/profile_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -24,31 +27,35 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  StudentProfile profile = StudentProfile();
+  static const Color _blue = Color(0xFF1565C0);
+  static const Color _teal = Color(0xFF0891B2);
+  static const Color _purple = Color(0xFF7C3AED);
 
-  /// Selected category on desktop (0 Profile … 4 About)
+  StudentProfile profile = StudentProfile();
+  bool _hideCgpa = false;
+
+  /// Selected category on desktop
   int _section = 0;
 
   @override
   void initState() {
     super.initState();
     _loadProfile();
+    _loadPrefs();
   }
 
-  static const Color _primary = Color(0xFF1565C0);
-
+  // ── data ──────────────────────────────────────────────────
   Future<void> _loadProfile() async {
     final prefs = await SharedPreferences.getInstance();
     final pd = prefs.getString('profile');
-    if (pd != null) {
-      if (!mounted) return;
+    if (pd != null && mounted) {
       setState(
         () => profile = StudentProfile.fromMap(
           Map<String, dynamic>.from(jsonDecode(pd)),
         ),
       );
     }
-    // Pull fresh from server
+    // pull fresh from the server (also used by pull-to-refresh)
     try {
       final userData = await AuthService().getMe();
       if (userData['profile'] != null) {
@@ -62,262 +69,476 @@ class _SettingsScreenState extends State<SettingsScreen> {
     } catch (_) {}
   }
 
-  Future<void> _saveProfile() async {
+  Future<void> _loadPrefs() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('profile', jsonEncode(profile.toMap()));
+    if (!mounted) return;
+    setState(() => _hideCgpa = prefs.getBool('cgpaHidden') ?? false);
   }
 
+  Future<void> _setHideCgpa(bool v) async {
+    setState(() => _hideCgpa = v);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('cgpaHidden', v);
+  }
+
+  Future<void> _openProfile() async {
+    final updated = await Navigator.push<StudentProfile>(
+      context,
+      MaterialPageRoute(builder: (_) => ProfileScreen(profile: profile)),
+    );
+    if (updated != null && mounted) setState(() => profile = updated);
+  }
+
+  // ── actions ───────────────────────────────────────────────
+  Future<void> _changePassword() async {
+    if (profile.email.trim().isEmpty) {
+      AppSnackBar.showError(context, 'Add your email in Profile first.');
+      return;
+    }
+    final ok = await showConfirmDialog(
+      context,
+      title: 'Reset your password?',
+      message: 'We\'ll email a password reset link to ${profile.email}.',
+      confirmLabel: 'Send link',
+      icon: Icons.lock_reset_rounded,
+    );
+    if (!ok || !mounted) return;
+    try {
+      await AuthService().forgotPassword(email: profile.email.trim());
+      if (mounted) {
+        AppSnackBar.showSuccess(context, 'Reset link sent — check your inbox ✓');
+      }
+    } on ApiException catch (e) {
+      if (mounted) AppSnackBar.showError(context, e.message);
+    } catch (_) {
+      if (mounted) {
+        AppSnackBar.showError(context, 'Could not connect. Try again.');
+      }
+    }
+  }
+
+  Future<void> _shareApp() async {
+    try {
+      await Share.share(
+        'I use SchoolLife to track my timetable, classes and grades. '
+        'Try it: https://gradexapp.web.app',
+      );
+    } catch (_) {
+      if (mounted) AppSnackBar.showError(context, 'Could not open share.');
+    }
+  }
+
+  Future<void> _signOut() async {
+    final ok = await showConfirmDialog(
+      context,
+      title: 'Log out?',
+      message: 'Your data stays saved on this device.',
+      confirmLabel: 'Log out',
+      icon: Icons.logout_rounded,
+      color: Colors.orange,
+    );
+    if (!ok) return;
+
+    try {
+      await AuthService().logout();
+    } catch (_) {}
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('authToken');
+    await prefs.remove('refreshToken');
+    await prefs.remove('savedEmail');
+
+    if (!mounted) return;
+    Navigator.of(
+      context,
+    ).pushAndRemoveUntil(fadeRoute(const LandingPage()), (_) => false);
+  }
+
+  Future<void> _deleteAccount() async {
+    final ok = await showConfirmDialog(
+      context,
+      title: 'Delete account?',
+      message:
+          'This permanently deletes your account and all your data. This cannot be undone.',
+      confirmLabel: 'Delete',
+      icon: Icons.delete_forever_rounded,
+      color: Colors.red,
+    );
+    if (!ok) return;
+
+    try {
+      await ProfileService().deleteAccount();
+    } catch (_) {}
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.clear();
+
+    if (!mounted) return;
+    Navigator.of(
+      context,
+    ).pushAndRemoveUntil(fadeRoute(const LandingPage()), (_) => false);
+  }
+
+  // ══════════════════════════════════════════════════════════
+  //  SHARED BUILDING BLOCKS
+  // ══════════════════════════════════════════════════════════
+  BoxDecoration _deco(bool isDark) => BoxDecoration(
+    color: isDark ? const Color(0xFF15181D) : Colors.white,
+    borderRadius: BorderRadius.circular(20),
+    boxShadow: [
+      BoxShadow(
+        color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
+        blurRadius: 12,
+        offset: const Offset(0, 3),
+      ),
+    ],
+  );
+
+  Widget _iconTile(IconData icon, Color color) => Container(
+    width: 38,
+    height: 38,
+    decoration: BoxDecoration(
+      color: color.withOpacity(0.12),
+      borderRadius: BorderRadius.circular(12),
+    ),
+    child: Icon(icon, color: color, size: 19),
+  );
+
+  Widget _row({
+    required bool isDark,
+    required IconData icon,
+    required Color color,
+    required String title,
+    String? subtitle,
+    Widget? trailing,
+    VoidCallback? onTap,
+    Color? titleColor,
+  }) {
+    final sub = isDark ? Colors.white54 : Colors.black45;
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        child: Row(
+          children: [
+            _iconTile(icon, color),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 14.5,
+                      fontWeight: FontWeight.w700,
+                      color: titleColor ??
+                          (isDark ? Colors.white : Colors.black87),
+                    ),
+                  ),
+                  if (subtitle != null) ...[
+                    const SizedBox(height: 2),
+                    Text(subtitle, style: TextStyle(fontSize: 12, color: sub)),
+                  ],
+                ],
+              ),
+            ),
+            if (trailing != null)
+              trailing
+            else if (onTap != null)
+              Icon(Icons.chevron_right_rounded, color: sub, size: 22),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _switchRow({
+    required bool isDark,
+    required IconData icon,
+    required Color color,
+    required String title,
+    required String subtitle,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+  }) => _row(
+    isDark: isDark,
+    icon: icon,
+    color: color,
+    title: title,
+    subtitle: subtitle,
+    onTap: () => onChanged(!value),
+    trailing: Switch(value: value, onChanged: onChanged, activeColor: Colors.blue),
+  );
+
+  Widget _group(String label, List<Widget> rows, bool isDark) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Padding(
+        padding: const EdgeInsets.only(left: 4, bottom: 10),
+        child: Text(
+          label.toUpperCase(),
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 1.4,
+            color: isDark ? Colors.white54 : Colors.black45,
+          ),
+        ),
+      ),
+      Container(
+        decoration: _deco(isDark),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          children: [
+            for (var i = 0; i < rows.length; i++) ...[
+              rows[i],
+              if (i < rows.length - 1)
+                Divider(
+                  height: 1,
+                  indent: 66,
+                  color: isDark
+                      ? Colors.white.withOpacity(0.07)
+                      : Colors.black.withOpacity(0.06),
+                ),
+            ],
+          ],
+        ),
+      ),
+    ],
+  );
+
+  // ── the rows of each group (shared by phone + desktop) ────
+  List<Widget> _appearanceRows(ThemeNotifier theme, bool isDark) => [
+    _switchRow(
+      isDark: isDark,
+      icon: isDark ? Icons.dark_mode_rounded : Icons.light_mode_rounded,
+      color: _blue,
+      title: 'Dark mode',
+      subtitle: isDark ? 'Using the dark theme' : 'Using the light theme',
+      value: isDark,
+      onChanged: (_) => theme.toggleTheme(),
+    ),
+  ];
+
+  List<Widget> _notificationRows() => const [
+    NotificationToggle(),
+    PersonalRemindersToggle(),
+  ];
+
+  List<Widget> _privacyRows(bool isDark) => [
+    _switchRow(
+      isDark: isDark,
+      icon: Icons.visibility_off_rounded,
+      color: _purple,
+      title: 'Hide CGPA',
+      subtitle: 'Keep your CGPA hidden on the Grades screen',
+      value: _hideCgpa,
+      onChanged: _setHideCgpa,
+    ),
+    _row(
+      isDark: isDark,
+      icon: Icons.lock_reset_rounded,
+      color: _teal,
+      title: 'Change password',
+      subtitle: 'Get a reset link by email',
+      onTap: _changePassword,
+    ),
+  ];
+
+  List<Widget> _aboutRows(bool isDark) => [
+    _row(
+      isDark: isDark,
+      icon: Icons.share_rounded,
+      color: _blue,
+      title: 'Share SchoolLife',
+      subtitle: 'Invite your classmates',
+      onTap: _shareApp,
+    ),
+    _row(
+      isDark: isDark,
+      icon: Icons.verified_outlined,
+      color: Colors.green,
+      title: 'App version',
+      subtitle: 'SchoolLife v1.0.1',
+    ),
+    if (!kIsWeb) const UpdateCheckTile(),
+  ];
+
+  Widget _deleteRow(bool isDark) => _row(
+    isDark: isDark,
+    icon: Icons.delete_forever_rounded,
+    color: Colors.red,
+    title: 'Delete account',
+    subtitle: 'Permanently remove your account and data',
+    titleColor: Colors.red,
+    onTap: _deleteAccount,
+  );
+
+  Widget _logoutButton(bool isDark) => PressScale(
+    onTap: _signOut,
+    child: Container(
+      height: 54,
+      decoration: BoxDecoration(
+        color: Colors.orange.withOpacity(isDark ? 0.14 : 0.1),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.orange.withOpacity(0.4)),
+      ),
+      child: const Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.logout_rounded, color: Colors.orange, size: 20),
+          SizedBox(width: 10),
+          Text(
+            'Log out',
+            style: TextStyle(
+              color: Colors.orange,
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+
+  Widget _avatar(double size, double font) => Container(
+    width: size,
+    height: size,
+    decoration: const BoxDecoration(
+      shape: BoxShape.circle,
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [Color(0xFF1E88E5), Color(0xFF0D47A1)],
+      ),
+    ),
+    child: Center(
+      child: Text(
+        profile.name.isNotEmpty ? profile.name[0].toUpperCase() : '?',
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: font,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
+    ),
+  );
+
+  // ══════════════════════════════════════════════════════════
+  //  BUILD
+  // ══════════════════════════════════════════════════════════
   @override
   Widget build(BuildContext context) {
-    final themeNotifier = context.watch<ThemeNotifier>();
-    final isDark = themeNotifier.isDarkMode;
+    final theme = context.watch<ThemeNotifier>();
+    final isDark = theme.isDarkMode;
 
-    // Desktop / large screens get their own layout; phones and tablets
-    // keep the original design below.
-    if (context.isExpanded) return _buildDesktop(themeNotifier, isDark);
+    if (context.isExpanded) return _buildDesktop(theme, isDark);
+    return _buildMobile(theme, isDark);
+  }
 
+  // ── Phone / tablet ───────────────────────────────────────
+  Widget _buildMobile(ThemeNotifier theme, bool isDark) {
     final bg = isDark ? const Color(0xFF0A0A0A) : const Color(0xFFF7F8FA);
-    final cardBg = isDark ? const Color(0xFF15181D) : Colors.white;
-    final textPrimary = isDark ? Colors.white : Colors.black87;
-    final textSecondary = isDark ? Colors.white54 : Colors.black45;
+    final text = isDark ? Colors.white : Colors.black87;
+    final sub = isDark ? Colors.white54 : Colors.black45;
+
+    // compact profile row: just the name + a Profile button
+    final profileRow = PressScale(
+      onTap: _openProfile,
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: _deco(isDark),
+        child: Row(
+          children: [
+            _avatar(48, 20),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Text(
+                profile.name.isNotEmpty ? profile.name : 'Your name',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w900,
+                  color: text,
+                ),
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: _blue.withOpacity(isDark ? 0.2 : 0.1),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Profile',
+                    style: TextStyle(
+                      color: _blue,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  SizedBox(width: 2),
+                  Icon(Icons.chevron_right_rounded, color: _blue, size: 18),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
 
     return Scaffold(
       backgroundColor: bg,
       body: SafeArea(
+        bottom: false,
         child: LayoutBuilder(
-          builder: (context, constraints) {
-            final sidePad = responsiveSidePadding(
-              constraints.maxWidth,
-              maxWidth: 760,
-            );
-            return ListView(
-              padding: EdgeInsets.fromLTRB(sidePad, 16, sidePad, 40),
-              children: [
-                // ── Flat title ──
-                Text(
-                  'Settings',
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w900,
-                    color: textPrimary,
+          builder: (context, c) {
+            final side = responsiveSidePadding(c.maxWidth, maxWidth: 640);
+            return RefreshIndicator(
+              color: _blue,
+              onRefresh: () async {
+                await _loadProfile();
+                await _loadPrefs();
+              },
+              child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: EdgeInsets.fromLTRB(side, 14, side, 120),
+                children: staggered([
+                  Text(
+                    'Settings',
+                    style: TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.w900,
+                      color: text,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 20),
-
-                // ── Profile card ──
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: cardBg,
-                    borderRadius: BorderRadius.circular(22),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
-                        blurRadius: 12,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
+                  Padding(
+                    padding: const EdgeInsets.only(top: 1, bottom: 16),
+                    child: Text(
+                      'Manage your account and app',
+                      style: TextStyle(fontSize: 13, color: sub),
+                    ),
                   ),
-                  child: Column(
-                    children: [
-                      Container(
-                        width: 84,
-                        height: 84,
-                        decoration: const BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [Color(0xFF1E88E5), Color(0xFF0D47A1)],
-                          ),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Center(
-                          child: Text(
-                            profile.name.isNotEmpty
-                                ? profile.name[0].toUpperCase()
-                                : '?',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 34,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                      Text(
-                        profile.name.isNotEmpty ? profile.name : 'Your Name',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: textPrimary,
-                          fontSize: 19,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        profile.email,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: textSecondary, fontSize: 13),
-                      ),
-                      if (profile.department.isNotEmpty) ...[
-                        const SizedBox(height: 10),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 5,
-                          ),
-                          decoration: BoxDecoration(
-                            color: const Color(
-                              0xFF1565C0,
-                            ).withOpacity(isDark ? 0.2 : 0.1),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(
-                            profile.department,
-                            style: const TextStyle(
-                              color: Color(0xFF1565C0),
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ],
-                      const SizedBox(height: 20),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _profileInfoBox(
-                              Icons.account_balance,
-                              'School',
-                              profile.school,
-                              isDark,
-                              textPrimary,
-                              textSecondary,
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: _profileInfoBox(
-                              Icons.badge_outlined,
-                              'Matric',
-                              profile.matricNumber,
-                              isDark,
-                              textPrimary,
-                              textSecondary,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _profileInfoBox(
-                              Icons.account_balance_outlined,
-                              'Faculty',
-                              profile.faculty,
-                              isDark,
-                              textPrimary,
-                              textSecondary,
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: _profileInfoBox(
-                              Icons.school_outlined,
-                              'Department',
-                              profile.department,
-                              isDark,
-                              textPrimary,
-                              textSecondary,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 28),
-
-                // ── Settings sections ──
-                _sectionLabel('Appearance', isDark),
-                const SizedBox(height: 8),
-                _buildCard(isDark, [
-                  _switchTile(
-                    icon: isDark
-                        ? Icons.dark_mode_rounded
-                        : Icons.light_mode_rounded,
-                    iconColor: _primary,
-                    title: 'Dark Mode',
-                    subtitle: isDark ? 'Using dark theme' : 'Using light theme',
-                    value: isDark,
-                    onChanged: (_) => themeNotifier.toggleTheme(),
-                    isDark: isDark,
-                  ),
-                ]),
-                const SizedBox(height: 20),
-
-                _sectionLabel('Notifications', isDark),
-                const SizedBox(height: 8),
-                _buildCard(isDark, [
-                  const NotificationToggle(),
-                  const PersonalRemindersToggle(),
-                ]),
-                const SizedBox(height: 20),
-
-                _sectionLabel('Account', isDark),
-                const SizedBox(height: 8),
-                _buildCard(isDark, [
-                  _actionTile(
-                    icon: Icons.edit_outlined,
-                    iconColor: _primary,
-                    title: 'Edit Profile',
-                    subtitle: 'Update your name, school, department',
-                    onTap: () => _showEditProfile(isDark),
-                    isDark: isDark,
-                  ),
-                  _divider(isDark),
-                  _actionTile(
-                    icon: Icons.logout_rounded,
-                    iconColor: Colors.orange,
-                    title: 'Sign Out',
-                    subtitle: 'Log out of your SchoolLife account',
-                    onTap: _signOut,
-                    isDark: isDark,
-                    textColor: Colors.orange,
-                  ),
-                  _divider(isDark),
-                  _actionTile(
-                    icon: Icons.delete_forever_rounded,
-                    iconColor: Colors.red,
-                    title: 'Delete Account',
-                    subtitle: 'Permanently remove your account and data',
-                    onTap: _deleteAccount,
-                    isDark: isDark,
-                    textColor: Colors.red,
-                  ),
-                ]),
-                const SizedBox(height: 20),
-
-                _sectionLabel('About', isDark),
-                const SizedBox(height: 8),
-                _buildCard(isDark, [
-                  _actionTile(
-                    icon: Icons.verified_outlined,
-                    iconColor: Colors.green,
-                    title: 'App Version',
-                    subtitle: 'SchoolLife v1.0.1',
-                    onTap: null,
-                    isDark: isDark,
-                  ),
-                ]),
-                const SizedBox(height: 20),
-                _sectionLabel('App Update', isDark),
-                const SizedBox(height: 8),
-                _buildCard(isDark, [const UpdateCheckTile()]),
-              ],
+                  profileRow,
+                  const SizedBox(height: 24),
+                  _group('Appearance', _appearanceRows(theme, isDark), isDark),
+                  const SizedBox(height: 22),
+                  _group('Notifications', _notificationRows(), isDark),
+                  const SizedBox(height: 22),
+                  _group('Privacy & security', _privacyRows(isDark), isDark),
+                  const SizedBox(height: 22),
+                  _group('About', _aboutRows(isDark), isDark),
+                  const SizedBox(height: 22),
+                  _group('Account', [_deleteRow(isDark)], isDark),
+                  const SizedBox(height: 26),
+                  _logoutButton(isDark),
+                ], stepMs: 55),
+              ),
             );
           },
         ),
@@ -326,22 +547,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   // ══════════════════════════════════════════════════════════
-  //  DESKTOP LAYOUT (screens >= 1024 px)
-  //  Category list on the left, selected category on the right.
+  //  DESKTOP (>= 900 px): categories on the left, panel on the right
   // ══════════════════════════════════════════════════════════
   static const _sections = [
     (Icons.person_outline_rounded, 'Profile', 'Your personal and academic details'),
     (Icons.palette_outlined, 'Appearance', 'Choose how SchoolLife looks'),
     (Icons.notifications_outlined, 'Notifications', 'Class and study reminders'),
-    (Icons.manage_accounts_outlined, 'Account', 'Edit your profile, sign out or delete'),
-    (Icons.info_outline_rounded, 'About', 'Version and app updates'),
+    (Icons.shield_outlined, 'Privacy & security', 'Control what is shown and secure your account'),
+    (Icons.info_outline_rounded, 'About', 'Version, updates and sharing'),
+    (Icons.manage_accounts_outlined, 'Account', 'Delete your account or log out'),
   ];
 
-  Widget _buildDesktop(ThemeNotifier themeNotifier, bool isDark) {
+  Widget _buildDesktop(ThemeNotifier theme, bool isDark) {
     final bg = isDark ? const Color(0xFF0A0A0A) : const Color(0xFFF7F8FA);
     final cardBg = isDark ? const Color(0xFF15181D) : Colors.white;
-    final textPrimary = isDark ? Colors.white : Colors.black87;
-    final textSecondary = isDark ? Colors.white54 : Colors.black45;
+    final text = isDark ? Colors.white : Colors.black87;
+    final sub = isDark ? Colors.white54 : Colors.black45;
 
     return Scaffold(
       backgroundColor: bg,
@@ -352,23 +573,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
             final side = responsiveSidePadding(cw, maxWidth: 1200);
             final stacked = cw < 820;
 
-            final pane = ListView(
-              padding: const EdgeInsets.only(bottom: 30),
-              children: [
-                Align(
-                  alignment: Alignment.topLeft,
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 820),
-                    child: _desktopPane(
-                      themeNotifier,
-                      isDark,
-                      cardBg,
-                      textPrimary,
-                      textSecondary,
+            final pane = RefreshIndicator(
+              color: _blue,
+              onRefresh: () async {
+                await _loadProfile();
+                await _loadPrefs();
+              },
+              child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.only(bottom: 30),
+                children: [
+                  Align(
+                    alignment: Alignment.topLeft,
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 820),
+                      child: _desktopPane(theme, isDark, cardBg, text, sub),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             );
 
             return Padding(
@@ -381,13 +604,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     style: TextStyle(
                       fontSize: 32,
                       fontWeight: FontWeight.w900,
-                      color: textPrimary,
+                      color: text,
                     ),
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    'Manage your profile, appearance and account',
-                    style: TextStyle(fontSize: 14, color: textSecondary),
+                    'Manage your account and app',
+                    style: TextStyle(fontSize: 14, color: sub),
                   ),
                   const SizedBox(height: 22),
                   Expanded(
@@ -401,14 +624,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                   children: [
                                     for (var i = 0; i < _sections.length; i++)
                                       Padding(
-                                        padding: const EdgeInsets.only(
-                                          right: 8,
-                                        ),
-                                        child: _navPill(
-                                          i,
-                                          isDark,
-                                          textPrimary,
-                                        ),
+                                        padding: const EdgeInsets.only(right: 8),
+                                        child: _navPill(i, isDark, text),
                                       ),
                                   ],
                                 ),
@@ -421,32 +638,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               SizedBox(
-                                width: 250,
+                                width: 260,
                                 child: Container(
                                   padding: const EdgeInsets.all(10),
-                                  decoration: BoxDecoration(
-                                    color: cardBg,
-                                    borderRadius: BorderRadius.circular(22),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.black.withOpacity(
-                                          isDark ? 0.3 : 0.05,
-                                        ),
-                                        blurRadius: 12,
-                                        offset: const Offset(0, 3),
-                                      ),
-                                    ],
-                                  ),
+                                  decoration: _deco(isDark),
                                   child: Column(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
                                       for (var i = 0; i < _sections.length; i++)
-                                        _navRow(
-                                          i,
-                                          isDark,
-                                          textPrimary,
-                                          textSecondary,
-                                        ),
+                                        _navRow(i, isDark, text, sub),
                                     ],
                                   ),
                                 ),
@@ -465,12 +665,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _navRow(
-    int i,
-    bool isDark,
-    Color textPrimary,
-    Color textSecondary,
-  ) {
+  Widget _navRow(int i, bool isDark, Color text, Color sub) {
     final selected = _section == i;
     final item = _sections[i];
     return Padding(
@@ -493,11 +688,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             child: Row(
               children: [
-                Icon(
-                  item.$1,
-                  size: 20,
-                  color: selected ? Colors.white : textSecondary,
-                ),
+                Icon(item.$1, size: 20, color: selected ? Colors.white : sub),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
@@ -505,7 +696,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
-                      color: selected ? Colors.white : textPrimary,
+                      color: selected ? Colors.white : text,
                     ),
                   ),
                 ),
@@ -517,7 +708,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _navPill(int i, bool isDark, Color textPrimary) {
+  Widget _navPill(int i, bool isDark, Color text) {
     final selected = _section == i;
     final item = _sections[i];
     return GestureDetector(
@@ -541,18 +732,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                item.$1,
-                size: 18,
-                color: selected ? Colors.white : textPrimary,
-              ),
+              Icon(item.$1, size: 18, color: selected ? Colors.white : text),
               const SizedBox(width: 8),
               Text(
                 item.$2,
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
-                  color: selected ? Colors.white : textPrimary,
+                  color: selected ? Colors.white : text,
                 ),
               ),
             ],
@@ -563,123 +750,88 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Widget _desktopPane(
-    ThemeNotifier themeNotifier,
+    ThemeNotifier theme,
     bool isDark,
     Color cardBg,
-    Color textPrimary,
-    Color textSecondary,
+    Color text,
+    Color sub,
   ) {
     final item = _sections[_section];
 
     final Widget body;
     switch (_section) {
       case 0:
-        body = _profilePane(isDark, cardBg, textPrimary, textSecondary);
+        body = _profilePane(isDark, cardBg, text, sub);
         break;
       case 1:
-        body = _appearancePane(
-          themeNotifier,
-          isDark,
-          cardBg,
-          textPrimary,
-          textSecondary,
-        );
+        body = _appearancePane(theme, isDark, cardBg, text, sub);
         break;
       case 2:
-        body = _buildCard(isDark, [
-          const NotificationToggle(),
-          _divider(isDark),
-          const PersonalRemindersToggle(),
-        ]);
+        body = _group('Reminders', _notificationRows(), isDark);
         break;
       case 3:
-        body = _accountPane(isDark, textSecondary);
+        body = _group('Privacy & security', _privacyRows(isDark), isDark);
+        break;
+      case 4:
+        body = _group('About', _aboutRows(isDark), isDark);
         break;
       default:
         body = Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildCard(isDark, [
-              _actionTile(
-                icon: Icons.verified_outlined,
-                iconColor: Colors.green,
-                title: 'App Version',
-                subtitle: 'SchoolLife v1.0.1',
-                onTap: null,
-                isDark: isDark,
-              ),
-            ]),
-            const SizedBox(height: 20),
-            _sectionLabel('App Update', isDark),
-            const SizedBox(height: 8),
-            _buildCard(isDark, [const UpdateCheckTile()]),
+            _group('Danger zone', [_deleteRow(isDark)], isDark),
+            const SizedBox(height: 26),
+            SizedBox(width: 260, child: _logoutButton(isDark)),
           ],
         );
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          item.$2,
-          style: TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.w900,
-            color: textPrimary,
-          ),
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 300),
+      child: KeyedSubtree(
+        key: ValueKey(_section),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              item.$2,
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.w900,
+                color: text,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(item.$3, style: TextStyle(fontSize: 13, color: sub)),
+            const SizedBox(height: 20),
+            body,
+          ],
         ),
-        const SizedBox(height: 2),
-        Text(item.$3, style: TextStyle(fontSize: 13, color: textSecondary)),
-        const SizedBox(height: 20),
-        body,
-      ],
+      ),
     );
   }
 
-  // ── Profile ──
-  Widget _profilePane(
-    bool isDark,
-    Color cardBg,
-    Color textPrimary,
-    Color textSecondary,
-  ) {
-    Widget infoTile(IconData icon, String label, String value) => Container(
+  Widget _profilePane(bool isDark, Color cardBg, Color text, Color sub) {
+    Widget info(IconData icon, String label, String value) => Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: cardBg,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
+      decoration: _deco(isDark),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _iconBox(icon, _primary),
+          _iconTile(icon, _blue),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: textSecondary,
-                  ),
-                ),
+                Text(label, style: TextStyle(fontSize: 11, color: sub)),
                 const SizedBox(height: 3),
                 Text(
                   value.isNotEmpty ? value : '—',
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w700,
-                    color: textPrimary,
+                    color: text,
                   ),
                 ),
               ],
@@ -694,106 +846,52 @@ class _SettingsScreenState extends State<SettingsScreen> {
       children: [
         Container(
           width: double.infinity,
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: cardBg,
-            borderRadius: BorderRadius.circular(24),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
-                blurRadius: 12,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
+          padding: const EdgeInsets.all(22),
+          decoration: _deco(isDark),
           child: Wrap(
             spacing: 22,
-            runSpacing: 18,
+            runSpacing: 16,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Container(
-                    width: 84,
-                    height: 84,
-                    decoration: const BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [Color(0xFF1E88E5), Color(0xFF0D47A1)],
-                      ),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Center(
-                      child: Text(
-                        profile.name.isNotEmpty
-                            ? profile.name[0].toUpperCase()
-                            : '?',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 34,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 20),
+                  _avatar(72, 30),
+                  const SizedBox(width: 18),
                   ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 330),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          profile.name.isNotEmpty ? profile.name : 'Your Name',
+                          profile.name.isNotEmpty ? profile.name : 'Your name',
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            color: textPrimary,
-                            fontSize: 22,
+                            fontSize: 21,
                             fontWeight: FontWeight.w900,
+                            color: text,
                           ),
                         ),
                         const SizedBox(height: 3),
                         Text(
                           profile.email,
-                          style: TextStyle(color: textSecondary, fontSize: 13),
+                          style: TextStyle(fontSize: 13, color: sub),
                         ),
-                        if (profile.department.isNotEmpty) ...[
-                          const SizedBox(height: 10),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 5,
-                            ),
-                            decoration: BoxDecoration(
-                              color: _primary.withOpacity(isDark ? 0.2 : 0.1),
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Text(
-                              profile.department,
-                              style: const TextStyle(
-                                color: _primary,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ],
                       ],
                     ),
                   ),
                 ],
               ),
               ElevatedButton.icon(
-                onPressed: () => _showEditProfile(isDark),
+                onPressed: _openProfile,
                 icon: const Icon(Icons.edit_outlined, size: 18),
                 label: const Text(
                   'Edit profile',
                   style: TextStyle(fontWeight: FontWeight.w700),
                 ),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: _primary,
+                  backgroundColor: _blue,
                   foregroundColor: Colors.white,
                   elevation: 0,
                   padding: const EdgeInsets.symmetric(
@@ -814,15 +912,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
           spacing: 14,
           runSpacing: 14,
           children: [
-            infoTile(Icons.account_balance, 'School', profile.school),
-            infoTile(Icons.badge_outlined, 'Matric number', profile.matricNumber),
-            infoTile(
-              Icons.account_balance_outlined,
-              'Faculty',
-              profile.faculty,
-            ),
-            infoTile(Icons.school_outlined, 'Department', profile.department),
-            infoTile(
+            info(Icons.account_balance, 'School', profile.school),
+            info(Icons.badge_outlined, 'Matric number', profile.matricNumber),
+            info(Icons.account_balance_outlined, 'Faculty', profile.faculty),
+            info(Icons.school_outlined, 'Department', profile.department),
+            info(
               Icons.stairs_outlined,
               'Level',
               profile.level.isNotEmpty ? '${profile.level} Level' : '',
@@ -833,13 +927,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  // ── Appearance: theme preview cards ──
   Widget _appearancePane(
-    ThemeNotifier themeNotifier,
+    ThemeNotifier theme,
     bool isDark,
     Color cardBg,
-    Color textPrimary,
-    Color textSecondary,
+    Color text,
+    Color sub,
   ) {
     Widget themeCard(String label, bool dark) {
       final selected = isDark == dark;
@@ -850,39 +943,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
       return Expanded(
         child: GestureDetector(
           onTap: () {
-            if (!selected) themeNotifier.toggleTheme();
+            if (!selected) theme.toggleTheme();
           },
           child: MouseRegion(
             cursor: SystemMouseCursors.click,
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
               padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: cardBg,
-                borderRadius: BorderRadius.circular(20),
+              decoration: _deco(isDark).copyWith(
                 border: Border.all(
-                  color: selected ? _primary : Colors.transparent,
+                  color: selected ? _blue : Colors.transparent,
                   width: 2,
                 ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
-                    blurRadius: 10,
-                    offset: const Offset(0, 3),
-                  ),
-                ],
               ),
               child: Column(
                 children: [
-                  // mini preview of the app in this theme
                   Container(
                     height: 120,
                     decoration: BoxDecoration(
                       color: pSide,
                       borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
-                        color: Colors.grey.withOpacity(0.25),
-                      ),
+                      border: Border.all(color: Colors.grey.withOpacity(0.25)),
                     ),
                     child: Row(
                       children: [
@@ -891,7 +972,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           width: 24,
                           height: 24,
                           decoration: BoxDecoration(
-                            color: _primary,
+                            color: _blue,
                             borderRadius: BorderRadius.circular(7),
                           ),
                         ),
@@ -911,7 +992,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                   height: 10,
                                   width: 60,
                                   decoration: BoxDecoration(
-                                    color: _primary,
+                                    color: _blue,
                                     borderRadius: BorderRadius.circular(4),
                                   ),
                                 ),
@@ -937,7 +1018,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       Icon(
                         dark ? Icons.dark_mode_rounded : Icons.light_mode_rounded,
                         size: 18,
-                        color: selected ? _primary : textSecondary,
+                        color: selected ? _blue : sub,
                       ),
                       const SizedBox(width: 8),
                       Text(
@@ -945,7 +1026,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w800,
-                          color: textPrimary,
+                          color: text,
                         ),
                       ),
                       const Spacer(),
@@ -954,7 +1035,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             ? Icons.check_circle_rounded
                             : Icons.circle_outlined,
                         size: 20,
-                        color: selected ? _primary : textSecondary,
+                        color: selected ? _blue : sub,
                       ),
                     ],
                   ),
@@ -975,622 +1056,4 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ],
     );
   }
-
-  // ── Account ──
-  Widget _accountPane(bool isDark, Color textSecondary) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildCard(isDark, [
-          _actionTile(
-            icon: Icons.edit_outlined,
-            iconColor: _primary,
-            title: 'Edit Profile',
-            subtitle: 'Update your name, school, department',
-            onTap: () => _showEditProfile(isDark),
-            isDark: isDark,
-          ),
-          _divider(isDark),
-          _actionTile(
-            icon: Icons.logout_rounded,
-            iconColor: Colors.orange,
-            title: 'Sign Out',
-            subtitle: 'Log out of your SchoolLife account',
-            onTap: _signOut,
-            isDark: isDark,
-            textColor: Colors.orange,
-          ),
-        ]),
-        const SizedBox(height: 26),
-        _sectionLabel('Danger zone', isDark),
-        const SizedBox(height: 8),
-        Container(
-          decoration: BoxDecoration(
-            color: Colors.red.withOpacity(isDark ? 0.08 : 0.04),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.red.withOpacity(0.3)),
-          ),
-          child: _actionTile(
-            icon: Icons.delete_forever_rounded,
-            iconColor: Colors.red,
-            title: 'Delete Account',
-            subtitle: 'Permanently remove your account and data',
-            onTap: _deleteAccount,
-            isDark: isDark,
-            textColor: Colors.red,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _profileInfoBox(
-    IconData icon,
-    String label,
-    String value,
-    bool isDark,
-    Color textPrimary,
-    Color textSecondary,
-  ) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: isDark
-            ? Colors.white.withOpacity(0.04)
-            : const Color(0xFFF2F4F8),
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: 16, color: _primary),
-          const SizedBox(height: 6),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 10,
-              color: textSecondary,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            value.isNotEmpty ? value : '—',
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              color: textPrimary,
-            ),
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
-      ),
-    );
-  }
-
-  String? _findBestMatch(String input, List<String> options) {
-    final query = input.toLowerCase().trim();
-    if (query.isEmpty) return null;
-
-    for (final opt in options) {
-      if (opt.toLowerCase().trim() == query) return opt;
-    }
-
-    final substringMatches = options
-        .where((opt) => opt.toLowerCase().contains(query))
-        .toList();
-    if (substringMatches.length == 1) return substringMatches.first;
-
-    if (substringMatches.isEmpty) {
-      final reverseMatches = options
-          .where((opt) => query.contains(opt.toLowerCase()))
-          .toList();
-      if (reverseMatches.length == 1) return reverseMatches.first;
-    }
-
-    final wordMatches = options.where((opt) {
-      final words = opt.toLowerCase().split(RegExp(r'\s+'));
-      return words.any((w) => w.startsWith(query) || query.startsWith(w));
-    }).toList();
-    if (wordMatches.length == 1) return wordMatches.first;
-
-    return null;
-  }
-
-  void _showEditProfile(bool isDark) {
-    final fk = GlobalKey<FormState>();
-    final nameC = TextEditingController(text: profile.name);
-    final emailC = TextEditingController(text: profile.email);
-    final matricC = TextEditingController(text: profile.matricNumber);
-    final schoolC = TextEditingController(text: profile.school);
-    final facC = TextEditingController(text: profile.faculty);
-    final deptC = TextEditingController(text: profile.department);
-    String selectedLevel = profile.level.isNotEmpty ? profile.level : '100';
-
-    final textColor = isDark ? Colors.white : Colors.black87;
-    final labelColor = isDark ? Colors.white70 : Colors.black54;
-    final fillColor = isDark ? const Color(0xFF2A2A2A) : Colors.grey.shade50;
-
-    showDialog(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setD) => AlertDialog(
-          backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-          surfaceTintColor: Colors.transparent,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          title: Row(
-            children: [
-              const Icon(Icons.edit, color: Colors.blue),
-              const SizedBox(width: 8),
-              Text('Edit Profile', style: TextStyle(color: textColor)),
-            ],
-          ),
-          content: SizedBox(
-            width: 480,
-            child: SingleChildScrollView(
-              child: Form(
-                key: fk,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _editField(
-                      nameC,
-                      'Full Name',
-                      Icons.person_outline,
-                      textColor,
-                      labelColor,
-                      fillColor,
-                      (v) =>
-                          (v == null || v.trim().isEmpty) ? 'Required' : null,
-                    ),
-                    const SizedBox(height: 12),
-                    _editField(
-                      emailC,
-                      'Email',
-                      Icons.email_outlined,
-                      textColor,
-                      labelColor,
-                      fillColor,
-                      (v) {
-                        if (v == null || v.trim().isEmpty) return 'Required';
-                        if (!v.trim().contains('@'))
-                          return 'Email must contain @';
-                        if (!isValidEmail(v.trim())) return 'Invalid email';
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    _editField(
-                      matricC,
-                      'Matric Number',
-                      Icons.badge_outlined,
-                      textColor,
-                      labelColor,
-                      fillColor,
-                      (v) =>
-                          (v == null || v.trim().isEmpty) ? 'Required' : null,
-                    ),
-                    const SizedBox(height: 12),
-                    ComboField(
-                      controller: schoolC,
-                      label: 'School / University',
-                      icon: Icons.account_balance,
-                      suggestions: getAllSchools(),
-                      dark: !isDark,
-                      validator: (v) {
-                        if (v == null || v.trim().isEmpty) return 'Required';
-                        if (_findBestMatch(v, getAllSchools()) == null) {
-                          return 'Please select a valid school from the list';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    ComboField(
-                      controller: facC,
-                      label: 'Faculty',
-                      icon: Icons.account_balance_outlined,
-                      suggestions: getFaculties(),
-                      dark: !isDark,
-                      onSuggestionSelected: (_) => setD(() => deptC.clear()),
-                      validator: (v) {
-                        if (v == null || v.trim().isEmpty) return 'Required';
-                        if (_findBestMatch(v, getFaculties()) == null) {
-                          return 'Please select a valid faculty from the list';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    StatefulBuilder(
-                      builder: (_, setSub) {
-                        final deptOptions = facC.text.trim().isNotEmpty
-                            ? getDepartments(facC.text.trim())
-                            : <String>[];
-                        return ComboField(
-                          controller: deptC,
-                          label: 'Department',
-                          icon: Icons.school_outlined,
-                          suggestions: deptOptions,
-                          dark: !isDark,
-                          validator: (v) {
-                            if (v == null || v.trim().isEmpty)
-                              return 'Required';
-                            if (_findBestMatch(v, deptOptions) == null) {
-                              return 'Please select a valid department from the list';
-                            }
-                            return null;
-                          },
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    DropdownButtonFormField<String>(
-                      value: selectedLevel,
-                      onChanged: (v) => setD(() => selectedLevel = v!),
-                      style: TextStyle(color: textColor),
-                      dropdownColor: isDark
-                          ? const Color(0xFF2A2A2A)
-                          : Colors.white,
-                      decoration: InputDecoration(
-                        labelText: 'Level',
-                        prefixIcon: const Icon(
-                          Icons.stairs_outlined,
-                          color: Colors.blue,
-                        ),
-                        filled: true,
-                        fillColor: fillColor,
-                        labelStyle: TextStyle(color: labelColor),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(
-                            color: isDark ? Colors.white24 : Colors.black12,
-                          ),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(
-                            color: Colors.blue.shade300,
-                            width: 2,
-                          ),
-                        ),
-                      ),
-                      items: ['100', '200', '300', '400', '500', '600', '700']
-                          .map(
-                            (l) => DropdownMenuItem(
-                              value: l,
-                              child: Text('$l Level'),
-                            ),
-                          )
-                          .toList(),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue,
-                foregroundColor: Colors.white,
-              ),
-              onPressed: () async {
-                if (!fk.currentState!.validate()) return;
-
-                final canonicalSchool =
-                    _findBestMatch(schoolC.text, getAllSchools()) ??
-                    schoolC.text.trim();
-                final canonicalFaculty =
-                    _findBestMatch(facC.text, getFaculties()) ??
-                    facC.text.trim();
-                final deptOptions = getDepartments(canonicalFaculty);
-                final canonicalDept =
-                    _findBestMatch(deptC.text, deptOptions) ??
-                    deptC.text.trim();
-
-                final updated = StudentProfile(
-                  name: nameC.text.trim(),
-                  email: emailC.text.trim(),
-                  matricNumber: matricC.text.trim(),
-                  school: canonicalSchool,
-                  faculty: canonicalFaculty,
-                  department: canonicalDept,
-                  level: selectedLevel,
-                );
-                setState(() => profile = updated);
-                await _saveProfile();
-                if (ctx.mounted) Navigator.pop(ctx);
-                ProfileService()
-                    .updateProfile(updated.toMap())
-                    .then(
-                      (_) =>
-                          AppSnackBar.showSuccess(context, 'Profile updated ✓'),
-                    )
-                    .catchError(
-                      (e) => AppSnackBar.showError(
-                        context,
-                        'Saved locally. Server: $e',
-                      ),
-                    );
-              },
-              child: const Text('Save'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ── Sign Out ─────────────────────────────────────────────────────────────
-  Future<void> _signOut() async {
-    final isDark = context.read<ThemeNotifier>().isDarkMode;
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-        surfaceTintColor: Colors.transparent,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text(
-          'Sign Out',
-          style: TextStyle(color: isDark ? Colors.white : Colors.black87),
-        ),
-        content: Text(
-          'Are you sure you want to sign out? '
-          'Your data will remain saved locally.',
-          style: TextStyle(color: isDark ? Colors.white70 : Colors.black54),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.orange,
-              foregroundColor: Colors.white,
-            ),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Sign Out'),
-          ),
-        ],
-      ),
-    );
-    if (ok != true) return;
-
-    try {
-      await AuthService().logout();
-    } catch (_) {}
-
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('authToken');
-    await prefs.remove('refreshToken');
-    await prefs.remove('savedEmail');
-
-    if (!mounted) return;
-    Navigator.of(
-      context,
-    ).pushAndRemoveUntil(fadeRoute(const LandingPage()), (_) => false);
-  }
-
-  // ── Delete Account ────────────────────────────────────────────────────────
-  Future<void> _deleteAccount() async {
-    final isDark = context.read<ThemeNotifier>().isDarkMode;
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-        surfaceTintColor: Colors.transparent,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text(
-          'Delete Account',
-          style: TextStyle(color: Colors.red),
-        ),
-        content: Text(
-          'This will permanently delete your account and all data. '
-          'This cannot be undone.',
-          style: TextStyle(color: isDark ? Colors.white70 : Colors.black54),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
-            ),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-    if (ok != true) return;
-
-    try {
-      await ProfileService().deleteAccount();
-    } catch (_) {}
-
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.clear();
-
-    if (!mounted) return;
-    Navigator.of(
-      context,
-    ).pushAndRemoveUntil(fadeRoute(const LandingPage()), (_) => false);
-  }
-
-  // ── _editField ────────────────────────────────────────────────────────────
-  Widget _editField(
-    TextEditingController ctrl,
-    String label,
-    IconData icon,
-    Color textColor,
-    Color labelColor,
-    Color fillColor,
-    String? Function(String?) validator,
-  ) => TextFormField(
-    controller: ctrl,
-    style: TextStyle(color: textColor),
-    validator: validator,
-    decoration: InputDecoration(
-      labelText: label,
-      labelStyle: TextStyle(color: labelColor),
-      prefixIcon: Icon(icon, color: Colors.blue, size: 20),
-      filled: true,
-      fillColor: fillColor,
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-    ),
-  );
-
-  // ── UI helpers ─────────────────────────────────────────────────────────
-  Widget _sectionLabel(String title, bool isDark) => Padding(
-    padding: const EdgeInsets.only(left: 4),
-    child: Text(
-      title.toUpperCase(),
-      style: TextStyle(
-        fontSize: 11,
-        fontWeight: FontWeight.w700,
-        letterSpacing: 1.2,
-        color: isDark ? Colors.indigo.shade300 : Colors.blue.shade700,
-      ),
-    ),
-  );
-
-  Widget _buildCard(bool isDark, List<Widget> children) => Container(
-    decoration: BoxDecoration(
-      color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-      borderRadius: BorderRadius.circular(16),
-      boxShadow: [
-        BoxShadow(
-          color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
-          blurRadius: 10,
-          offset: const Offset(0, 4),
-        ),
-      ],
-    ),
-    child: Column(children: children),
-  );
-
-  Widget _divider(bool isDark) => Divider(
-    height: 1,
-    indent: 52,
-    color: isDark ? Colors.white10 : Colors.black.withOpacity(0.06),
-  );
-
-  Widget _switchTile({
-    required IconData icon,
-    required Color iconColor,
-    required String title,
-    required String subtitle,
-    required bool value,
-    required ValueChanged<bool> onChanged,
-    required bool isDark,
-  }) => Padding(
-    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-    child: Row(
-      children: [
-        _iconBox(icon, iconColor),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 14,
-                  color: isDark ? Colors.white : Colors.black87,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                subtitle,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: isDark ? Colors.white54 : Colors.black45,
-                ),
-              ),
-            ],
-          ),
-        ),
-        Switch(value: value, onChanged: onChanged, activeColor: Colors.blue),
-      ],
-    ),
-  );
-
-  Widget _actionTile({
-    required IconData icon,
-    required Color iconColor,
-    required String title,
-    required String subtitle,
-    required VoidCallback? onTap,
-    required bool isDark,
-    Color? textColor,
-  }) => InkWell(
-    onTap: onTap,
-    borderRadius: BorderRadius.circular(16),
-    child: Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      child: Row(
-        children: [
-          _iconBox(icon, iconColor),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14,
-                    color:
-                        textColor ?? (isDark ? Colors.white : Colors.black87),
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  subtitle,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: isDark ? Colors.white54 : Colors.black45,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          if (onTap != null)
-            Icon(
-              Icons.chevron_right_rounded,
-              size: 20,
-              color: isDark ? Colors.white30 : Colors.black26,
-            ),
-        ],
-      ),
-    ),
-  );
-
-  Widget _iconBox(IconData icon, Color color) => Container(
-    width: 36,
-    height: 36,
-    decoration: BoxDecoration(
-      color: color.withOpacity(0.12),
-      borderRadius: BorderRadius.circular(10),
-    ),
-    child: Icon(icon, color: color, size: 18),
-  );
 }

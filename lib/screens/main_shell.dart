@@ -1,16 +1,15 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../providers/theme_notifier.dart';
-import '../services/notification_store.dart';
 import '../utils/responsive.dart';
+import '../widgets/animations.dart';
+import '../widgets/brand_widgets.dart';
+import 'home_dashboard.dart';
 import 'homescreen.dart';
 import 'timetable_screen.dart';
 import 'settings_screen.dart';
-import 'notifications_screen.dart';
 
 const _blue = Color(0xFF1565C0);
 
@@ -23,9 +22,25 @@ class MainShell extends StatefulWidget {
   State<MainShell> createState() => _MainShellState();
 }
 
-class _MainShellState extends State<MainShell> {
+class _MainShellState extends State<MainShell>
+    with SingleTickerProviderStateMixin {
   late int _currentIndex;
   late final List<Widget> _screens;
+
+  // soft fade + slide whenever the tab changes (IndexedStack keeps state)
+  late final AnimationController _tabAnim = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 320),
+    value: 1,
+  );
+  late final Animation<double> _tabFade = CurvedAnimation(
+    parent: _tabAnim,
+    curve: Curves.easeOut,
+  );
+  late final Animation<Offset> _tabSlide = Tween<Offset>(
+    begin: const Offset(0, 0.025),
+    end: Offset.zero,
+  ).animate(CurvedAnimation(parent: _tabAnim, curve: Curves.easeOutCubic));
 
   /// null = use the default for the current screen size.
   double? _sidebarWidth;
@@ -67,7 +82,7 @@ class _MainShellState extends State<MainShell> {
     super.initState();
     _currentIndex = widget.initialIndex;
     _screens = [
-      _HomeTab(onNavigate: _goTo),
+      HomeDashboard(onNavigate: _goTo),
       const TimetableScreen(),
       const HomeScreen(),
       const SettingsScreen(),
@@ -87,9 +102,16 @@ class _MainShellState extends State<MainShell> {
     });
   }
 
+  @override
+  void dispose() {
+    _tabAnim.dispose();
+    super.dispose();
+  }
+
   void _goTo(int i) {
     if (i != _currentIndex) {
       setState(() => _currentIndex = i);
+      _tabAnim.forward(from: 0);
       _loadProfile(); // keeps the sidebar profile fresh after edits
     }
   }
@@ -101,21 +123,23 @@ class _MainShellState extends State<MainShell> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth;
-        final content = IndexedStack(index: _currentIndex, children: _screens);
+        final content = FadeTransition(
+          opacity: _tabFade,
+          child: SlideTransition(
+            position: _tabSlide,
+            child: IndexedStack(index: _currentIndex, children: _screens),
+          ),
+        );
 
         // ── Phone: bottom navigation (unchanged) ──────────────
         if (width < Breakpoints.medium) {
-          return Scaffold(
-            body: content,
-            bottomNavigationBar: _buildBottomNav(isDark),
-          );
+          return _buildPhone(context, isDark, content);
         }
 
         // ── Tablet / desktop / web: resizable sidebar ─────────
         final maxW = width * 0.45 < 380 ? width * 0.45 : 380.0;
-        final defaultW = width >= Breakpoints.expanded
-            ? _defaultExpandedWidth
-            : _railWidth;
+        // full sidebar only when there is room; 600–1179 px starts as a rail
+        final defaultW = width >= 1180 ? _defaultExpandedWidth : _railWidth;
         final sw = ((_sidebarWidth ?? defaultW).clamp(_railWidth, maxW))
             .toDouble();
         final collapsed = sw < _collapseThreshold;
@@ -149,6 +173,7 @@ class _MainShellState extends State<MainShell> {
                       ? 'SchoolLife'
                       : subtitleParts.join(' · '),
                   onTap: _goTo,
+                  onMore: _showMoreSheet,
                   onToggle: () => setState(
                     () => _sidebarWidth = collapsed
                         ? _defaultExpandedWidth
@@ -200,32 +225,219 @@ class _MainShellState extends State<MainShell> {
     );
   }
 
-  Widget _buildBottomNav(bool isDark) {
-    return Container(
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF0D1B2A) : Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(isDark ? 0.4 : 0.08),
-            blurRadius: 24,
-            offset: const Offset(0, -4),
+  // ══════════════════════════════════════════════════════════
+  //  PHONE LAYOUT: black bottom bar with a raised center button
+  // ══════════════════════════════════════════════════════════
+  static const double _barH = 66; // bar height (without the safe area)
+  static const double _bump = 32; // how far the center button rises
+
+  Widget _buildPhone(BuildContext context, bool isDark, Widget content) {
+    final bg = isDark ? const Color(0xFF0A0A0A) : const Color(0xFFF7F8FA);
+    final inset = MediaQuery.paddingOf(context).bottom;
+    final keyboard = MediaQuery.viewInsetsOf(context).bottom > 0;
+
+    return Scaffold(
+      backgroundColor: bg,
+      // the bar floats over the page, so the page must not resize for the
+      // keyboard (child screens still receive the keyboard insets)
+      resizeToAvoidBottomInset: false,
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: Padding(
+              padding: EdgeInsets.only(bottom: keyboard ? 0 : _barH + inset),
+              child: MediaQuery.removePadding(
+                context: context,
+                removeBottom: true,
+                child: content,
+              ),
+            ),
+          ),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: AnimatedSlide(
+              offset: keyboard ? const Offset(0, 1.3) : Offset.zero,
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOutCubic,
+              child: _buildBottomNav(inset),
+            ),
           ),
         ],
       ),
-      child: SafeArea(
-        top: false,
-        child: SizedBox(
-          height: 68,
-          child: Row(
-            children: [
-              for (var i = 0; i < _destinations.length; i++)
-                _NavItem(
-                  index: i,
-                  currentIndex: _currentIndex,
-                  destination: _destinations[i],
-                  onTap: _goTo,
-                  isDark: isDark,
+    );
+  }
+
+  Widget _buildBottomNav(double inset) {
+    final barTotal = _barH + inset;
+    return SizedBox(
+      height: barTotal + _bump,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          // black bar with a curved notch around the center button
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            height: barTotal,
+            child: CustomPaint(
+              painter: _NavBarPainter(),
+              child: Padding(
+                padding: EdgeInsets.only(bottom: inset),
+                child: Row(
+                  children: [
+                    for (var i = 0; i < 2; i++)
+                      _BarItem(
+                        destination: _destinations[i],
+                        active: i == _currentIndex,
+                        onTap: () => _goTo(i),
+                      ),
+                    const SizedBox(width: 104), // room for the notch
+                    for (var i = 2; i < 4; i++)
+                      _BarItem(
+                        destination: _destinations[i],
+                        active: i == _currentIndex,
+                        onTap: () => _goTo(i),
+                      ),
+                  ],
                 ),
+              ),
+            ),
+          ),
+          // raised "more" button
+          Positioned(
+            top: 2,
+            left: 0,
+            right: 0,
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: _MoreButton(onTap: _showMoreSheet),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Placeholder for the features that will live behind the center button.
+  void _showMoreSheet() {
+    final isDark = context.read<ThemeNotifier>().isDarkMode;
+    final card = isDark ? const Color(0xFF15181D) : Colors.white;
+    final text = isDark ? Colors.white : Colors.black87;
+    final sub = isDark ? Colors.white54 : Colors.black45;
+
+    const items = [
+      (Icons.group_add_rounded, 'Join a class', Color(0xFF1565C0)),
+      (Icons.forum_rounded, 'Communities', Color(0xFF7C3AED)),
+      (Icons.how_to_reg_rounded, 'Attendance', Color(0xFF0891B2)),
+      (Icons.assignment_rounded, 'Assignments', Color(0xFF1E88E5)),
+    ];
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: card,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.white24 : Colors.black12,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 18),
+              Text(
+                'More',
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w900,
+                  color: text,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                'New features are on the way',
+                style: TextStyle(fontSize: 13, color: sub),
+              ),
+              const SizedBox(height: 18),
+              GridView.count(
+                crossAxisCount: 2,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                mainAxisSpacing: 12,
+                crossAxisSpacing: 12,
+                childAspectRatio: 1.7,
+                children: [
+                  for (final it in items)
+                    PressScale(
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('${it.$2} is coming soon')),
+                        );
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: it.$3.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(color: it.$3.withOpacity(0.25)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(it.$1, color: it.$3, size: 24),
+                                const Spacer(),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 7,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: it.$3.withOpacity(0.15),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    'SOON',
+                                    style: TextStyle(
+                                      fontSize: 8.5,
+                                      fontWeight: FontWeight.w800,
+                                      color: it.$3,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            Text(
+                              it.$2,
+                              style: TextStyle(
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w800,
+                                color: text,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
+              ),
             ],
           ),
         ),
@@ -249,59 +461,6 @@ class _NavDestination {
   });
 }
 
-class _BrandMark extends StatelessWidget {
-  const _BrandMark({required this.showText});
-
-  final bool showText;
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = context.watch<ThemeNotifier>().isDarkMode;
-    final textColor = isDark ? Colors.white : Colors.black87;
-
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 38,
-          height: 38,
-          decoration: BoxDecoration(
-            color: _blue,
-            borderRadius: BorderRadius.circular(11),
-          ),
-          child: const Center(
-            child: Text(
-              'S',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w900,
-                color: Colors.white,
-                height: 1,
-              ),
-            ),
-          ),
-        ),
-        if (showText) ...[
-          const SizedBox(width: 10),
-          Flexible(
-            child: Text(
-              'SCHOOLLIFE',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: textColor,
-                fontSize: 14,
-                fontWeight: FontWeight.w900,
-                letterSpacing: 2,
-              ),
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-}
-
 class _Sidebar extends StatelessWidget {
   const _Sidebar({
     required this.destinations,
@@ -313,6 +472,7 @@ class _Sidebar extends StatelessWidget {
     required this.subtitle,
     required this.onTap,
     required this.onToggle,
+    required this.onMore,
   });
 
   final List<_NavDestination> destinations;
@@ -324,6 +484,7 @@ class _Sidebar extends StatelessWidget {
   final String subtitle;
   final ValueChanged<int> onTap;
   final VoidCallback onToggle;
+  final VoidCallback onMore;
 
   @override
   Widget build(BuildContext context) {
@@ -382,7 +543,7 @@ class _Sidebar extends StatelessWidget {
           children: [
             // ── Top: brand + collapse toggle ──
             if (collapsed) ...[
-              const _BrandMark(showText: false),
+              const BrandMark(showText: false),
               const SizedBox(height: 8),
               toggle,
             ] else
@@ -393,7 +554,7 @@ class _Sidebar extends StatelessWidget {
                       padding: EdgeInsets.only(left: 4),
                       child: Align(
                         alignment: Alignment.centerLeft,
-                        child: _BrandMark(showText: true),
+                        child: BrandMark(showText: true),
                       ),
                     ),
                   ),
@@ -418,6 +579,8 @@ class _Sidebar extends StatelessWidget {
                         collapsed: collapsed,
                         onTap: () => onTap(i),
                       ),
+                    const SizedBox(height: 14),
+                    _SidebarMore(collapsed: collapsed, onTap: onMore),
                   ],
                 ),
               ),
@@ -431,7 +594,7 @@ class _Sidebar extends StatelessWidget {
                   : Colors.black.withOpacity(0.08),
             ),
             if (collapsed) ...[
-              _BellButton(isDark: isDark, badgeBorder: background, size: 40),
+              BellButton(isDark: isDark, badgeBorder: background, size: 40),
               const SizedBox(height: 10),
               Tooltip(
                 message: name.isNotEmpty ? name : 'Settings',
@@ -489,13 +652,108 @@ class _Sidebar extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 6),
-                  _BellButton(
+                  BellButton(
                     isDark: isDark,
                     badgeBorder: background,
                     size: 40,
                   ),
                 ],
               ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// "More" entry of the sidebar — same job as the raised button on phones.
+class _SidebarMore extends StatelessWidget {
+  const _SidebarMore({required this.collapsed, required this.onTap});
+
+  final bool collapsed;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    const gradient = LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: [Color(0xFF1E88E5), Color(0xFF0D47A1)],
+    );
+
+    if (collapsed) {
+      return Center(
+        child: Tooltip(
+          message: 'More',
+          preferBelow: false,
+          child: PressScale(
+            onTap: onTap,
+            child: Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                gradient: gradient,
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF1E88E5).withOpacity(0.35),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: const Icon(Icons.apps_rounded, color: Colors.white),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return PressScale(
+      onTap: onTap,
+      child: Container(
+        height: 48,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        decoration: BoxDecoration(
+          gradient: gradient,
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF1E88E5).withOpacity(0.3),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.apps_rounded, color: Colors.white, size: 22),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Text(
+                'More',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Text(
+                'SOON',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 8.5,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
           ],
         ),
       ),
@@ -641,1212 +899,90 @@ class _ResizeHandleState extends State<_ResizeHandle> {
   }
 }
 
-/// Notification bell with unread badge (used in the header and sidebar).
-class _BellButton extends StatelessWidget {
-  const _BellButton({
-    required this.isDark,
-    required this.badgeBorder,
-    this.size = 42,
-  });
+// ══════════════════════════════════════════════════════════
+//  BOTTOM BAR PIECES (phone)
+// ══════════════════════════════════════════════════════════
 
-  final bool isDark;
-  final Color badgeBorder;
-  final double size;
+/// Black bar: rounded top corners + a smooth notch for the center button.
+class _NavBarPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    const r = 28.0; // top corner radius
+    const half = 50.0; // half width of the notch
+    const depth = 42.0; // notch depth
+    final w = size.width, h = size.height, cx = w / 2;
+
+    final path = Path()
+      ..moveTo(0, r)
+      ..quadraticBezierTo(0, 0, r, 0)
+      ..lineTo(cx - half - 18, 0)
+      ..cubicTo(cx - half + 4, 0, cx - half + 2, depth, cx, depth)
+      ..cubicTo(cx + half - 2, depth, cx + half - 4, 0, cx + half + 18, 0)
+      ..lineTo(w - r, 0)
+      ..quadraticBezierTo(w, 0, w, r)
+      ..lineTo(w, h)
+      ..lineTo(0, h)
+      ..close();
+
+    canvas.drawShadow(path, Colors.black, 12, true);
+    canvas.drawPath(path, Paint()..color = Colors.black);
+  }
 
   @override
-  Widget build(BuildContext context) {
-    return Consumer<NotificationStore>(
-      builder: (context, store, _) {
-        final count = store.unreadCount;
-        return GestureDetector(
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const NotificationsScreen()),
-          ),
-          child: MouseRegion(
-            cursor: SystemMouseCursors.click,
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                Container(
-                  width: size,
-                  height: size,
-                  decoration: BoxDecoration(
-                    color: _blue.withOpacity(isDark ? 0.2 : 0.1),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: const Icon(
-                    Icons.notifications_outlined,
-                    color: _blue,
-                    size: 21,
-                  ),
-                ),
-                if (count > 0)
-                  Positioned(
-                    top: -4,
-                    right: -4,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 5,
-                        vertical: 1,
-                      ),
-                      constraints: const BoxConstraints(
-                        minWidth: 18,
-                        minHeight: 18,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.red,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: badgeBorder, width: 2),
-                      ),
-                      child: Text(
-                        count > 99 ? '99+' : '$count',
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
+  bool shouldRepaint(_NavBarPainter old) => false;
 }
 
-// ══════════════════════════════════════════════════════════
-//  HOME TAB
-// ══════════════════════════════════════════════════════════
-class _HomeTab extends StatefulWidget {
-  const _HomeTab({required this.onNavigate});
-
-  final ValueChanged<int> onNavigate;
-
-  @override
-  State<_HomeTab> createState() => _HomeTabState();
-}
-
-class _HomeTabState extends State<_HomeTab> {
-  String _name = '';
-  String _department = '';
-  String _level = '';
-  String _school = '';
-
-  static const _weekdays = [
-    'Monday',
-    'Tuesday',
-    'Wednesday',
-    'Thursday',
-    'Friday',
-    'Saturday',
-    'Sunday',
-  ];
-  static const _months = [
-    'January',
-    'February',
-    'March',
-    'April',
-    'May',
-    'June',
-    'July',
-    'August',
-    'September',
-    'October',
-    'November',
-    'December',
-  ];
-
-  @override
-  void initState() {
-    super.initState();
-    _loadProfile();
-  }
-
-  Future<void> _loadProfile() async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString('profile');
-    if (raw != null) {
-      final m = jsonDecode(raw) as Map<String, dynamic>;
-      if (!mounted) return;
-      setState(() {
-        _name = m['name'] ?? '';
-        _department = m['department'] ?? '';
-        _level = m['level'] ?? '';
-        _school = m['school'] ?? '';
-      });
-    }
-  }
-
-  String get _greeting {
-    final h = DateTime.now().hour;
-    if (h < 12) return 'Good Morning';
-    if (h < 17) return 'Good Afternoon';
-    return 'Good Evening';
-  }
-
-  String get _firstName => _name.split(' ').first;
-
-  String get _dateLabel {
-    final n = DateTime.now();
-    return '${_weekdays[n.weekday - 1]}, ${n.day} ${_months[n.month - 1]}';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = context.watch<ThemeNotifier>().isDarkMode;
-    final bg = isDark ? const Color(0xFF0A0A0A) : const Color(0xFFF7F8FA);
-    final cardBg = isDark ? const Color(0xFF15181D) : Colors.white;
-    final textPrimary = isDark ? Colors.white : Colors.black87;
-    final textSecondary = isDark ? Colors.white54 : Colors.black45;
-
-    final screenWidth = MediaQuery.sizeOf(context).width;
-    final isDesktop = screenWidth >= Breakpoints.expanded;
-    final showBrand = screenWidth < Breakpoints.medium;
-
-    return Scaffold(
-      backgroundColor: bg,
-      body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final cw = constraints.maxWidth;
-
-            if (isDesktop) {
-              return _desktopHome(
-                cw: cw,
-                isDark: isDark,
-                cardBg: cardBg,
-                textPrimary: textPrimary,
-                textSecondary: textSecondary,
-              );
-            }
-
-            // ── Phone / tablet layout ───────────────────────
-            final sidePad = responsiveSidePadding(cw);
-            final narrow = cw < 600;
-            final threeInfoCards = cw >= 640;
-            final tipColumns = cw >= 700 ? 2 : 1;
-
-            final greetingBlock = Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '$_greeting,',
-                  style: TextStyle(fontSize: 15, color: textSecondary),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  _firstName.isNotEmpty ? _firstName : 'Student',
-                  style: TextStyle(
-                    fontSize: 26,
-                    fontWeight: FontWeight.w900,
-                    color: textPrimary,
-                  ),
-                ),
-              ],
-            );
-
-            final infoCards = [
-              _infoCard(
-                icon: Icons.account_balance_outlined,
-                label: 'Department',
-                value: _department.isNotEmpty ? _department : '—',
-                color: const Color(0xFF0891B2),
-                cardBg: cardBg,
-                isDark: isDark,
-                textPrimary: textPrimary,
-                textSecondary: textSecondary,
-              ),
-              _infoCard(
-                icon: Icons.stairs_outlined,
-                label: 'Level',
-                value: _level.isNotEmpty ? '$_level Level' : '—',
-                color: const Color(0xFF7C3AED),
-                cardBg: cardBg,
-                isDark: isDark,
-                textPrimary: textPrimary,
-                textSecondary: textSecondary,
-              ),
-              _infoCard(
-                icon: Icons.account_balance_rounded,
-                label: 'School',
-                value: _school.isNotEmpty ? _school : '—',
-                color: _blue,
-                cardBg: cardBg,
-                isDark: isDark,
-                textPrimary: textPrimary,
-                textSecondary: textSecondary,
-                fullWidth: true,
-              ),
-            ];
-
-            final actions = [
-              _quickAction(
-                icon: Icons.calendar_month_rounded,
-                label: 'Timetable',
-                color: _blue,
-                textPrimary: textPrimary,
-                onTap: () => widget.onNavigate(1),
-              ),
-              _quickAction(
-                icon: Icons.school_rounded,
-                label: 'Grades',
-                color: const Color(0xFF0891B2),
-                textPrimary: textPrimary,
-                onTap: () => widget.onNavigate(2),
-              ),
-              _quickAction(
-                icon: Icons.settings_rounded,
-                label: 'Settings',
-                color: const Color(0xFF7C3AED),
-                textPrimary: textPrimary,
-                onTap: () => widget.onNavigate(3),
-              ),
-            ];
-
-            return ListView(
-              padding: EdgeInsets.fromLTRB(sidePad, 16, sidePad, 32),
-              children: [
-                // ── Header ────────────────────────────────
-                if (showBrand) ...[
-                  Row(
-                    children: [
-                      const _BrandMark(showText: true),
-                      const Spacer(),
-                      _BellButton(isDark: isDark, badgeBorder: bg),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-                  greetingBlock,
-                ] else
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(child: greetingBlock),
-                      _BellButton(isDark: isDark, badgeBorder: bg),
-                    ],
-                  ),
-                const SizedBox(height: 20),
-
-                // ── Blue gradient CTA banner ──────────────
-                _TapScale(
-                  onTap: () => widget.onNavigate(2),
-                  child: Container(
-                    width: double.infinity,
-                    padding: EdgeInsets.all(narrow ? 20 : 26),
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [Color(0xFF1E88E5), Color(0xFF0D47A1)],
-                      ),
-                      borderRadius: BorderRadius.circular(22),
-                      boxShadow: [
-                        BoxShadow(
-                          color: _blue.withOpacity(0.35),
-                          blurRadius: 18,
-                          offset: const Offset(0, 8),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                'Check your grades',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 17,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                              const SizedBox(height: 6),
-                              Text(
-                                narrow
-                                    ? 'See your latest results\nand track your progress'
-                                    : 'See your latest results and track your progress',
-                                style: const TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: 13,
-                                  height: 1.3,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Container(
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.2),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.arrow_forward,
-                            color: Colors.white,
-                            size: 18,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 28),
-
-                // ── Quick Actions (circle style) ──────────
-                _sectionTitle('Quick Actions', textPrimary),
-                const SizedBox(height: 14),
-                if (narrow)
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: actions,
-                  )
-                else
-                  Wrap(spacing: 44, runSpacing: 16, children: actions),
-                const SizedBox(height: 28),
-
-                // ── Academic Info ─────────────────────────
-                _sectionTitle('Academic Info', textPrimary),
-                const SizedBox(height: 14),
-                if (threeInfoCards)
-                  ResponsiveGrid(columns: 3, children: infoCards)
-                else ...[
-                  ResponsiveGrid(columns: 2, children: infoCards.sublist(0, 2)),
-                  const SizedBox(height: 14),
-                  infoCards[2],
-                ],
-                const SizedBox(height: 28),
-
-                // ── Tips ───────────────────────────────────
-                _sectionTitle('Study Tips', textPrimary),
-                const SizedBox(height: 12),
-                ResponsiveGrid(
-                  columns: tipColumns,
-                  spacing: 12,
-                  runSpacing: 12,
-                  children: _tips(isDark),
-                ),
-
-                if (kIsWeb) _downloadApkButton(isDark),
-              ],
-            );
-          },
-        ),
-      ),
-    );
-  }
-
-  // ════════════════════════════════════════════════════════
-  //  DESKTOP DASHBOARD
-  // ════════════════════════════════════════════════════════
-  Widget _desktopHome({
-    required double cw,
-    required bool isDark,
-    required Color cardBg,
-    required Color textPrimary,
-    required Color textSecondary,
-  }) {
-    final sidePad = responsiveSidePadding(cw, maxWidth: 1280);
-    final twoCol = cw >= 900;
-    final initial = _name.isNotEmpty ? _name[0].toUpperCase() : 'S';
-
-    // ── Greeting header ──
-    final header = Row(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '$_greeting,',
-                style: TextStyle(fontSize: 16, color: textSecondary),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                _firstName.isNotEmpty ? _firstName : 'Student',
-                style: TextStyle(
-                  fontSize: 34,
-                  fontWeight: FontWeight.w900,
-                  color: textPrimary,
-                ),
-              ),
-            ],
-          ),
-        ),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-          decoration: BoxDecoration(
-            color: cardBg,
-            borderRadius: BorderRadius.circular(14),
-            boxShadow: _cardShadow(isDark),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.today_rounded, size: 16, color: _blue),
-              const SizedBox(width: 8),
-              Text(
-                _dateLabel,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: textPrimary,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-
-    // ── Hero banner ──
-    final hero = _TapScale(
-      onTap: () => widget.onNavigate(2),
-      child: Container(
-        width: double.infinity,
-        clipBehavior: Clip.antiAlias,
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFF1E88E5), Color(0xFF0D47A1)],
-          ),
-          borderRadius: BorderRadius.circular(28),
-          boxShadow: [
-            BoxShadow(
-              color: _blue.withOpacity(0.35),
-              blurRadius: 24,
-              offset: const Offset(0, 10),
-            ),
-          ],
-        ),
-        child: Stack(
-          children: [
-            Positioned(
-              right: -50,
-              top: -60,
-              child: Container(
-                width: 240,
-                height: 240,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.white.withOpacity(0.07),
-                ),
-              ),
-            ),
-            Positioned(
-              right: 110,
-              bottom: -90,
-              child: Container(
-                width: 190,
-                height: 190,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.white.withOpacity(0.06),
-                ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(32),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Check your grades',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 26,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        const Text(
-                          'See your latest results and track your progress',
-                          style: TextStyle(
-                            color: Colors.white70,
-                            fontSize: 14,
-                            height: 1.4,
-                          ),
-                        ),
-                        const SizedBox(height: 22),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 18,
-                            vertical: 11,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(30),
-                          ),
-                          child: const Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                'View grades',
-                                style: TextStyle(
-                                  color: _blue,
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: 13,
-                                ),
-                              ),
-                              SizedBox(width: 8),
-                              Icon(
-                                Icons.arrow_forward_rounded,
-                                size: 16,
-                                color: _blue,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (cw >= 760)
-                    Icon(
-                      Icons.school_rounded,
-                      size: 104,
-                      color: Colors.white.withOpacity(0.25),
-                    ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-
-    // ── Quick action cards ──
-    final actionCards = [
-      _desktopActionCard(
-        icon: Icons.calendar_month_rounded,
-        label: 'Timetable',
-        desc: 'Lectures, study sessions & exams',
-        color: _blue,
-        cardBg: cardBg,
-        isDark: isDark,
-        textPrimary: textPrimary,
-        textSecondary: textSecondary,
-        onTap: () => widget.onNavigate(1),
-      ),
-      _desktopActionCard(
-        icon: Icons.school_rounded,
-        label: 'Grades',
-        desc: 'Results and progress',
-        color: const Color(0xFF0891B2),
-        cardBg: cardBg,
-        isDark: isDark,
-        textPrimary: textPrimary,
-        textSecondary: textSecondary,
-        onTap: () => widget.onNavigate(2),
-      ),
-      _desktopActionCard(
-        icon: Icons.settings_rounded,
-        label: 'Settings',
-        desc: 'Profile and preferences',
-        color: const Color(0xFF7C3AED),
-        cardBg: cardBg,
-        isDark: isDark,
-        textPrimary: textPrimary,
-        textSecondary: textSecondary,
-        onTap: () => widget.onNavigate(3),
-      ),
-    ];
-
-    final main = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        hero,
-        const SizedBox(height: 30),
-        _sectionTitle('Quick Actions', textPrimary),
-        const SizedBox(height: 14),
-        ResponsiveGrid(minItemWidth: 210, children: actionCards),
-        const SizedBox(height: 30),
-        _sectionTitle('Study Tips', textPrimary),
-        const SizedBox(height: 14),
-        ResponsiveGrid(
-          minItemWidth: 300,
-          spacing: 14,
-          runSpacing: 14,
-          children: _tips(isDark),
-        ),
-      ],
-    );
-
-    // ── Right panel: profile + academic info ──
-    final profile = Container(
-      padding: const EdgeInsets.all(22),
-      decoration: BoxDecoration(
-        color: cardBg,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: _cardShadow(isDark),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 58,
-                height: 58,
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [Color(0xFF1E88E5), Color(0xFF0D47A1)],
-                  ),
-                ),
-                child: Center(
-                  child: Text(
-                    initial,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 24,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      _name.isNotEmpty ? _name : 'Student',
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w900,
-                        color: textPrimary,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      _level.isNotEmpty ? '$_level Level' : 'SchoolLife',
-                      style: TextStyle(fontSize: 13, color: textSecondary),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 18),
-          Divider(
-            height: 1,
-            color: isDark
-                ? Colors.white.withOpacity(0.08)
-                : Colors.black.withOpacity(0.07),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'ACADEMIC INFO',
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 1.4,
-              color: textSecondary,
-            ),
-          ),
-          const SizedBox(height: 14),
-          _profileRow(
-            icon: Icons.account_balance_outlined,
-            label: 'Department',
-            value: _department.isNotEmpty ? _department : '—',
-            color: const Color(0xFF0891B2),
-            textPrimary: textPrimary,
-            textSecondary: textSecondary,
-          ),
-          const SizedBox(height: 14),
-          _profileRow(
-            icon: Icons.stairs_outlined,
-            label: 'Level',
-            value: _level.isNotEmpty ? '$_level Level' : '—',
-            color: const Color(0xFF7C3AED),
-            textPrimary: textPrimary,
-            textSecondary: textSecondary,
-          ),
-          const SizedBox(height: 14),
-          _profileRow(
-            icon: Icons.account_balance_rounded,
-            label: 'School',
-            value: _school.isNotEmpty ? _school : '—',
-            color: _blue,
-            textPrimary: textPrimary,
-            textSecondary: textSecondary,
-          ),
-        ],
-      ),
-    );
-
-    final download = kIsWeb
-        ? Container(
-            padding: const EdgeInsets.all(22),
-            decoration: BoxDecoration(
-              color: cardBg,
-              borderRadius: BorderRadius.circular(24),
-              boxShadow: _cardShadow(isDark),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF16A34A).withOpacity(0.12),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.android_rounded,
-                        color: Color(0xFF16A34A),
-                        size: 22,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Get the Android app',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w800,
-                              color: textPrimary,
-                            ),
-                          ),
-                          Text(
-                            'Take SchoolLife with you',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: textSecondary,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                _downloadApkButton(isDark, top: 16),
-              ],
-            ),
-          )
-        : const SizedBox.shrink();
-
-    final side = Column(
-      children: [
-        profile,
-        if (kIsWeb) ...[const SizedBox(height: 18), download],
-      ],
-    );
-
-    return ListView(
-      padding: EdgeInsets.fromLTRB(sidePad, 28, sidePad, 40),
-      children: [
-        header,
-        const SizedBox(height: 26),
-        if (twoCol)
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(child: main),
-              const SizedBox(width: 28),
-              SizedBox(width: 340, child: side),
-            ],
-          )
-        else ...[
-          main,
-          const SizedBox(height: 28),
-          side,
-        ],
-      ],
-    );
-  }
-
-  List<BoxShadow> _cardShadow(bool isDark) => [
-    BoxShadow(
-      color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
-      blurRadius: 12,
-      offset: const Offset(0, 3),
-    ),
-  ];
-
-  Widget _sectionTitle(String text, Color color) => Text(
-    text,
-    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: color),
-  );
-
-  Widget _desktopActionCard({
-    required IconData icon,
-    required String label,
-    required String desc,
-    required Color color,
-    required Color cardBg,
-    required bool isDark,
-    required Color textPrimary,
-    required Color textSecondary,
-    required VoidCallback onTap,
-  }) {
-    return Material(
-      color: cardBg,
-      borderRadius: BorderRadius.circular(20),
-      elevation: 0,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(20),
-        onTap: onTap,
-        hoverColor: color.withOpacity(0.05),
-        child: Container(
-          padding: const EdgeInsets.all(18),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: _cardShadow(isDark),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: color.withOpacity(0.12),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(icon, color: color, size: 24),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      label,
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w800,
-                        color: textPrimary,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      desc,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: textSecondary,
-                        height: 1.3,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Icon(Icons.chevron_right_rounded, color: textSecondary),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _profileRow({
-    required IconData icon,
-    required String label,
-    required String value,
-    required Color color,
-    required Color textPrimary,
-    required Color textSecondary,
-  }) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 34,
-          height: 34,
-          decoration: BoxDecoration(
-            color: color.withOpacity(0.15),
-            shape: BoxShape.circle,
-          ),
-          child: Icon(icon, size: 17, color: color),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(label, style: TextStyle(fontSize: 11, color: textSecondary)),
-              const SizedBox(height: 2),
-              Text(
-                value,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  color: textPrimary,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _quickAction({
-    required IconData icon,
-    required String label,
-    required Color color,
-    required Color textPrimary,
-    required VoidCallback onTap,
-  }) {
-    return _TapScale(
-      onTap: onTap,
-      child: Column(
-        children: [
-          Container(
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.12),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, color: color, size: 24),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: textPrimary,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _infoCard({
-    required IconData icon,
-    required String label,
-    required String value,
-    required Color color,
-    required Color cardBg,
-    required bool isDark,
-    required Color textPrimary,
-    required Color textSecondary,
-    bool fullWidth = false,
-  }) {
-    return Container(
-      width: fullWidth ? double.infinity : null,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: cardBg,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.15),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, size: 17, color: color),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(label, style: TextStyle(fontSize: 11, color: textSecondary)),
-                const SizedBox(height: 2),
-                Text(
-                  value,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: textPrimary,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _downloadApkButton(bool isDark, {double top = 28}) => Align(
-    alignment: Alignment.centerLeft,
-    child: ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 420),
-      child: Container(
-        margin: EdgeInsets.only(top: top),
-        width: double.infinity,
-        child: ElevatedButton.icon(
-          onPressed: () async {
-            // NOTE: backend URL and APK file name are unchanged on purpose.
-            // Update them only after the server side is renamed too.
-            final uri = Uri.parse(
-              'https://gradexbackend.onrender.com/downloads/gradex.apk',
-            );
-            if (await canLaunchUrl(uri)) {
-              await launchUrl(uri, webOnlyWindowName: '_self');
-            }
-          },
-          icon: const Icon(Icons.download_rounded),
-          label: const Text(
-            'Download SchoolLife for Android',
-            style: TextStyle(fontWeight: FontWeight.w700),
-          ),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: _blue,
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-            elevation: 0,
-          ),
-        ),
-      ),
-    ),
-  );
-
-  List<Widget> _tips(bool isDark) {
-    const tips = [
-      (
-        '📚',
-        'Review your notes within 24 hours of class to retain 80% more information.',
-      ),
-      ('⏰', 'Use the Pomodoro technique: 25 min focused study, 5 min break.'),
-      (
-        '🎯',
-        'Set specific daily study goals instead of vague "study more" intentions.',
-      ),
-      (
-        '💤',
-        'Sleep at least 7 hours — memory consolidation happens during sleep.',
-      ),
-    ];
-
-    return tips
-        .map(
-          (t) => Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: isDark ? const Color(0xFF1E293B) : Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(t.$1, style: const TextStyle(fontSize: 22)),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    t.$2,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: isDark ? Colors.white70 : Colors.black54,
-                      height: 1.5,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        )
-        .toList();
-  }
-}
-
-// ══════════════════════════════════════════════════════════
-//  BOTTOM NAV ITEM (phone)
-// ══════════════════════════════════════════════════════════
-class _NavItem extends StatelessWidget {
-  final int index;
-  final int currentIndex;
-  final _NavDestination destination;
-  final ValueChanged<int> onTap;
-  final bool isDark;
-
-  const _NavItem({
-    required this.index,
-    required this.currentIndex,
+class _BarItem extends StatelessWidget {
+  const _BarItem({
     required this.destination,
+    required this.active,
     required this.onTap,
-    required this.isDark,
   });
+
+  final _NavDestination destination;
+  final bool active;
+  final VoidCallback onTap;
+
+  static const Color _accent = Color(0xFF1E88E5);
 
   @override
   Widget build(BuildContext context) {
-    final isActive = index == currentIndex;
-    const activeColor = _blue;
-    final inactiveColor = isDark ? Colors.white38 : Colors.black38;
-
+    final color = active ? _accent : Colors.white54;
     return Expanded(
       child: GestureDetector(
-        onTap: () => onTap(index),
         behavior: HitTestBehavior.opaque,
+        onTap: onTap,
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOut,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
               decoration: BoxDecoration(
-                color: isActive
-                    ? activeColor.withOpacity(0.12)
+                color: active
+                    ? _accent.withOpacity(0.16)
                     : Colors.transparent,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(14),
               ),
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 200),
+              child: AnimatedScale(
+                scale: active ? 1.12 : 1.0,
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeOutBack,
                 child: Icon(
-                  isActive ? destination.activeIcon : destination.icon,
-                  key: ValueKey(isActive),
-                  color: isActive ? activeColor : inactiveColor,
-                  size: 24,
+                  active ? destination.activeIcon : destination.icon,
+                  color: color,
+                  size: 23,
                 ),
               ),
             ),
             const SizedBox(height: 2),
             AnimatedDefaultTextStyle(
-              duration: const Duration(milliseconds: 200),
+              duration: const Duration(milliseconds: 220),
               style: TextStyle(
-                color: isActive ? activeColor : inactiveColor,
+                color: color,
                 fontSize: 10,
-                fontWeight: isActive ? FontWeight.w700 : FontWeight.w400,
+                fontWeight: active ? FontWeight.w700 : FontWeight.w500,
               ),
               child: Text(destination.label),
             ),
@@ -1857,33 +993,57 @@ class _NavItem extends StatelessWidget {
   }
 }
 
-class _TapScale extends StatefulWidget {
-  const _TapScale({required this.child, required this.onTap});
-  final Widget child;
+/// Raised center button with a slow breathing glow.
+class _MoreButton extends StatefulWidget {
+  const _MoreButton({required this.onTap});
+
   final VoidCallback onTap;
 
   @override
-  State<_TapScale> createState() => _TapScaleState();
+  State<_MoreButton> createState() => _MoreButtonState();
 }
 
-class _TapScaleState extends State<_TapScale> {
-  double _scale = 1.0;
+class _MoreButtonState extends State<_MoreButton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 2200),
+  )..repeat(reverse: true);
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      child: GestureDetector(
-        onTapDown: (_) => setState(() => _scale = 0.97),
-        onTapUp: (_) => setState(() => _scale = 1.0),
-        onTapCancel: () => setState(() => _scale = 1.0),
-        onTap: widget.onTap,
-        child: AnimatedScale(
-          scale: _scale,
-          duration: const Duration(milliseconds: 120),
-          curve: Curves.easeOut,
-          child: widget.child,
+    return PressScale(
+      onTap: widget.onTap,
+      pressedScale: 0.92,
+      child: AnimatedBuilder(
+        animation: _c,
+        builder: (_, child) => Container(
+          width: 62,
+          height: 62,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFF1E88E5), Color(0xFF0D47A1)],
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF1E88E5).withOpacity(0.25 + 0.25 * _c.value),
+                blurRadius: 14 + 10 * _c.value,
+                spreadRadius: 1 + 2 * _c.value,
+              ),
+            ],
+          ),
+          child: child,
         ),
+        child: const Icon(Icons.apps_rounded, color: Colors.white, size: 28),
       ),
     );
   }

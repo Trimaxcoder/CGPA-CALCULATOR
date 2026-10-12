@@ -71,7 +71,7 @@ class _GradesDesktopState extends State<_GradesDesktop> {
 
             return ListView(
               padding: EdgeInsets.fromLTRB(side, 26, side, 40),
-              children: [
+              children: staggered([
                 _header(isDark, textPrimary, textSecondary),
                 const SizedBox(height: 22),
                 _summary(),
@@ -93,7 +93,7 @@ class _GradesDesktopState extends State<_GradesDesktop> {
                   const SizedBox(height: 20),
                   SizedBox(height: 600, child: right),
                 ],
-              ],
+              ]),
             );
           },
         ),
@@ -277,28 +277,70 @@ class _GradesDesktopState extends State<_GradesDesktop> {
                   child: Row(
                     children: [
                       Expanded(
-                        child: s._statCard(
-                          'Total Units',
-                          '${s.totalUnits} credits',
-                          Icons.library_books,
-                          Colors.blue,
-                        ),
+                        flex: 3,
+                        child: s._gradeDistributionCard(compact: true),
                       ),
                       const SizedBox(width: 14),
-                      Expanded(
-                        child: s._statCard(
-                          'Courses Taken',
-                          '${s.totalCourses}',
-                          Icons.menu_book,
-                          Colors.purple,
-                        ),
-                      ),
+                      Expanded(flex: 2, child: _unitsCoursesCard()),
                     ],
                   ),
                 ),
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _unitsCoursesCard() {
+    final dark = s.isDarkMode;
+    Widget row(IconData icon, Color color, String value, String label) => Row(
+      children: [
+        Container(
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.12),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, size: 18, color: color),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                value,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w900,
+                  color: dark ? Colors.white : Colors.black87,
+                ),
+              ),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: dark ? Colors.white54 : Colors.black45,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: s._gCardDeco(),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: [
+          row(Icons.library_books, Colors.blue, '${s.totalUnits}', 'Total units'),
+          row(Icons.menu_book, Colors.purple, '${s.totalCourses}', 'Courses taken'),
         ],
       ),
     );
@@ -360,15 +402,26 @@ class _GradesDesktopState extends State<_GradesDesktop> {
                 letterSpacing: 1,
               ),
             ),
-            Text(
-              s._cgpaHidden ? '••••' : cgpa.toStringAsFixed(2),
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 56,
-                fontWeight: FontWeight.w900,
-                height: 1.1,
-              ),
-            ),
+            s._cgpaHidden
+                ? const Text(
+                    '••••',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 56,
+                      fontWeight: FontWeight.w900,
+                      height: 1.1,
+                    ),
+                  )
+                : AnimatedCount(
+                    value: cgpa,
+                    decimals: 2,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 56,
+                      fontWeight: FontWeight.w900,
+                      height: 1.1,
+                    ),
+                  ),
             const SizedBox(height: 8),
             if (!s._cgpaHidden)
               Container(

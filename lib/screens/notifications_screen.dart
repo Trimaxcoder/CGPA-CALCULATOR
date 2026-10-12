@@ -8,6 +8,7 @@ import '../stores/announcement_store.dart';
 import '../services/notification_router.dart';
 import '../providers/theme_notifier.dart';
 import '../utils/responsive.dart';
+import '../widgets/animations.dart';
 import '../widgets/desktop_page.dart';
 import 'announcement_detail_screen.dart';
 
@@ -182,10 +183,17 @@ class _NotificationsScreenState extends State<NotificationsScreen>
                       ],
                     ),
                   ),
-                  TabBar(
+                  // Padded + label-sized indicator so the white underline stays
+                  // inside the curved header instead of poking out of the corners
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
+                    child: TabBar(
                     controller: _tab,
-                    indicatorColor: Colors.white,
-                    indicatorWeight: 3,
+                    indicatorSize: TabBarIndicatorSize.label,
+                    indicator: const UnderlineTabIndicator(
+                      borderSide: BorderSide(color: Colors.white, width: 3),
+                      insets: EdgeInsets.symmetric(horizontal: 6),
+                    ),
                     labelColor: Colors.white,
                     unselectedLabelColor: Colors.white54,
                     labelStyle: const TextStyle(
@@ -218,6 +226,7 @@ class _NotificationsScreenState extends State<NotificationsScreen>
                         ),
                       ),
                     ],
+                  ),
                   ),
                 ],
               ),
@@ -847,7 +856,8 @@ class _NotifCard extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) => InkWell(
+  Widget build(BuildContext context) => FadeSlideIn(
+    child: InkWell(
     borderRadius: BorderRadius.circular(14),
     onTap: onTap,
     child: Container(
@@ -940,7 +950,7 @@ class _NotifCard extends StatelessWidget {
         ],
       ),
     ),
-  );
+  ));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -969,7 +979,8 @@ class _AnnouncementCard extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) => InkWell(
+  Widget build(BuildContext context) => FadeSlideIn(
+    child: InkWell(
     borderRadius: BorderRadius.circular(14),
     onTap: onTap,
     child: Container(
@@ -1101,5 +1112,5 @@ class _AnnouncementCard extends StatelessWidget {
         ],
       ),
     ),
-  );
+  ));
 }
