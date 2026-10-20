@@ -196,3 +196,53 @@ Future<bool> showConfirmDialog(
   );
   return res ?? false;
 }
+
+/// Outlined "cancel" button used inside [AppDialog] actions.
+class DialogCancelButton extends StatelessWidget {
+  const DialogCancelButton({super.key, this.label = 'Cancel', this.onPressed});
+
+  final String label;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return OutlinedButton(
+      onPressed: onPressed ?? () => Navigator.pop(context, false),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: dark ? Colors.white70 : Colors.black54,
+        side: BorderSide(color: dark ? Colors.white24 : Colors.black12),
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      ),
+      child: Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
+    );
+  }
+}
+
+/// Filled confirm button used inside [AppDialog] actions.
+class DialogConfirmButton extends StatelessWidget {
+  const DialogConfirmButton({
+    super.key,
+    required this.label,
+    this.color = _blue,
+    this.onPressed,
+  });
+
+  final String label;
+  final Color color;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) => ElevatedButton(
+    onPressed: onPressed ?? () => Navigator.pop(context, true),
+    style: ElevatedButton.styleFrom(
+      backgroundColor: color,
+      foregroundColor: Colors.white,
+      elevation: 0,
+      padding: const EdgeInsets.symmetric(vertical: 14),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+    ),
+    child: Text(label, style: const TextStyle(fontWeight: FontWeight.w800)),
+  );
+}

@@ -138,6 +138,22 @@ class _MyAppState extends State<MyApp> {
   // A sheet that passes its own `constraints:` still overrides this.
   static const _sheetTheme = BottomSheetThemeData(
     constraints: BoxConstraints(maxWidth: 600),
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+    ),
+  );
+
+  // One look for every dialog / popup menu / snackbar in the app
+  static final _popupTheme = PopupMenuThemeData(
+    elevation: 8,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+  );
+  static final _snackTheme = SnackBarThemeData(
+    behavior: SnackBarBehavior.floating,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+  );
+  static final _dialogShape = RoundedRectangleBorder(
+    borderRadius: BorderRadius.circular(28),
   );
 
   @override
@@ -158,14 +174,38 @@ class _MyAppState extends State<MyApp> {
             useMaterial3: false,
             brightness: Brightness.light,
             bottomSheetTheme: _sheetTheme,
+            popupMenuTheme: _popupTheme,
+            snackBarTheme: _snackTheme,
+            dialogTheme: DialogThemeData(
+              shape: _dialogShape,
+              backgroundColor: Colors.white,
+              surfaceTintColor: Colors.transparent,
+              titleTextStyle: const TextStyle(
+                fontSize: 19,
+                fontWeight: FontWeight.w900,
+                color: Colors.black87,
+              ),
+            ),
           ),
           darkTheme: ThemeData(
             useMaterial3: false,
             brightness: Brightness.dark,
             scaffoldBackgroundColor: const Color(0xFF0A0A0A),
             bottomSheetTheme: _sheetTheme,
+            popupMenuTheme: _popupTheme,
+            snackBarTheme: _snackTheme,
+            dialogTheme: DialogThemeData(
+              shape: _dialogShape,
+              backgroundColor: const Color(0xFF15181D),
+              surfaceTintColor: Colors.transparent,
+              titleTextStyle: const TextStyle(
+                fontSize: 19,
+                fontWeight: FontWeight.w900,
+                color: Colors.white,
+              ),
+            ),
           ),
-          themeMode: theme.isDarkMode ? ThemeMode.dark : ThemeMode.light,
+          themeMode: theme.themeMode,
           home: const SplashScreen(),
         ),
       ),

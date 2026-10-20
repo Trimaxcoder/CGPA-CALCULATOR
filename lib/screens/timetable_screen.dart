@@ -13,6 +13,7 @@ import '../widgets/snackBar.dart';
 import '../services/notification_service.dart';
 import 'compose_announcement_screen.dart';
 import '../widgets/animations.dart';
+import '../widgets/app_dialog.dart';
 import '../widgets/class_card.dart';
 
 class TimetableScreen extends StatefulWidget {
@@ -103,8 +104,10 @@ class _TimetableScreenState extends State<TimetableScreen>
     super.dispose();
   }
 
-  Future<void> _loadAll() async {
-    setState(() => _loading = true);
+  /// [silent] = refresh in place (pull-to-refresh / refresh buttons) without
+  /// swapping the whole screen for a spinner, which used to reset the page.
+  Future<void> _loadAll({bool silent = false}) async {
+    if (!silent) setState(() => _loading = true);
     await _loadProfile();
     await Future.wait([_loadLectures(), _loadExams(), _loadPersonal()]);
     await _checkAdminStatus();
@@ -192,12 +195,11 @@ class _TimetableScreenState extends State<TimetableScreen>
         await _svc.toggleAlert(id, type);
       }
       await _loadLectures();
+      if (!mounted) return;
       setState(() {});
     } catch (e) {
       if (mounted)
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error: $e')));
+        AppSnackBar.auto(context, 'Error: $e');
     }
   }
 
@@ -314,7 +316,7 @@ class _TimetableScreenState extends State<TimetableScreen>
                     ),
                   ),
                   GestureDetector(
-                    onTap: _loadAll,
+                    onTap: () => _loadAll(silent: true),
                     child: MouseRegion(
                       cursor: SystemMouseCursors.click,
                       child: tile(
@@ -635,7 +637,7 @@ class _TimetableScreenState extends State<TimetableScreen>
                   icon: Icons.refresh_rounded,
                   label: 'Refresh',
                   isDark: isDark,
-                  onTap: _loadAll,
+                  onTap: () => _loadAll(silent: true),
                 ),
                 if (_isAdmin) ...[
                   _deskButton(
@@ -1225,7 +1227,7 @@ class _TimetableScreenState extends State<TimetableScreen>
                     // drag down to refresh works on every day, even when empty
                     return RefreshIndicator(
                       color: _primary,
-                      onRefresh: _loadAll,
+                      onRefresh: () => _loadAll(silent: true),
                       child: _dayEntriesList(
                         isDark: isDark,
                         isEmpty: cards.isEmpty,
@@ -1529,6 +1531,7 @@ class _TimetableScreenState extends State<TimetableScreen>
           ),
           onPressed: () async {
             await MutedCoursesStore().toggle(e.courseCode);
+            if (!mounted) return;
             setState(() {});
             AppSnackBar.showInfo(
               context,
@@ -1552,6 +1555,7 @@ class _TimetableScreenState extends State<TimetableScreen>
               if (val == 'delete') {
                 await _svc.deleteLecture(e.id);
                 await _loadLectures();
+                if (!mounted) return;
                 setState(() {});
               } else {
                 _showAddLectureSheet(isDark, editing: e);
@@ -1848,6 +1852,7 @@ class _TimetableScreenState extends State<TimetableScreen>
                   onPressed: () async {
                     await _svc.toggleBookmark(e.id);
                     await _loadPersonal();
+                    if (!mounted) return;
                     setState(() {});
 
                     final updated = _personal.firstWhere(
@@ -1863,13 +1868,7 @@ class _TimetableScreenState extends State<TimetableScreen>
                             startTime: updated.startTime,
                           );
                       if (!success && context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                              'Reminder permission missing — enable it in Settings.',
-                            ),
-                          ),
-                        );
+                        AppSnackBar.auto(context, 'Reminder permission missing — enable it in Settings.');
                       }
                     } else {
                       await NotificationService.cancelStudyReminder(updated.id);
@@ -1893,6 +1892,7 @@ class _TimetableScreenState extends State<TimetableScreen>
                     if (val == 'delete') {
                       await _svc.deletePersonal(e.id);
                       await _loadPersonal();
+                      if (!mounted) return;
                       setState(() {});
                     } else {
                       _showAddPersonalSheet(isDark, editing: e);
@@ -2108,6 +2108,7 @@ class _TimetableScreenState extends State<TimetableScreen>
                         if (val == 'delete') {
                           await _svc.deleteExam(e.id);
                           await _loadExams();
+                          if (!mounted) return;
                           setState(() {});
                         } else {
                           _showAddExamSheet(isDark, editing: e);
@@ -2327,23 +2328,16 @@ class _TimetableScreenState extends State<TimetableScreen>
                     try {
                       await _svc.setReminder(e.id, enabled, minutesBefore);
                       await _loadReminders();
+                      if (!mounted) return;
                       setState(() {});
                       if (ctx.mounted) Navigator.pop(ctx);
                       if (mounted)
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              enabled
+                        AppSnackBar.auto(context, enabled
                                   ? '🔔 Reminder set for $minutesBefore min before class'
-                                  : 'Reminder turned off',
-                            ),
-                          ),
-                        );
+                                  : 'Reminder turned off');
                     } catch (err) {
                       if (ctx.mounted)
-                        ScaffoldMessenger.of(
-                          context,
-                        ).showSnackBar(SnackBar(content: Text('Error: $err')));
+                        AppSnackBar.auto(context, 'Error: $err');
                     }
                   },
                   child: const Text('Save'),
@@ -2552,13 +2546,12 @@ class _TimetableScreenState extends State<TimetableScreen>
                           await _svc.updateLecture(editing.id, body);
                         }
                         await _loadLectures();
+                        if (!mounted) return;
                         setState(() {});
                         if (ctx.mounted) Navigator.pop(ctx);
                       } catch (e) {
                         if (ctx.mounted)
-                          ScaffoldMessenger.of(
-                            context,
-                          ).showSnackBar(SnackBar(content: Text('Error: $e')));
+                          AppSnackBar.auto(context, 'Error: $e');
                       }
                     },
                     child: Text(
@@ -2728,13 +2721,12 @@ class _TimetableScreenState extends State<TimetableScreen>
                           await _svc.updatePersonal(editing.id, body);
                         }
                         await _loadPersonal();
+                        if (!mounted) return;
                         setState(() {});
                         if (ctx.mounted) Navigator.pop(ctx);
                       } catch (e) {
                         if (ctx.mounted)
-                          ScaffoldMessenger.of(
-                            context,
-                          ).showSnackBar(SnackBar(content: Text('Error: $e')));
+                          AppSnackBar.auto(context, 'Error: $e');
                       }
                     },
                     child: Text(
@@ -2902,13 +2894,12 @@ class _TimetableScreenState extends State<TimetableScreen>
                           await _svc.updateExam(editing.id, body);
                         }
                         await _loadExams();
+                        if (!mounted) return;
                         setState(() {});
                         if (ctx.mounted) Navigator.pop(ctx);
                       } catch (e) {
                         if (ctx.mounted)
-                          ScaffoldMessenger.of(
-                            context,
-                          ).showSnackBar(SnackBar(content: Text('Error: $e')));
+                          AppSnackBar.auto(context, 'Error: $e');
                       }
                     },
                     child: Text(editing == null ? 'Add Exam' : 'Save Changes'),
@@ -3002,19 +2993,11 @@ class _TimetableScreenState extends State<TimetableScreen>
                       });
                       if (ctx.mounted) {
                         Navigator.pop(ctx);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                              '✅ Request submitted! You\'ll be notified when reviewed.',
-                            ),
-                          ),
-                        );
+                        AppSnackBar.auto(context, '✅ Request submitted! You\'ll be notified when reviewed.');
                       }
                     } catch (e) {
                       if (ctx.mounted)
-                        ScaffoldMessenger.of(
-                          context,
-                        ).showSnackBar(SnackBar(content: Text('Error: $e')));
+                        AppSnackBar.auto(context, 'Error: $e');
                     }
                   },
                   child: const Text('Submit Request'),
@@ -3028,56 +3011,29 @@ class _TimetableScreenState extends State<TimetableScreen>
   }
 
   Future<void> _confirmResign(bool isDark) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text(
-          'Resign as Admin?',
-          style: TextStyle(
-            color: isDark ? Colors.white : Colors.black87,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        content: Text(
+    final confirmed = await showConfirmDialog(
+      context,
+      title: 'Resign as admin?',
+      message:
           'You will lose admin access immediately. Your timetable entries will remain.',
-          style: TextStyle(
-            color: isDark ? Colors.white60 : Colors.black54,
-            fontSize: 13,
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
-            ),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Resign'),
-          ),
-        ],
-      ),
+      confirmLabel: 'Resign',
+      icon: Icons.logout_rounded,
+      color: Colors.red,
     );
+    if (!confirmed) return;
 
-    if (confirmed != true) return;
     try {
       await _svc.resignAdmin();
       await _checkAdminStatus();
+      if (!mounted) return;
       setState(() {});
-      if (mounted)
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('You have resigned as admin.')),
-        );
+      if (mounted) {
+        AppSnackBar.auto(context, 'You have resigned as admin.');
+      }
     } catch (e) {
-      if (mounted)
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error: $e')));
+      if (mounted) {
+        AppSnackBar.auto(context, 'Error: $e');
+      }
     }
   }
 

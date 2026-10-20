@@ -5,6 +5,7 @@ import '../models/announcement.dart';
 import '../providers/theme_notifier.dart';
 import '../utils/responsive.dart';
 import '../widgets/desktop_page.dart';
+import '../widgets/page_header.dart';
 
 class AnnouncementDetailScreen extends StatelessWidget {
   final Announcement announcement;
@@ -44,72 +45,37 @@ class AnnouncementDetailScreen extends StatelessWidget {
       );
     }
 
-    // ── Phone / tablet (original design) ───────────────────
+    // ── Phone / tablet ─────────────────────────────────────
     return Scaffold(
       backgroundColor:
-          isDark ? const Color(0xFF0A0A0A) : const Color(0xFFF2F4F8),
+          isDark ? const Color(0xFF0A0A0A) : const Color(0xFFF7F8FA),
       body: Column(
         children: [
-          // ── Gradient header (matches NotificationsScreen) ────────────────
-          Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Color(0xFF0D47A1),
-                  Color(0xFF1565C0),
-                  Color(0xFF1E88E5),
-                ],
-              ),
-              borderRadius:
-                  BorderRadius.vertical(bottom: Radius.circular(28)),
-              boxShadow: [
-                BoxShadow(
-                  color: Color(0x331565C0),
-                  blurRadius: 16,
-                  offset: Offset(0, 6),
-                ),
-              ],
-            ),
-            child: SafeArea(
-              bottom: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(8, 12, 8, 16),
-                child: Row(
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.arrow_back_ios_new,
-                          color: Colors.white),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                    const Expanded(
-                      child: Text(
-                        'Announcement',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 18,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 48),
-                  ],
-                ),
-              ),
-            ),
-          ),
-
-          // ── Body ─────────────────────────────────────────────────────────
+          const MobileHeader(title: 'Announcement'),
+          const SizedBox(height: 12),
           Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 40),
               child: Align(
                 alignment: Alignment.topCenter,
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 760),
-                  child: _content(isDark, titleSize: 22, bodySize: 15),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: isDark ? const Color(0xFF15181D) : Colors.white,
+                      borderRadius: BorderRadius.circular(22),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
+                          blurRadius: 12,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                    child: _content(isDark, titleSize: 22, bodySize: 15),
+                  ),
                 ),
               ),
             ),

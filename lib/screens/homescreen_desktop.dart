@@ -32,6 +32,11 @@ class _GradesDesktopState extends State<_GradesDesktop> {
     super.dispose();
   }
 
+  Future<void> _openGrading() async {
+    await _showGradingSheet(context, s);
+    if (mounted) setState(() {});
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = context.watch<ThemeNotifier>().isDarkMode;
@@ -1230,7 +1235,7 @@ class _GradesDesktopState extends State<_GradesDesktop> {
               desc: 'Edit your grade scale',
               color: Colors.orange,
               textSecondary: textSecondary,
-              onTap: s._showGradingSettings,
+              onTap: _openGrading,
             ),
           ],
         ),

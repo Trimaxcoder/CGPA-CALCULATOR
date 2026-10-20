@@ -1,197 +1,294 @@
-
 // ══════════════════════════════════════════════════════════
-//  CUSTOM SNACKBAR SYSTEM
-//  — slides in from right, stays 3 s, slides out to left,
-//    has a close (×) button, stacks if multiple fire at once
+//  APP SNACKBAR  (overlay based)
+//  Always appears ON TOP of everything — bottom sheets, dialogs, the
+//  bottom nav — so no success / error message is ever hidden.
+//  Same API as before: showSuccess / showError / showInfo / showUndo,
+//  plus auto() which picks the style from the message text.
 // ══════════════════════════════════════════════════════════
-
-
+import 'dart:async';
 import 'package:flutter/material.dart';
+import '../services/navigation_service.dart';
+
+enum _Kind { success, error, info }
 
 class AppSnackBar {
-  static final _overlays = <OverlayEntry>[];
+  static OverlayEntry? _entry;
+  static Timer? _timer;
+  static _ToastState? _state;
 
-  static void show(
+  static void showSuccess(BuildContext context, String message) =>
+      _show(context, message, _Kind.success);
+
+  static void showError(BuildContext context, String message) =>
+      _show(context, message, _Kind.error);
+
+  static void showInfo(BuildContext context, String message) =>
+      _show(context, message, _Kind.info);
+
+  static void showUndo(
     BuildContext context,
-    String message, {
-    Color color = Colors.black87,
-    IconData icon = Icons.info_outline,
-    String? actionLabel,
-    VoidCallback? onAction,
-  }) {
-    late OverlayEntry entry;
-    entry = OverlayEntry(
-      builder: (_) => _SnackBarWidget(
-        message: message,
-        color: color,
-        icon: icon,
-        actionLabel: actionLabel,
-        onAction: onAction,
-        onDismiss: () {
-          entry.remove();
-          _overlays.remove(entry);
-        },
-      ),
-    );
-    Overlay.of(context).insert(entry);
-    _overlays.add(entry);
-  }
-
-  static void showSuccess(BuildContext ctx, String msg) => show(
-    ctx,
-    msg,
-    color: Colors.green.shade700,
-    icon: Icons.check_circle_outline,
+    String message,
+    VoidCallback onUndo,
+  ) => _show(
+    context,
+    message,
+    _Kind.info,
+    actionLabel: 'UNDO',
+    onAction: onUndo,
+    duration: const Duration(seconds: 5),
   );
 
-  static void showError(BuildContext ctx, String msg) =>
-      show(ctx, msg, color: Colors.red.shade700, icon: Icons.error_outline);
+  /// Picks success / error / info from the wording of the message.
+  static void auto(BuildContext context, String message) {
+    final m = message.toLowerCase();
+    final isError =
+        m.startsWith('error') ||
+        m.contains('failed') ||
+        m.contains('could not') ||
+        m.contains("couldn't") ||
+        m.contains('incorrect') ||
+        m.contains('invalid') ||
+        m.contains('missing') ||
+        m.contains('not found') ||
+        m.contains('unable');
+    if (isError) {
+      showError(context, message);
+      return;
+    }
+    final isSuccess =
+        message.contains('✓') ||
+        message.contains('✅') ||
+        RegExp(
+          r'\b(added|saved|updated|deleted|sent|submitted|approved|restored|'
+          r'cleared|enabled|revoked|resigned|applied|created|muted|unmuted|'
+          r'removed|set)\b',
+        ).hasMatch(m);
+    if (isSuccess) {
+      showSuccess(context, message);
+    } else {
+      showInfo(context, message);
+    }
+  }
 
-  static void showInfo(BuildContext ctx, String msg) =>
-      show(ctx, msg, color: Colors.blue.shade700, icon: Icons.info_outline);
+  static void _show(
+    BuildContext context,
+    String message,
+    _Kind kind, {
+    String? actionLabel,
+    VoidCallback? onAction,
+    Duration? duration,
+  }) {
+    final overlay =
+        NavigationService.navigatorKey.currentState?.overlay ??
+        Overlay.maybeOf(context, rootOverlay: true);
+    if (overlay == null) return;
 
-  static void showUndo(BuildContext ctx, String msg, VoidCallback onUndo) =>
-      show(
-        ctx,
-        msg,
-        color: Colors.grey.shade800,
-        icon: Icons.delete_outline,
-        actionLabel: 'UNDO',
-        onAction: onUndo,
-      );
+    _remove(immediate: true);
+
+    final entry = OverlayEntry(
+      builder: (_) => _Toast(
+        message: message,
+        kind: kind,
+        actionLabel: actionLabel,
+        onAction: onAction,
+        onClose: () => _remove(),
+        register: (s) => _state = s,
+      ),
+    );
+    _entry = entry;
+    overlay.insert(entry);
+
+    _timer = Timer(
+      duration ??
+          (kind == _Kind.error
+              ? const Duration(milliseconds: 4500)
+              : const Duration(milliseconds: 3200)),
+      () => _remove(),
+    );
+  }
+
+  static void _remove({bool immediate = false}) {
+    _timer?.cancel();
+    _timer = null;
+    final entry = _entry;
+    final st = _state;
+    _entry = null;
+    _state = null;
+    if (entry == null) return;
+
+    if (immediate || st == null) {
+      try {
+        entry.remove();
+      } catch (_) {}
+      return;
+    }
+    st.hide().then((_) {
+      try {
+        entry.remove();
+      } catch (_) {}
+    });
+  }
 }
 
-class _SnackBarWidget extends StatefulWidget {
-  final String message;
-  final Color color;
-  final IconData icon;
-  final String? actionLabel;
-  final VoidCallback? onAction;
-  final VoidCallback onDismiss;
-
-  const _SnackBarWidget({
+class _Toast extends StatefulWidget {
+  const _Toast({
     required this.message,
-    required this.color,
-    required this.icon,
-    required this.onDismiss,
+    required this.kind,
+    required this.onClose,
+    required this.register,
     this.actionLabel,
     this.onAction,
   });
 
+  final String message;
+  final _Kind kind;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+  final VoidCallback onClose;
+  final void Function(_ToastState) register;
+
   @override
-  State<_SnackBarWidget> createState() => _SnackBarWidgetState();
+  State<_Toast> createState() => _ToastState();
 }
 
-class _SnackBarWidgetState extends State<_SnackBarWidget>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _ctrl;
-  late Animation<Offset> _slide;
-  late Animation<double> _fade;
+class _ToastState extends State<_Toast> with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 320),
+    reverseDuration: const Duration(milliseconds: 220),
+  );
 
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 350),
-    );
-    _slide = Tween<Offset>(
-      begin: const Offset(1.2, 0),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOutCubic));
-    _fade = Tween<double>(
-      begin: 0,
-      end: 1,
-    ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
-
-    _ctrl.forward();
-
-    // Auto-dismiss after 3 seconds
-    Future.delayed(const Duration(seconds: 3), () {
-      if (mounted) _dismiss();
-    });
+    widget.register(this);
+    _c.forward();
   }
 
-  void _dismiss() async {
-    if (!mounted) return;
-    await _ctrl.reverse();
-    widget.onDismiss();
+  Future<void> hide() async {
+    if (mounted) await _c.reverse();
   }
 
   @override
   void dispose() {
-    _ctrl.dispose();
+    _c.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
+    final phone = media.size.width < 600;
+
+    late final Color accent;
+    late final IconData icon;
+    switch (widget.kind) {
+      case _Kind.success:
+        accent = const Color(0xFF22C55E);
+        icon = Icons.check_circle_rounded;
+        break;
+      case _Kind.error:
+        accent = const Color(0xFFEF4444);
+        icon = Icons.error_rounded;
+        break;
+      case _Kind.info:
+        accent = const Color(0xFF1E88E5);
+        icon = Icons.info_rounded;
+        break;
+    }
+
+    final curved = CurvedAnimation(parent: _c, curve: Curves.easeOutCubic);
+
     return Positioned(
-      bottom: MediaQuery.of(context).padding.bottom + 16,
       left: 16,
       right: 16,
+      // above the bottom bar on phones
+      bottom: media.padding.bottom + (phone ? 96 : 24),
       child: SlideTransition(
-        position: _slide,
+        position: Tween<Offset>(
+          begin: const Offset(0, 0.6),
+          end: Offset.zero,
+        ).animate(curved),
         child: FadeTransition(
-          opacity: _fade,
-          child: Material(
-            color: Colors.transparent,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              decoration: BoxDecoration(
-                color: widget.color,
-                borderRadius: BorderRadius.circular(14),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.25),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Row(
-                children: [
-                  Icon(widget.icon, color: Colors.white, size: 20),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      widget.message,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                  if (widget.actionLabel != null) ...[
-                    const SizedBox(width: 8),
-                    GestureDetector(
-                      onTap: () {
-                        widget.onAction?.call();
-                        _dismiss();
-                      },
-                      child: Text(
-                        widget.actionLabel!,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13,
-                          decoration: TextDecoration.underline,
-                          decorationColor: Colors.white,
+          opacity: curved,
+          child: Align(
+            alignment: Alignment.bottomCenter,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 440),
+              child: Material(
+                color: Colors.transparent,
+                child: GestureDetector(
+                  onTap: widget.onClose,
+                  onVerticalDragEnd: (d) {
+                    if ((d.primaryVelocity ?? 0) > 120) widget.onClose();
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF111827),
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(color: accent.withOpacity(0.45)),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.35),
+                          blurRadius: 20,
+                          offset: const Offset(0, 8),
                         ),
-                      ),
+                      ],
                     ),
-                    const SizedBox(width: 6),
-                  ],
-                  GestureDetector(
-                    onTap: _dismiss,
-                    child: const Icon(
-                      Icons.close,
-                      color: Colors.white70,
-                      size: 18,
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 34,
+                          height: 34,
+                          decoration: BoxDecoration(
+                            color: accent.withOpacity(0.16),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(icon, color: accent, size: 20),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            widget.message,
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w600,
+                              height: 1.35,
+                            ),
+                          ),
+                        ),
+                        if (widget.actionLabel != null) ...[
+                          const SizedBox(width: 8),
+                          TextButton(
+                            onPressed: () {
+                              widget.onAction?.call();
+                              widget.onClose();
+                            },
+                            style: TextButton.styleFrom(
+                              foregroundColor: accent,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                              ),
+                              minimumSize: const Size(0, 34),
+                            ),
+                            child: Text(
+                              widget.actionLabel!,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w900,
+                                fontSize: 12.5,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
-                ],
+                ),
               ),
             ),
           ),

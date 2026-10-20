@@ -6,7 +6,10 @@ import '../services/announcement_service.dart';
 import '../stores/announcement_store.dart';
 import '../providers/theme_notifier.dart';
 import '../utils/responsive.dart';
+import '../widgets/app_dialog.dart';
 import '../widgets/desktop_page.dart';
+import '../widgets/snackBar.dart';
+import '../widgets/page_header.dart';
 
 class ManageAnnouncementsScreen extends StatefulWidget {
   const ManageAnnouncementsScreen({super.key});
@@ -29,9 +32,9 @@ class _ManageAnnouncementsScreenState extends State<ManageAnnouncementsScreen> {
     _load();
   }
 
-  Future<void> _load() async {
+  Future<void> _load({bool silent = false}) async {
     setState(() {
-      _loading = true;
+      if (!silent) _loading = true;
       _error = null;
     });
     try {
@@ -170,9 +173,7 @@ class _ManageAnnouncementsScreenState extends State<ManageAnnouncementsScreen> {
                         if (ctx.mounted) Navigator.pop(ctx, true);
                       } catch (e) {
                         if (ctx.mounted) {
-                          ScaffoldMessenger.of(
-                            ctx,
-                          ).showSnackBar(SnackBar(content: Text('Error: $e')));
+                          AppSnackBar.auto(ctx, 'Error: $e');
                         }
                       }
                     },
@@ -189,56 +190,34 @@ class _ManageAnnouncementsScreenState extends State<ManageAnnouncementsScreen> {
     if (saved == true) {
       await _load();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ Announcement updated'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        AppSnackBar.auto(context, '✅ Announcement updated');
       }
     }
   }
 
   Future<void> _deleteAnnouncement(Announcement a) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete Announcement'),
-        content: Text(
-          'Delete "${a.title}"? This removes it for everyone and cannot be undone.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Delete', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
+    final confirmed = await showConfirmDialog(
+      context,
+      title: 'Delete announcement?',
+      message:
+          '"${a.title}" will be removed for everyone. This cannot be undone.',
+      confirmLabel: 'Delete',
+      icon: Icons.delete_forever_rounded,
+      color: Colors.red,
     );
 
-    if (confirmed != true) return;
+    if (!confirmed) return;
 
     try {
       await AnnouncementService.deleteAnnouncement(a.id);
       AnnouncementStore().removeFromServerResult(a.id);
       setState(() => _mine.removeWhere((x) => x.id == a.id));
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Announcement deleted'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        AppSnackBar.auto(context, 'Announcement deleted');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error: $e')));
+        AppSnackBar.auto(context, 'Error: $e');
       }
     }
   }
@@ -264,13 +243,13 @@ class _ManageAnnouncementsScreenState extends State<ManageAnnouncementsScreen> {
   // ── One announcement card (shared by phone + desktop) ──────────────────
   Widget _announcementCard(Announcement a, bool isDark, {bool desktop = false}) {
     return Container(
-      margin: desktop ? EdgeInsets.zero : const EdgeInsets.only(bottom: 10),
-      padding: EdgeInsets.all(desktop ? 18 : 14),
+      margin: desktop ? EdgeInsets.zero : const EdgeInsets.only(bottom: 12),
+      padding: EdgeInsets.all(desktop ? 18 : 16),
       decoration: BoxDecoration(
         color: isDark
             ? (desktop ? const Color(0xFF15181D) : Colors.black)
             : Colors.white,
-        borderRadius: BorderRadius.circular(desktop ? 20 : 14),
+        borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
@@ -385,6 +364,22 @@ class _ManageAnnouncementsScreenState extends State<ManageAnnouncementsScreen> {
 
   // ── Loading / error / empty / list (shared) ────────────────────────────
   Widget _body(bool isDark, {required bool desktop}) {
+    final inner = _bodyInner(isDark, desktop: desktop);
+    // list screens already refresh; make the empty / error states pullable too
+    if (_loading || (_error == null && _mine.isNotEmpty)) return inner;
+    return RefreshIndicator(
+      color: _primary,
+      onRefresh: () => _load(silent: true),
+      child: LayoutBuilder(
+        builder: (context, c) => ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: [SizedBox(height: c.maxHeight, child: inner)],
+        ),
+      ),
+    );
+  }
+
+  Widget _bodyInner(bool isDark, {required bool desktop}) {
     if (_loading) return const Center(child: CircularProgressIndicator());
 
     if (_error != null) {
@@ -447,7 +442,7 @@ class _ManageAnnouncementsScreenState extends State<ManageAnnouncementsScreen> {
     }
 
     return RefreshIndicator(
-      onRefresh: _load,
+      onRefresh: () => _load(silent: true),
       child: ListView.builder(
         padding: EdgeInsets.symmetric(
           horizontal: responsiveSidePadding(
@@ -490,66 +485,21 @@ class _ManageAnnouncementsScreenState extends State<ManageAnnouncementsScreen> {
     return Scaffold(
       backgroundColor: isDark
           ? const Color(0xFF0A0A0A)
-          : const Color(0xFFF2F4F8),
+          : const Color(0xFFF7F8FA),
       body: Column(
         children: [
-          // ── Header ───────────────────────────────────────────────────────
-          Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Color(0xFF0D47A1),
-                  Color(0xFF1565C0),
-                  Color(0xFF1E88E5),
-                ],
+          MobileHeader(
+            title: 'My announcements',
+            subtitle: _loading ? 'Loading…' : '${_mine.length} sent',
+            actions: [
+              HeaderTile(
+                icon: Icons.refresh_rounded,
+                tooltip: 'Refresh',
+                onTap: () => _load(silent: true),
               ),
-              borderRadius: BorderRadius.vertical(bottom: Radius.circular(28)),
-              boxShadow: [
-                BoxShadow(
-                  color: Color(0x331565C0),
-                  blurRadius: 16,
-                  offset: Offset(0, 6),
-                ),
-              ],
-            ),
-            child: SafeArea(
-              bottom: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(8, 12, 8, 16),
-                child: Row(
-                  children: [
-                    IconButton(
-                      icon: const Icon(
-                        Icons.arrow_back_ios_new,
-                        color: Colors.white,
-                      ),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                    const Expanded(
-                      child: Text(
-                        'My Announcements',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 18,
-                        ),
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(
-                        Icons.refresh_rounded,
-                        color: Colors.white,
-                      ),
-                      onPressed: _load,
-                    ),
-                  ],
-                ),
-              ),
-            ),
+            ],
           ),
+          const SizedBox(height: 14),
 
           // ── Body ─────────────────────────────────────────────────────────
           Expanded(child: _body(isDark, desktop: false)),

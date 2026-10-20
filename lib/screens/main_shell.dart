@@ -10,6 +10,7 @@ import 'home_dashboard.dart';
 import 'homescreen.dart';
 import 'timetable_screen.dart';
 import 'settings_screen.dart';
+import '../widgets/snackBar.dart';
 
 const _blue = Color(0xFF1565C0);
 
@@ -261,7 +262,7 @@ class _MainShellState extends State<MainShell>
               offset: keyboard ? const Offset(0, 1.3) : Offset.zero,
               duration: const Duration(milliseconds: 220),
               curve: Curves.easeOutCubic,
-              child: _buildBottomNav(inset),
+              child: _buildBottomNav(inset, isDark),
             ),
           ),
         ],
@@ -269,7 +270,7 @@ class _MainShellState extends State<MainShell>
     );
   }
 
-  Widget _buildBottomNav(double inset) {
+  Widget _buildBottomNav(double inset, bool isDark) {
     final barTotal = _barH + inset;
     return SizedBox(
       height: barTotal + _bump,
@@ -283,7 +284,7 @@ class _MainShellState extends State<MainShell>
             bottom: 0,
             height: barTotal,
             child: CustomPaint(
-              painter: _NavBarPainter(),
+              painter: _NavBarPainter(isDark: isDark),
               child: Padding(
                 padding: EdgeInsets.only(bottom: inset),
                 child: Row(
@@ -292,6 +293,7 @@ class _MainShellState extends State<MainShell>
                       _BarItem(
                         destination: _destinations[i],
                         active: i == _currentIndex,
+                        isDark: isDark,
                         onTap: () => _goTo(i),
                       ),
                     const SizedBox(width: 104), // room for the notch
@@ -299,6 +301,7 @@ class _MainShellState extends State<MainShell>
                       _BarItem(
                         destination: _destinations[i],
                         active: i == _currentIndex,
+                        isDark: isDark,
                         onTap: () => _goTo(i),
                       ),
                   ],
@@ -385,9 +388,7 @@ class _MainShellState extends State<MainShell>
                     PressScale(
                       onTap: () {
                         Navigator.pop(ctx);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('${it.$2} is coming soon')),
-                        );
+                        AppSnackBar.auto(context, '${it.$2} is coming soon');
                       },
                       child: Container(
                         padding: const EdgeInsets.all(14),
@@ -905,6 +906,10 @@ class _ResizeHandleState extends State<_ResizeHandle> {
 
 /// Black bar: rounded top corners + a smooth notch for the center button.
 class _NavBarPainter extends CustomPainter {
+  _NavBarPainter({required this.isDark});
+
+  final bool isDark;
+
   @override
   void paint(Canvas canvas, Size size) {
     const r = 28.0; // top corner radius
@@ -924,30 +929,38 @@ class _NavBarPainter extends CustomPainter {
       ..lineTo(0, h)
       ..close();
 
-    canvas.drawShadow(path, Colors.black, 12, true);
-    canvas.drawPath(path, Paint()..color = Colors.black);
+    // white bar in the light theme, black bar in the dark theme
+    canvas.drawShadow(path, Colors.black, isDark ? 12 : 10, true);
+    canvas.drawPath(
+      path,
+      Paint()..color = isDark ? Colors.black : Colors.white,
+    );
   }
 
   @override
-  bool shouldRepaint(_NavBarPainter old) => false;
+  bool shouldRepaint(_NavBarPainter old) => old.isDark != isDark;
 }
 
 class _BarItem extends StatelessWidget {
   const _BarItem({
     required this.destination,
     required this.active,
+    required this.isDark,
     required this.onTap,
   });
 
   final _NavDestination destination;
   final bool active;
+  final bool isDark;
   final VoidCallback onTap;
 
   static const Color _accent = Color(0xFF1E88E5);
 
   @override
   Widget build(BuildContext context) {
-    final color = active ? _accent : Colors.white54;
+    final color = active
+        ? _accent
+        : (isDark ? Colors.white54 : Colors.black45);
     return Expanded(
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,

@@ -3,7 +3,10 @@ import 'package:provider/provider.dart';
 import '../providers/theme_notifier.dart';
 import '../services/timetable_service.dart';
 import '../utils/responsive.dart';
+import '../widgets/app_dialog.dart';
 import '../widgets/desktop_page.dart';
+import '../widgets/snackBar.dart';
+import '../widgets/page_header.dart';
 
 class SuperAdminScreen extends StatefulWidget {
   const SuperAdminScreen({super.key});
@@ -42,29 +45,27 @@ class _SuperAdminScreenState extends State<SuperAdminScreen>
     super.dispose();
   }
 
-  Future<void> _loadRequests() async {
-    setState(() => _loadingRequests = true);
+  Future<void> _loadRequests({bool silent = false}) async {
+    if (!silent) setState(() => _loadingRequests = true);
     try {
       final list = await _svc.getPendingRequests();
       if (mounted) setState(() => _requests = list);
     } catch (e) {
       if (mounted)
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Error: $e')));
+        AppSnackBar.auto(context, 'Error: $e');
     } finally {
       if (mounted) setState(() => _loadingRequests = false);
     }
   }
 
-  Future<void> _loadAdmins() async {
-    setState(() => _loadingAdmins = true);
+  Future<void> _loadAdmins({bool silent = false}) async {
+    if (!silent) setState(() => _loadingAdmins = true);
     try {
       final list = await _svc.getAllAdmins();
       if (mounted) setState(() => _admins = list);
     } catch (e) {
       if (mounted)
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Error: $e')));
+        AppSnackBar.auto(context, 'Error: $e');
     } finally {
       if (mounted) setState(() => _loadingAdmins = false);
     }
@@ -77,69 +78,42 @@ class _SuperAdminScreenState extends State<SuperAdminScreen>
 
   Future<void> _review(String id, String status, bool isDark) async {
     final noteCtrl = TextEditingController();
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text(
-          status == 'approved' ? '✅ Approve Request' : '❌ Reject Request',
-          style: TextStyle(
-              color: isDark ? Colors.white : Colors.black87,
-              fontSize: 16,
-              fontWeight: FontWeight.bold),
-        ),
-        content: SizedBox(
-          width: 420,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                status == 'approved'
-                    ? 'This user will become a course rep admin.'
-                    : 'Provide a reason for rejection.',
-                style: TextStyle(
-                    color: isDark ? Colors.white60 : Colors.black54,
-                    fontSize: 13),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: noteCtrl,
-                style:
-                    TextStyle(color: isDark ? Colors.white : Colors.black87),
-                decoration: InputDecoration(
-                  hintText: status == 'approved'
-                      ? 'Optional note...'
-                      : 'Reason for rejection...',
-                  hintStyle: TextStyle(
-                      color: isDark ? Colors.white38 : Colors.black38),
-                  filled: true,
-                  fillColor: isDark
-                      ? const Color(0xFF2A2A2A)
-                      : Colors.grey.shade50,
-                  border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12)),
-                ),
-                maxLines: 2,
-              ),
-            ],
+    final approve = status == 'approved';
+
+    final confirmed = await showAppDialog<bool>(
+      context,
+      builder: (ctx) => AppDialog(
+        title: approve ? 'Approve request?' : 'Reject request?',
+        message: approve
+            ? 'This user will become a course rep admin.'
+            : 'Give a reason so the student understands.',
+        icon: approve ? Icons.verified_rounded : Icons.cancel_rounded,
+        color: approve ? Colors.green : Colors.red,
+        maxWidth: 420,
+        child: TextField(
+          controller: noteCtrl,
+          maxLines: 2,
+          style: TextStyle(color: isDark ? Colors.white : Colors.black87),
+          decoration: InputDecoration(
+            hintText: approve ? 'Optional note…' : 'Reason for rejection…',
+            hintStyle: TextStyle(
+              color: isDark ? Colors.white38 : Colors.black38,
+            ),
+            filled: true,
+            fillColor: isDark
+                ? Colors.white.withOpacity(0.06)
+                : const Color(0xFFF5F7FA),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide.none,
+            ),
           ),
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor:
-                  status == 'approved' ? Colors.green : Colors.red,
-              foregroundColor: Colors.white,
-            ),
-            onPressed: () => Navigator.pop(ctx, true),
-            child:
-                Text(status == 'approved' ? 'Approve' : 'Reject'),
+          const DialogCancelButton(),
+          DialogConfirmButton(
+            label: approve ? 'Approve' : 'Reject',
+            color: approve ? Colors.green : Colors.red,
           ),
         ],
       ),
@@ -147,65 +121,39 @@ class _SuperAdminScreenState extends State<SuperAdminScreen>
 
     if (confirmed != true) return;
     try {
-      await _svc.reviewRequest(id, status,
-          reviewNote: noteCtrl.text.trim());
+      await _svc.reviewRequest(id, status, reviewNote: noteCtrl.text.trim());
       await _loadRequests();
-      if (mounted)
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(status == 'approved'
-                ? '✅ Request approved!'
-                : '❌ Request rejected.')));
+      if (mounted) {
+        AppSnackBar.auto(context, approve ? '✅ Request approved!' : '❌ Request rejected.');
+      }
     } catch (e) {
-      if (mounted)
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Error: $e')));
+      if (mounted) {
+        AppSnackBar.auto(context, 'Error: $e');
+      }
     }
   }
 
   Future<void> _revoke(String userId, String name, bool isDark) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('Revoke Admin Access?',
-            style: TextStyle(
-                color: isDark ? Colors.white : Colors.black87,
-                fontWeight: FontWeight.bold)),
-        content: Text(
-          '$name will lose admin access immediately and will be notified.',
-          style: TextStyle(
-              color: isDark ? Colors.white60 : Colors.black54,
-              fontSize: 13),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red,
-                foregroundColor: Colors.white),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Revoke'),
-          ),
-        ],
-      ),
+    final confirmed = await showConfirmDialog(
+      context,
+      title: 'Revoke admin access?',
+      message: '$name will lose admin access immediately and will be notified.',
+      confirmLabel: 'Revoke',
+      icon: Icons.person_remove_rounded,
+      color: Colors.red,
     );
+    if (!confirmed) return;
 
-    if (confirmed != true) return;
     try {
       await _svc.revokeAdmin(userId);
       await _loadAdmins();
-      if (mounted)
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Admin access revoked.')));
+      if (mounted) {
+        AppSnackBar.auto(context, 'Admin access revoked.');
+      }
     } catch (e) {
-      if (mounted)
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Error: $e')));
+      if (mounted) {
+        AppSnackBar.auto(context, 'Error: $e');
+      }
     }
   }
 
@@ -216,79 +164,29 @@ class _SuperAdminScreenState extends State<SuperAdminScreen>
     if (context.isExpanded) return _buildDesktop(isDark);
 
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF0A0A0A) : const Color(0xFFF2F4F8),
+      backgroundColor: isDark ? const Color(0xFF0A0A0A) : const Color(0xFFF7F8FA),
       body: Column(
         children: [
-          // ── Fixed gradient header ────────────────────────
-          Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [Color(0xFF0D47A1), Color(0xFF1565C0), Color(0xFF1E88E5)],
+          MobileHeader(
+            title: 'Super Admin',
+            subtitle: 'Review admin requests and manage course reps',
+            actions: [
+              HeaderTile(
+                icon: Icons.refresh_rounded,
+                tooltip: 'Refresh',
+                onTap: _refreshAll,
               ),
-              borderRadius: BorderRadius.vertical(bottom: Radius.circular(28)),
-              boxShadow: [
-                BoxShadow(
-                  color: Color(0x331565C0),
-                  blurRadius: 16,
-                  offset: Offset(0, 6),
-                ),
-              ],
-            ),
-            child: SafeArea(
-              bottom: false,
-              child: Column(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(8, 12, 8, 4),
-                    child: Row(
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white),
-                          onPressed: () => Navigator.pop(context),
-                        ),
-                        const Expanded(
-                          child: Text(
-                            'Super Admin',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w800,
-                              fontSize: 18,
-                            ),
-                          ),
-                        ),
-                        _glassIconButton(
-                            icon: Icons.refresh_rounded,
-                            onPressed: _refreshAll)
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  // Padded + label-sized indicator keeps the underline inside
-                  // the curved header corners
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 14),
-                    child: TabBar(
-                      controller: _tabCtrl,
-                      labelColor: Colors.white,
-                      unselectedLabelColor: Colors.white54,
-                      indicatorSize: TabBarIndicatorSize.label,
-                      indicator: const UnderlineTabIndicator(
-                        borderSide: BorderSide(color: Colors.white, width: 3),
-                        insets: EdgeInsets.symmetric(horizontal: 6),
-                      ),
-                      tabs: const [
-                        Tab(icon: Icon(Icons.pending_actions_rounded, size: 20), text: 'Pending'),
-                        Tab(icon: Icon(Icons.verified_user_rounded, size: 20), text: 'Admins'),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: _segmented(isDark),
             ),
           ),
+          const SizedBox(height: 14),
           Expanded(
             child: TabBarView(
               controller: _tabCtrl,
@@ -517,13 +415,20 @@ class _SuperAdminScreenState extends State<SuperAdminScreen>
   // ── Pending Requests Tab (phone) ─────────────────────────────────────────
   Widget _buildPendingTab(bool isDark) {
     if (_loadingRequests) return const Center(child: CircularProgressIndicator());
-    if (_requests.isEmpty)
-      return _emptyState(
-          Icons.inbox_rounded, 'No Pending Requests',
-          'All admin requests will appear here', isDark);
+    if (_requests.isEmpty) {
+      return _pullable(
+        () => _loadRequests(silent: true),
+        _emptyState(
+          Icons.inbox_rounded,
+          'No Pending Requests',
+          'All admin requests will appear here',
+          isDark,
+        ),
+      );
+    }
 
     return RefreshIndicator(
-      onRefresh: _loadRequests,
+      onRefresh: () => _loadRequests(silent: true),
       child: ListView.builder(
         padding: EdgeInsets.symmetric(
           horizontal: responsiveSidePadding(
@@ -545,12 +450,20 @@ class _SuperAdminScreenState extends State<SuperAdminScreen>
   // ── Current Admins Tab (phone) ───────────────────────────────────────────
   Widget _buildAdminsTab(bool isDark) {
     if (_loadingAdmins) return const Center(child: CircularProgressIndicator());
-    if (_admins.isEmpty)
-      return _emptyState(Icons.verified_user_outlined,
-          'No Admins Yet', 'Approved admins will appear here', isDark);
+    if (_admins.isEmpty) {
+      return _pullable(
+        () => _loadAdmins(silent: true),
+        _emptyState(
+          Icons.verified_user_outlined,
+          'No Admins Yet',
+          'Approved admins will appear here',
+          isDark,
+        ),
+      );
+    }
 
     return RefreshIndicator(
-      onRefresh: _loadAdmins,
+      onRefresh: () => _loadAdmins(silent: true),
       child: ListView.builder(
         padding: EdgeInsets.symmetric(
           horizontal: responsiveSidePadding(
@@ -567,6 +480,18 @@ class _SuperAdminScreenState extends State<SuperAdminScreen>
       ),
     );
   }
+
+  /// Wraps an empty state so it can be pulled down to refresh.
+  Widget _pullable(Future<void> Function() onRefresh, Widget child) =>
+      RefreshIndicator(
+        onRefresh: onRefresh,
+        child: LayoutBuilder(
+          builder: (context, c) => ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            children: [SizedBox(height: c.maxHeight, child: child)],
+          ),
+        ),
+      );
 
   Widget _requestCard(Map r, Map user, Map profile, bool isDark,
           {bool desktop = false}) =>

@@ -7,6 +7,8 @@ import '../stores/announcement_store.dart';
 import '../utils/responsive.dart';
 import '../widgets/desktop_page.dart';
 import 'manage_announcements_screen.dart';
+import '../widgets/snackBar.dart';
+import '../widgets/page_header.dart';
 
 class ComposeAnnouncementScreen extends StatefulWidget {
   const ComposeAnnouncementScreen({super.key});
@@ -69,21 +71,12 @@ class _ComposeAnnouncementScreenState
       await AnnouncementStore().refresh();
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              '✅ Sent! ${result.notifiedCount} student${result.notifiedCount == 1 ? '' : 's'} notified.',
-            ),
-            backgroundColor: Colors.green,
-          ),
-        );
+        AppSnackBar.auto(context, '✅ Sent! ${result.notifiedCount} student${result.notifiedCount == 1 ? '' : 's'} notified.');
         Navigator.pop(context);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-        );
+        AppSnackBar.auto(context, 'Error: $e');
       }
     } finally {
       if (mounted) setState(() => _sending = false);
@@ -141,62 +134,18 @@ class _ComposeAnnouncementScreenState
           isDark ? const Color(0xFF0A0A0A) : const Color(0xFFF2F4F8),
       body: Column(
         children: [
-          // ── Header ───────────────────────────────────────────────────────
-          Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Color(0xFF0D47A1),
-                  Color(0xFF1565C0),
-                  Color(0xFF1E88E5),
-                ],
+          MobileHeader(
+            title: 'New announcement',
+            subtitle: 'Send an update to your students',
+            actions: [
+              HeaderTile(
+                icon: Icons.list_alt_rounded,
+                tooltip: 'My announcements',
+                onTap: _openManage,
               ),
-              borderRadius:
-                  BorderRadius.vertical(bottom: Radius.circular(28)),
-              boxShadow: [
-                BoxShadow(
-                  color: Color(0x331565C0),
-                  blurRadius: 16,
-                  offset: Offset(0, 6),
-                ),
-              ],
-            ),
-            child: SafeArea(
-              bottom: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(8, 12, 8, 16),
-                child: Row(
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.arrow_back_ios_new,
-                          color: Colors.white),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                    const Expanded(
-                      child: Text(
-                        'New Announcement',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 18,
-                        ),
-                      ),
-                    ),
-                    // quick access to edit/delete sent announcements
-                    IconButton(
-                      icon: const Icon(Icons.list_alt_rounded,
-                          color: Colors.white),
-                      tooltip: 'Manage my announcements',
-                      onPressed: _openManage,
-                    ),
-                  ],
-                ),
-              ),
-            ),
+            ],
           ),
+          const SizedBox(height: 8),
 
           // ── Form ─────────────────────────────────────────────────────────
           Expanded(

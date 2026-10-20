@@ -15,6 +15,7 @@ import '../services/api_service.dart';
 import '../utils/responsive.dart';
 import 'forgotpasswordscreen.dart';
 import 'registerscreen.dart';
+import '../widgets/app_dialog.dart';
 import '../widgets/google_button.dart';
 import '../widgets/snackBar.dart';
 import 'landing_page.dart';
@@ -186,47 +187,21 @@ class _SignInScreenState extends State<SignInScreen> {
     required String email,
     required String password,
   }) async {
-    await showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Row(
-          children: [
-            Icon(Icons.fingerprint, color: Colors.blue, size: 28),
-            SizedBox(width: 10),
-            Flexible(child: Text('Enable Fingerprint Login')),
-          ],
-        ),
-        content: const Text(
-          'Would you like to use your fingerprint to sign in faster next time?',
-          style: TextStyle(fontSize: 14, height: 1.5),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Not Now'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blue,
-              foregroundColor: Colors.white,
-            ),
-            onPressed: () async {
-              await BiometricService.saveCredentials(
-                email: email,
-                password: password,
-              );
-              Navigator.pop(ctx);
-              if (mounted) {
-                AppSnackBar.showSuccess(context, 'Fingerprint login enabled ✓');
-                setState(() => _bioEnabled = true);
-              }
-            },
-            child: const Text('Enable'),
-          ),
-        ],
-      ),
+    final enable = await showConfirmDialog(
+      context,
+      title: 'Enable fingerprint login?',
+      message: 'Sign in faster next time using your fingerprint.',
+      confirmLabel: 'Enable',
+      cancelLabel: 'Not now',
+      icon: Icons.fingerprint_rounded,
     );
+    if (!enable) return;
+
+    await BiometricService.saveCredentials(email: email, password: password);
+    if (mounted) {
+      AppSnackBar.showSuccess(context, 'Fingerprint login enabled ✓');
+      setState(() => _bioEnabled = true);
+    }
   }
 
   // ── Google sign in ─────────────────────────────────────────────────────────

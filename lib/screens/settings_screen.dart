@@ -17,7 +17,7 @@ import '../widgets/ui_helpers.dart';
 import '../utils/responsive.dart';
 import '../widgets/notification_toggle.dart';
 import '../widgets/personal_reminders_toggle.dart';
-import '../widgets/profile_screen.dart';
+import 'profile_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -310,16 +310,135 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   // ── the rows of each group (shared by phone + desktop) ────
   List<Widget> _appearanceRows(ThemeNotifier theme, bool isDark) => [
-    _switchRow(
+    _row(
       isDark: isDark,
-      icon: isDark ? Icons.dark_mode_rounded : Icons.light_mode_rounded,
+      icon: switch (theme.themeMode) {
+        ThemeMode.light => Icons.light_mode_rounded,
+        ThemeMode.dark => Icons.dark_mode_rounded,
+        ThemeMode.system => Icons.brightness_auto_rounded,
+      },
       color: _blue,
-      title: 'Dark mode',
-      subtitle: isDark ? 'Using the dark theme' : 'Using the light theme',
-      value: isDark,
-      onChanged: (_) => theme.toggleTheme(),
+      title: 'App theme',
+      subtitle: theme.label,
+      onTap: () => _pickTheme(theme),
     ),
   ];
+
+  /// Pop-up with Light / Dark / System as radio options.
+  Future<void> _pickTheme(ThemeNotifier theme) async {
+    var selected = theme.themeMode;
+    const options = [
+      (ThemeMode.light, 'Light theme', Icons.light_mode_rounded),
+      (ThemeMode.dark, 'Dark theme', Icons.dark_mode_rounded),
+      (ThemeMode.system, 'System theme', Icons.brightness_auto_rounded),
+    ];
+
+    final result = await showAppDialog<ThemeMode>(
+      context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setD) {
+          final dark = Theme.of(ctx).brightness == Brightness.dark;
+          return AppDialog(
+            title: 'App theme',
+            message: 'Choose how SchoolLife looks.',
+            icon: Icons.palette_rounded,
+            child: Column(
+              children: [
+                for (final o in options)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(16),
+                      onTap: () => setD(() => selected = o.$1),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 12,
+                        ),
+                        decoration: BoxDecoration(
+                          color: selected == o.$1
+                              ? _blue.withOpacity(dark ? 0.2 : 0.08)
+                              : (dark
+                                    ? Colors.white.withOpacity(0.04)
+                                    : const Color(0xFFF5F7FA)),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: selected == o.$1
+                                ? _blue.withOpacity(0.6)
+                                : Colors.transparent,
+                            width: 1.4,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              o.$3,
+                              size: 21,
+                              color: selected == o.$1
+                                  ? _blue
+                                  : (dark ? Colors.white54 : Colors.black45),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                o.$2,
+                                style: TextStyle(
+                                  fontSize: 14.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: dark ? Colors.white : Colors.black87,
+                                ),
+                              ),
+                            ),
+                            // radio button
+                            AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
+                              width: 22,
+                              height: 22,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: selected == o.$1
+                                      ? _blue
+                                      : (dark
+                                            ? Colors.white30
+                                            : Colors.black26),
+                                  width: 2,
+                                ),
+                              ),
+                              child: Center(
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 200),
+                                  width: selected == o.$1 ? 10 : 0,
+                                  height: selected == o.$1 ? 10 : 0,
+                                  decoration: const BoxDecoration(
+                                    color: _blue,
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            actions: [
+              const DialogCancelButton(),
+              DialogConfirmButton(
+                label: 'Apply',
+                onPressed: () => Navigator.pop(ctx, selected),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+
+    if (result != null) await theme.setThemeMode(result);
+  }
 
   List<Widget> _notificationRows() => const [
     NotificationToggle(),
@@ -934,22 +1053,71 @@ class _SettingsScreenState extends State<SettingsScreen> {
     Color text,
     Color sub,
   ) {
-    Widget themeCard(String label, bool dark) {
-      final selected = isDark == dark;
+    Widget mini(bool dark) {
       final pBg = dark ? const Color(0xFF0A0A0A) : const Color(0xFFF7F8FA);
       final pCard = dark ? const Color(0xFF15181D) : Colors.white;
       final pSide = dark ? const Color(0xFF0D1B2A) : const Color(0xFFE9EDF4);
+      return Container(
+        color: pSide,
+        child: Row(
+          children: [
+            const SizedBox(width: 10),
+            Container(
+              width: 22,
+              height: 22,
+              decoration: BoxDecoration(
+                color: _blue,
+                borderRadius: BorderRadius.circular(7),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Container(
+                margin: const EdgeInsets.fromLTRB(0, 8, 8, 8),
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: pBg,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      height: 8,
+                      width: 44,
+                      decoration: BoxDecoration(
+                        color: _blue,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Expanded(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: pCard,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
 
+    Widget themeCard(String label, ThemeMode mode, IconData icon) {
+      final selected = theme.themeMode == mode;
       return Expanded(
         child: GestureDetector(
-          onTap: () {
-            if (!selected) theme.toggleTheme();
-          },
+          onTap: () => theme.setThemeMode(mode),
           child: MouseRegion(
             cursor: SystemMouseCursors.click,
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
-              padding: const EdgeInsets.all(14),
+              padding: const EdgeInsets.all(12),
               decoration: _deco(isDark).copyWith(
                 border: Border.all(
                   color: selected ? _blue : Colors.transparent,
@@ -958,83 +1126,40 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               child: Column(
                 children: [
-                  Container(
-                    height: 120,
-                    decoration: BoxDecoration(
-                      color: pSide,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: Colors.grey.withOpacity(0.25)),
-                    ),
-                    child: Row(
-                      children: [
-                        const SizedBox(width: 10),
-                        Container(
-                          width: 24,
-                          height: 24,
-                          decoration: BoxDecoration(
-                            color: _blue,
-                            borderRadius: BorderRadius.circular(7),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Container(
-                            margin: const EdgeInsets.fromLTRB(0, 8, 8, 8),
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(
-                              color: pBg,
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(14),
+                    child: SizedBox(
+                      height: 110,
+                      child: mode == ThemeMode.system
+                          ? Row(
                               children: [
-                                Container(
-                                  height: 10,
-                                  width: 60,
-                                  decoration: BoxDecoration(
-                                    color: _blue,
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Expanded(
-                                  child: Container(
-                                    decoration: BoxDecoration(
-                                      color: pCard,
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                  ),
-                                ),
+                                Expanded(child: ClipRect(child: mini(false))),
+                                Expanded(child: ClipRect(child: mini(true))),
                               ],
-                            ),
-                          ),
-                        ),
-                      ],
+                            )
+                          : mini(mode == ThemeMode.dark),
                     ),
                   ),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 12),
                   Row(
                     children: [
-                      Icon(
-                        dark ? Icons.dark_mode_rounded : Icons.light_mode_rounded,
-                        size: 18,
-                        color: selected ? _blue : sub,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        label,
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w800,
-                          color: text,
+                      Icon(icon, size: 17, color: selected ? _blue : sub),
+                      const SizedBox(width: 7),
+                      Expanded(
+                        child: Text(
+                          label,
+                          style: TextStyle(
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w800,
+                            color: text,
+                          ),
                         ),
                       ),
-                      const Spacer(),
                       Icon(
                         selected
                             ? Icons.check_circle_rounded
                             : Icons.circle_outlined,
-                        size: 20,
+                        size: 19,
                         color: selected ? _blue : sub,
                       ),
                     ],
@@ -1050,9 +1175,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        themeCard('Light', false),
-        const SizedBox(width: 16),
-        themeCard('Dark', true),
+        themeCard('Light theme', ThemeMode.light, Icons.light_mode_rounded),
+        const SizedBox(width: 14),
+        themeCard('Dark theme', ThemeMode.dark, Icons.dark_mode_rounded),
+        const SizedBox(width: 14),
+        themeCard('System theme', ThemeMode.system, Icons.brightness_auto_rounded),
       ],
     );
   }

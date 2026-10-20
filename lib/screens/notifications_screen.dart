@@ -9,8 +9,10 @@ import '../services/notification_router.dart';
 import '../providers/theme_notifier.dart';
 import '../utils/responsive.dart';
 import '../widgets/animations.dart';
+import '../widgets/app_dialog.dart';
 import '../widgets/desktop_page.dart';
 import 'announcement_detail_screen.dart';
+import '../widgets/page_header.dart';
 
 class NotificationsScreen extends StatefulWidget {
   /// Pass initialTab: 1 to land directly on the Announcements tab
@@ -129,109 +131,26 @@ class _NotificationsScreenState extends State<NotificationsScreen>
     return Scaffold(
       backgroundColor: isDark
           ? const Color(0xFF0A0A0A)
-          : const Color(0xFFF2F4F8),
+          : const Color(0xFFF7F8FA),
       body: Column(
         children: [
-          // ── Gradient header ──────────────────────────────────────────────
-          Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Color(0xFF0D47A1),
-                  Color(0xFF1565C0),
-                  Color(0xFF1E88E5),
-                ],
-              ),
-              borderRadius: BorderRadius.vertical(bottom: Radius.circular(28)),
-              boxShadow: [
-                BoxShadow(
-                  color: Color(0x331565C0),
-                  blurRadius: 16,
-                  offset: Offset(0, 6),
-                ),
-              ],
-            ),
-            child: SafeArea(
-              bottom: false,
-              child: Column(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(8, 12, 8, 0),
-                    child: Row(
-                      children: [
-                        IconButton(
-                          icon: const Icon(
-                            Icons.arrow_back_ios_new,
-                            color: Colors.white,
-                          ),
-                          onPressed: () => Navigator.pop(context),
-                        ),
-                        const Expanded(
-                          child: Text(
-                            'Notifications',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w800,
-                              fontSize: 18,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 48),
-                      ],
-                    ),
-                  ),
-                  // Padded + label-sized indicator so the white underline stays
-                  // inside the curved header instead of poking out of the corners
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
-                    child: TabBar(
-                    controller: _tab,
-                    indicatorSize: TabBarIndicatorSize.label,
-                    indicator: const UnderlineTabIndicator(
-                      borderSide: BorderSide(color: Colors.white, width: 3),
-                      insets: EdgeInsets.symmetric(horizontal: 6),
-                    ),
-                    labelColor: Colors.white,
-                    unselectedLabelColor: Colors.white54,
-                    labelStyle: const TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 14,
-                    ),
-                    tabs: [
-                      Tab(
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Text('Notifications'),
-                            if (notifStore.unreadCount > 0) ...[
-                              const SizedBox(width: 6),
-                              _Badge(notifStore.unreadCount),
-                            ],
-                          ],
-                        ),
-                      ),
-                      Tab(
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Text('Announcements'),
-                            if (annStore.unreadCount > 0) ...[
-                              const SizedBox(width: 6),
-                              _Badge(annStore.unreadCount),
-                            ],
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  ),
-                ],
-              ),
+          MobileHeader(
+            title: 'Notifications',
+            subtitle: _unreadSubtitle(
+              notifStore.unreadCount,
+              annStore.unreadCount,
             ),
           ),
+          const SizedBox(height: 14),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: _mobileSwitch(
+              isDark,
+              notifStore.unreadCount,
+              annStore.unreadCount,
+            ),
+          ),
+          const SizedBox(height: 10),
 
           // ── Tab views ────────────────────────────────────────────────────
           Expanded(
@@ -254,6 +173,110 @@ class _NotificationsScreenState extends State<NotificationsScreen>
           ),
         ],
       ),
+    );
+  }
+
+  String _unreadSubtitle(int n, int a) {
+    if (n + a == 0) return 'You\'re all caught up';
+    return '$n unread · $a new announcement${a == 1 ? '' : 's'}';
+  }
+
+  /// Sliding pill (same style as Timetable / Grades) with unread badges.
+  Widget _mobileSwitch(bool isDark, int unreadN, int unreadA) {
+    final items = [
+      (Icons.notifications_rounded, 'Notifications', unreadN),
+      (Icons.campaign_rounded, 'Announcements', unreadA),
+    ];
+    return LayoutBuilder(
+      builder: (context, c) {
+        final w = (c.maxWidth - 8) / items.length;
+        return Container(
+          height: 50,
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: isDark ? Colors.white.withOpacity(0.06) : Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
+                blurRadius: 10,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: AnimatedBuilder(
+            animation: _tab.animation!,
+            builder: (context, _) {
+              final v = _tab.animation!.value;
+              return Stack(
+                children: [
+                  Positioned(
+                    left: v * w,
+                    top: 0,
+                    bottom: 0,
+                    width: w,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF1E88E5), Color(0xFF0D47A1)],
+                        ),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                  Row(
+                    children: [
+                      for (var i = 0; i < items.length; i++)
+                        Expanded(
+                          child: GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTap: () => _tab.animateTo(i),
+                            child: Center(
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      items[i].$1,
+                                      size: 17,
+                                      color: (v - i).abs() < 0.5
+                                          ? Colors.white
+                                          : (isDark
+                                                ? Colors.white54
+                                                : Colors.black54),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      items[i].$2,
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w700,
+                                        color: (v - i).abs() < 0.5
+                                            ? Colors.white
+                                            : (isDark
+                                                  ? Colors.white54
+                                                  : Colors.black54),
+                                      ),
+                                    ),
+                                    if (items[i].$3 > 0) ...[
+                                      const SizedBox(width: 6),
+                                      _Badge(items[i].$3),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+              );
+            },
+          ),
+        );
+      },
     );
   }
 
@@ -481,8 +504,13 @@ class _NotificationsTab extends StatelessWidget {
                   isDark: isDark,
                   icon: Icons.notifications_none_rounded,
                   label: 'No notifications yet',
+                  onRefresh: () => store.load(),
                 )
-              : ListView.builder(
+              : RefreshIndicator(
+                  color: const Color(0xFF1565C0),
+                  onRefresh: () => store.load(),
+                  child: ListView.builder(
+                  physics: const AlwaysScrollableScrollPhysics(),
                   padding: EdgeInsets.symmetric(
                     horizontal: responsiveSidePadding(
                       MediaQuery.sizeOf(context).width,
@@ -511,32 +539,22 @@ class _NotificationsTab extends StatelessWidget {
                     );
                   },
                 ),
+                ),
         ),
       ],
     );
   }
 
-  void _confirmClearAll(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Clear all notifications?'),
-        content: const Text('This cannot be undone.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () {
-              store.clearAll();
-              Navigator.pop(ctx);
-            },
-            child: const Text('Clear', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
+  Future<void> _confirmClearAll(BuildContext context) async {
+    final ok = await showConfirmDialog(
+      context,
+      title: 'Clear all notifications?',
+      message: 'This cannot be undone.',
+      confirmLabel: 'Clear all',
+      icon: Icons.delete_sweep_rounded,
+      color: Colors.red,
     );
+    if (ok) store.clearAll();
   }
 }
 
@@ -687,6 +705,7 @@ class _AnnouncementsTab extends StatelessWidget {
                   isDark: isDark,
                   icon: Icons.campaign_outlined,
                   label: 'No announcements yet',
+                  onRefresh: store.refresh,
                 )
               : RefreshIndicator(
                   onRefresh: store.refresh,
@@ -723,27 +742,16 @@ class _AnnouncementsTab extends StatelessWidget {
     );
   }
 
-  void _confirmClearAll(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Clear all announcements?'),
-        content: const Text('This removes them from your view only.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () {
-              store.hideAllLocal();
-              Navigator.pop(ctx);
-            },
-            child: const Text('Clear', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
+  Future<void> _confirmClearAll(BuildContext context) async {
+    final ok = await showConfirmDialog(
+      context,
+      title: 'Clear all announcements?',
+      message: 'This only removes them from your view.',
+      confirmLabel: 'Clear all',
+      icon: Icons.delete_sweep_rounded,
+      color: Colors.red,
     );
+    if (ok) store.hideAllLocal();
   }
 }
 
@@ -780,10 +788,10 @@ class _DismissBackground extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     alignment: Alignment.centerRight,
     padding: const EdgeInsets.only(right: 20),
-    margin: const EdgeInsets.only(bottom: 10),
+    margin: const EdgeInsets.only(bottom: 12),
     decoration: BoxDecoration(
       color: Colors.red.shade400,
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(20),
     ),
     child: const Icon(Icons.delete, color: Colors.white),
   );
@@ -794,45 +802,114 @@ class _EmptyState extends StatelessWidget {
   final IconData icon;
   final String label;
 
+  /// When given, the empty screen can be pulled down to refresh.
+  final Future<void> Function()? onRefresh;
+
   static const Color _primary = Color(0xFF1565C0);
 
   const _EmptyState({
     required this.isDark,
     required this.icon,
     required this.label,
+    this.onRefresh,
   });
 
   @override
-  Widget build(BuildContext context) => Center(
-    child: Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 96,
-          height: 96,
-          decoration: BoxDecoration(
-            color: _primary.withOpacity(0.08),
-            shape: BoxShape.circle,
+  Widget build(BuildContext context) {
+    Widget content() => Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 96,
+            height: 96,
+            decoration: BoxDecoration(
+              color: _primary.withOpacity(0.08),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, size: 44, color: _primary.withOpacity(0.5)),
           ),
-          child: Icon(icon, size: 44, color: _primary.withOpacity(0.5)),
-        ),
-        const SizedBox(height: 16),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.w600,
-            color: isDark ? Colors.white70 : Colors.black87,
+          const SizedBox(height: 16),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              color: isDark ? Colors.white70 : Colors.black87,
+            ),
           ),
+        ],
+      ),
+    );
+
+    if (onRefresh == null) return content();
+
+    return RefreshIndicator(
+      color: _primary,
+      onRefresh: onRefresh!,
+      child: LayoutBuilder(
+        builder: (context, c) => ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: [
+            SizedBox(
+              height: c.maxHeight < 260 ? 260 : c.maxHeight,
+              child: content(),
+            ),
+          ],
         ),
-      ],
-    ),
-  );
+      ),
+    );
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  Notification card
+//  Cards
 // ─────────────────────────────────────────────────────────────────────────────
+
+BoxDecoration _cardDeco(bool isDark, bool highlight) => BoxDecoration(
+  color: isDark ? const Color(0xFF15181D) : Colors.white,
+  borderRadius: BorderRadius.circular(20),
+  border: highlight
+      ? Border.all(color: const Color(0xFF1565C0).withOpacity(0.45), width: 1.2)
+      : null,
+  boxShadow: [
+    BoxShadow(
+      color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
+      blurRadius: 12,
+      offset: const Offset(0, 3),
+    ),
+  ],
+);
+
+Widget _iconBlock(IconData icon) => Container(
+  width: 48,
+  height: 48,
+  decoration: BoxDecoration(
+    color: const Color(0xFF1565C0).withOpacity(0.12),
+    borderRadius: BorderRadius.circular(15),
+  ),
+  child: Icon(icon, color: const Color(0xFF1565C0), size: 23),
+);
+
+Widget _unreadDot() => Container(
+  width: 9,
+  height: 9,
+  decoration: const BoxDecoration(
+    color: Color(0xFF1565C0),
+    shape: BoxShape.circle,
+  ),
+);
+
+Widget _removeButton(bool isDark, VoidCallback onDelete) => IconButton(
+  tooltip: 'Remove',
+  icon: Icon(
+    Icons.close_rounded,
+    size: 18,
+    color: isDark ? Colors.white38 : Colors.black38,
+  ),
+  visualDensity: VisualDensity.compact,
+  onPressed: onDelete,
+);
 
 class _NotifCard extends StatelessWidget {
   final AppNotification n;
@@ -841,10 +918,8 @@ class _NotifCard extends StatelessWidget {
   final String timeLabel;
   final VoidCallback onTap;
 
-  /// Desktop only: shows a remove button (mobile uses swipe to dismiss).
+  /// Desktop only: shows a remove button (phones swipe to dismiss).
   final VoidCallback? onDelete;
-
-  static const Color _primary = Color(0xFF1565C0);
 
   const _NotifCard({
     required this.n,
@@ -856,106 +931,74 @@ class _NotifCard extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) => FadeSlideIn(
-    child: InkWell(
-    borderRadius: BorderRadius.circular(14),
-    onTap: onTap,
-    child: Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: isDark ? Colors.black : Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: !n.isRead
-            ? Border.all(color: _primary.withOpacity(0.4), width: 1.2)
-            : null,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: _primary.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(icon, color: _primary, size: 20),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+  Widget build(BuildContext context) {
+    final text = isDark ? Colors.white : Colors.black87;
+    final sub = isDark ? Colors.white60 : Colors.black54;
+    final faint = isDark ? Colors.white38 : Colors.black38;
+
+    return FadeSlideIn(
+      child: PressScale(
+        onTap: onTap,
+        pressedScale: 0.98,
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.all(14),
+          decoration: _cardDeco(isDark, !n.isRead),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _iconBlock(icon),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: Text(
-                        n.title,
-                        style: TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 14,
-                          color: isDark ? Colors.white : Colors.black87,
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            n.title,
+                            style: TextStyle(
+                              fontWeight: n.isRead
+                                  ? FontWeight.w700
+                                  : FontWeight.w900,
+                              fontSize: 14.5,
+                              color: text,
+                            ),
+                          ),
                         ),
-                      ),
+                        if (!n.isRead) _unreadDot(),
+                      ],
                     ),
-                    if (!n.isRead)
-                      Container(
-                        width: 8,
-                        height: 8,
-                        decoration: const BoxDecoration(
-                          color: _primary,
-                          shape: BoxShape.circle,
+                    const SizedBox(height: 4),
+                    Text(
+                      n.body,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 12.5, height: 1.4, color: sub),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Icon(Icons.schedule_rounded, size: 12, color: faint),
+                        const SizedBox(width: 4),
+                        Text(
+                          timeLabel,
+                          style: TextStyle(fontSize: 11, color: faint),
                         ),
-                      ),
+                      ],
+                    ),
                   ],
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  n.body,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: isDark ? Colors.white60 : Colors.black54,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  timeLabel,
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: isDark ? Colors.white38 : Colors.black38,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          if (onDelete != null)
-            IconButton(
-              tooltip: 'Remove',
-              icon: Icon(
-                Icons.close_rounded,
-                size: 18,
-                color: isDark ? Colors.white38 : Colors.black38,
               ),
-              visualDensity: VisualDensity.compact,
-              onPressed: onDelete,
-            ),
-        ],
+              if (onDelete != null) _removeButton(isDark, onDelete!),
+            ],
+          ),
+        ),
       ),
-    ),
-  ));
+    );
+  }
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-//  Announcement card
-// ─────────────────────────────────────────────────────────────────────────────
 
 class _AnnouncementCard extends StatelessWidget {
   final Announcement a;
@@ -964,10 +1007,8 @@ class _AnnouncementCard extends StatelessWidget {
   final String timeLabel;
   final VoidCallback onTap;
 
-  /// Desktop only: shows a remove button (mobile uses swipe to dismiss).
+  /// Desktop only: shows a remove button (phones swipe to dismiss).
   final VoidCallback? onDelete;
-
-  static const Color _primary = Color(0xFF1565C0);
 
   const _AnnouncementCard({
     required this.a,
@@ -979,138 +1020,110 @@ class _AnnouncementCard extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) => FadeSlideIn(
-    child: InkWell(
-    borderRadius: BorderRadius.circular(14),
-    onTap: onTap,
-    child: Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: isDark ? Colors.black : Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: isUnread
-            ? Border.all(color: _primary.withOpacity(0.4), width: 1.2)
-            : null,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: _primary.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Icon(
-              Icons.campaign_rounded,
-              color: _primary,
-              size: 20,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+  Widget build(BuildContext context) {
+    const blue = Color(0xFF1565C0);
+    final text = isDark ? Colors.white : Colors.black87;
+    final sub = isDark ? Colors.white60 : Colors.black54;
+    final faint = isDark ? Colors.white38 : Colors.black38;
+
+    return FadeSlideIn(
+      child: PressScale(
+        onTap: onTap,
+        pressedScale: 0.98,
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.all(14),
+          decoration: _cardDeco(isDark, isUnread),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _iconBlock(Icons.campaign_rounded),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: Text(
-                        a.title,
-                        style: TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 14,
-                          color: isDark ? Colors.white : Colors.black87,
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            a.title,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontWeight: isUnread
+                                  ? FontWeight.w900
+                                  : FontWeight.w700,
+                              fontSize: 14.5,
+                              color: text,
+                            ),
+                          ),
                         ),
-                      ),
+                        if (isUnread) _unreadDot(),
+                      ],
                     ),
-                    if (isUnread)
-                      Container(
-                        width: 8,
-                        height: 8,
-                        decoration: const BoxDecoration(
-                          color: _primary,
-                          shape: BoxShape.circle,
+                    const SizedBox(height: 3),
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            a.adminName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w700,
+                              color: blue.withOpacity(0.85),
+                            ),
+                          ),
                         ),
-                      ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 7,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: blue.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            a.levelLabel,
+                            style: const TextStyle(
+                              fontSize: 10,
+                              color: blue,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      a.message,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 12.5, height: 1.4, color: sub),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Icon(Icons.schedule_rounded, size: 12, color: faint),
+                        const SizedBox(width: 4),
+                        Text(
+                          timeLabel,
+                          style: TextStyle(fontSize: 11, color: faint),
+                        ),
+                      ],
+                    ),
                   ],
                 ),
-                const SizedBox(height: 2),
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        a.adminName,
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: _primary.withOpacity(0.8),
-                        ),
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: _primary.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        a.levelLabel,
-                        style: const TextStyle(
-                          fontSize: 10,
-                          color: _primary,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  a.message,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: isDark ? Colors.white60 : Colors.black54,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  timeLabel,
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: isDark ? Colors.white38 : Colors.black38,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          if (onDelete != null)
-            IconButton(
-              tooltip: 'Remove',
-              icon: Icon(
-                Icons.close_rounded,
-                size: 18,
-                color: isDark ? Colors.white38 : Colors.black38,
               ),
-              visualDensity: VisualDensity.compact,
-              onPressed: onDelete,
-            ),
-        ],
+              if (onDelete != null) _removeButton(isDark, onDelete!),
+            ],
+          ),
+        ),
       ),
-    ),
-  ));
+    );
+  }
 }

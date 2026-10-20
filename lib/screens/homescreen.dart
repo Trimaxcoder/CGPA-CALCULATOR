@@ -27,10 +27,12 @@ import '../widgets/ui_helpers.dart';
 import '../widgets/snackBar.dart';
 import '../utils/responsive.dart';
 import '../widgets/animations.dart';
+import '../widgets/app_dialog.dart';
 
 part 'homescreen_desktop.dart';
 part 'homescreen_modern.dart';
 part 'homescreen_mobile.dart';
+part 'homescreen_grading.dart';
 // ══════════════════════════════════════════════════════════
 //  HOME SCREEN
 // ══════════════════════════════════════════════════════════
@@ -1106,57 +1108,16 @@ class _HomeScreenState extends State<HomeScreen>
     _showSuccessDialog(name);
   }
 
-  void _showSuccessDialog(String name) => showDialog(
-    context: context,
-    builder: (ctx) => AlertDialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      contentPadding: const EdgeInsets.fromLTRB(24, 28, 24, 16),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 66,
-            height: 66,
-            decoration: BoxDecoration(
-              color: Colors.green.shade50,
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              Icons.check_circle_rounded,
-              color: Colors.green.shade600,
-              size: 42,
-            ),
-          ),
-          const SizedBox(height: 14),
-          const Text(
-            'Course Added!',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            '$name saved to Year $_selYear, Semester $_selSem.',
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
-          ),
-          const SizedBox(height: 20),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: () => Navigator.pop(ctx),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-              child: const Text('OK'),
-            ),
-          ),
-        ],
-      ),
-    ),
-  );
+  void _showSuccessDialog(String name) => showAppDialog(
+  context,
+  builder: (ctx) => AppDialog(
+    title: 'Course added!',
+    message: '$name saved to Year $_selYear, Semester $_selSem.',
+    icon: Icons.check_circle_rounded,
+    color: Colors.green,
+    actions: [DialogConfirmButton(label: 'OK', color: Colors.green)],
+  ),
+);
 
   // ── add from JSON picker ─────────────────────────────────
   void _addFromPicker() {
@@ -2106,38 +2067,18 @@ class _HomeScreenState extends State<HomeScreen>
     }
   }
 
-  Future<bool> _confirm(
-    String title,
-    String body,
-    String action, {
-    bool destructive = true,
-  }) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
-        surfaceTintColor: Colors.transparent,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text(
-          title,
-          style: TextStyle(color: destructive ? Colors.red : null),
-        ),
-        content: Text(body),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(action, style: const TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-    return ok ?? false;
-  }
+
+  Future<bool> _confirm(String title, String body, String action,
+    {bool destructive = true}) {
+  return showConfirmDialog(
+    context,
+    title: title,
+    message: body,
+    confirmLabel: action,
+    icon: destructive ? Icons.delete_forever_rounded : Icons.help_outline_rounded,
+    color: destructive ? Colors.red : const Color(0xFF1565C0),
+  );
+}
 
   // ══════════════════════════════════════════════════════════
   //  MANUAL BATCH ENTRY

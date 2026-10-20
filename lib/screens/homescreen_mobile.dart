@@ -72,6 +72,11 @@ class _GradesMobileState extends State<_GradesMobile>
 
   Future<void> _refresh() => s._syncWithServer();
 
+  Future<void> _openGrading() async {
+    await _showGradingSheet(context, s);
+    if (mounted) setState(() {});
+  }
+
   void _select(int y, int sm) {
     s._selYear = y;
     s._selSem = sm;
@@ -201,7 +206,7 @@ class _GradesMobileState extends State<_GradesMobile>
             onSelected: (v) {
               switch (v) {
                 case 'grading':
-                  s._showGradingSettings();
+                  _openGrading();
                   break;
                 case 'pdf':
                   s._exportPDF();
@@ -689,7 +694,7 @@ class _GradesMobileState extends State<_GradesMobile>
                   'Edit your grade scale',
                   Colors.orange,
                   isDark,
-                  s._showGradingSettings,
+                  _openGrading,
                 ),
               ),
             ],
