@@ -1,3 +1,4 @@
+import 'dart:async' show unawaited;
 import 'dart:ui' show PointerDeviceKind;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -27,6 +28,9 @@ import 'stores/announcement_store.dart';
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
+  // Chat messages are not saved to the bell history
+  if (message.data['type'] == 'class_message') return;
 
   final courseCode = message.data['courseCode'] ?? '';
   await MutedCoursesStore().load(); // background isolate needs to load fresh
@@ -64,6 +68,23 @@ Future<void> _initNotificationsSafely() async {
   }
 }
 
+/// Network-dependent startup work. Runs AFTER the first frame is on screen,
+/// so a slow connection or server can never hold the app on a black screen.
+Future<void> _initServicesInBackground() async {
+  await Future.wait([
+    _initNotificationsSafely(),
+    () async {
+      try {
+        // Loads the cache first, then refreshes from the server.
+        // The store calls notifyListeners() after each step.
+        await AnnouncementStore().init();
+      } catch (e) {
+        debugPrint('AnnouncementStore.init failed: $e');
+      }
+    }(),
+  ]);
+}
+
 /// Lets a mouse / trackpad drag-scroll and swipe PageViews / Dismissibles on
 /// desktop and web (by default only touch can).
 class _AppScrollBehavior extends MaterialScrollBehavior {
@@ -92,6 +113,7 @@ void main() async {
   tzdata.initializeTimeZones();
   tz.setLocalLocation(tz.getLocation('Africa/Lagos'));
 
+  // Fast, local-only setup: safe to wait for.
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
   // Background handlers aren't supported on web (it needs a service worker)
@@ -102,12 +124,11 @@ void main() async {
   await NotificationStore().load();
   await MutedCoursesStore().load();
 
-  // Don't let push-token failures (e.g. SERVICE_NOT_AVAILABLE on devices
-  // with outdated/missing Play Services) block or crash app startup.
-  await _initNotificationsSafely();
-  await AnnouncementStore().init();
-
+  // Show the splash screen right away...
   runApp(const MyApp());
+
+  // ...and do the network-dependent work in the background.
+  unawaited(_initServicesInBackground());
 }
 
 class MyApp extends StatefulWidget {
@@ -130,7 +151,7 @@ class _MyAppState extends State<MyApp> {
 
     // Wait until the first frame is drawn before navigating
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      NotificationRouter.routeByType(message.data['type'] ?? 'general');
+      NotificationService.routeFromInitialMessage(message);
     });
   }
 

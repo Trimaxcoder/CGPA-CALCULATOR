@@ -5,9 +5,13 @@ import '../models/announcement.dart';
 class AnnouncementService {
   static final _client = ApiClient();
 
+  // Longest we wait for the announcements feed before giving up.
+  // The store catches the timeout, so the app keeps its cached list.
+  static const _feedTimeout = Duration(seconds: 12);
+
   /// GET /announcements — scoped feed for the logged-in user
   static Future<List<Announcement>> fetchAnnouncements() async {
-    final data = await _client.get('/announcements');
+    final data = await _client.get('/announcements').timeout(_feedTimeout);
     final list = data['announcements'] as List<dynamic>;
     return list
         .map((e) => Announcement.fromMap(e as Map<String, dynamic>))

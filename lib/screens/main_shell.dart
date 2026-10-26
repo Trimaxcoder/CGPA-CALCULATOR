@@ -11,6 +11,7 @@ import 'homescreen.dart';
 import 'timetable_screen.dart';
 import 'settings_screen.dart';
 import '../widgets/snackBar.dart';
+import 'class_workspace_screen.dart';
 
 const _blue = Color(0xFF1565C0);
 
@@ -27,6 +28,11 @@ class _MainShellState extends State<MainShell>
     with SingleTickerProviderStateMixin {
   late int _currentIndex;
   late final List<Widget> _screens;
+
+  // Keeps every tab's state alive when the layout switches between the
+  // phone (bottom bar) and wide (sidebar) versions, e.g. on window resize
+  // or device rotation.
+  final GlobalKey _contentKey = GlobalKey();
 
   // soft fade + slide whenever the tab changes (IndexedStack keeps state)
   late final AnimationController _tabAnim = AnimationController(
@@ -81,7 +87,8 @@ class _MainShellState extends State<MainShell>
   @override
   void initState() {
     super.initState();
-    _currentIndex = widget.initialIndex;
+    // clamp so a bad index from a notification route can't crash IndexedStack
+    _currentIndex = widget.initialIndex.clamp(0, _destinations.length - 1);
     _screens = [
       HomeDashboard(onNavigate: _goTo),
       const TimetableScreen(),
@@ -125,6 +132,7 @@ class _MainShellState extends State<MainShell>
       builder: (context, constraints) {
         final width = constraints.maxWidth;
         final content = FadeTransition(
+          key: _contentKey, // preserves screen state across layout switches
           opacity: _tabFade,
           child: SlideTransition(
             position: _tabSlide,
@@ -141,8 +149,10 @@ class _MainShellState extends State<MainShell>
         final maxW = width * 0.45 < 380 ? width * 0.45 : 380.0;
         // full sidebar only when there is room; 600–1179 px starts as a rail
         final defaultW = width >= 1180 ? _defaultExpandedWidth : _railWidth;
-        final sw = ((_sidebarWidth ?? defaultW).clamp(_railWidth, maxW))
-            .toDouble();
+        final sw = ((_sidebarWidth ?? defaultW).clamp(
+          _railWidth,
+          maxW,
+        )).toDouble();
         final collapsed = sw < _collapseThreshold;
 
         final sidebarBg = isDark
@@ -185,7 +195,9 @@ class _MainShellState extends State<MainShell>
               _ResizeHandle(
                 isDark: isDark,
                 onDrag: (dx) => setState(
-                  () => _sidebarWidth = (sw + dx).clamp(_railWidth, maxW).toDouble(),
+                  () => _sidebarWidth = (sw + dx)
+                      .clamp(_railWidth, maxW)
+                      .toDouble(),
                 ),
                 onDragEnd: () => setState(() {
                   final w = _sidebarWidth ?? sw;
@@ -324,33 +336,39 @@ class _MainShellState extends State<MainShell>
     );
   }
 
-  /// Placeholder for the features that will live behind the center button.
+  /// Features that live behind the center button.
+  /// Phone: bottom sheet. Tablet / desktop / web: centered dialog.
   void _showMoreSheet() {
     final isDark = context.read<ThemeNotifier>().isDarkMode;
     final card = isDark ? const Color(0xFF15181D) : Colors.white;
     final text = isDark ? Colors.white : Colors.black87;
     final sub = isDark ? Colors.white54 : Colors.black45;
+    final isWide = MediaQuery.sizeOf(context).width >= Breakpoints.medium;
 
-    const items = [
-      (Icons.group_add_rounded, 'Join a class', Color(0xFF1565C0)),
-      (Icons.forum_rounded, 'Communities', Color(0xFF7C3AED)),
-      (Icons.how_to_reg_rounded, 'Attendance', Color(0xFF0891B2)),
-      (Icons.assignment_rounded, 'Assignments', Color(0xFF1E88E5)),
+    // (icon, label, color, onTap). A null onTap shows the SOON badge.
+    final List<(IconData, String, Color, VoidCallback?)> items = [
+      (
+        Icons.group_add_rounded,
+        'Join a class',
+        const Color(0xFF1565C0),
+        () => Navigator.of(
+          context,
+        ).push(MaterialPageRoute(builder: (_) => const ClassWorkspaceScreen())),
+      ),
+      (Icons.forum_rounded, 'Communities', const Color(0xFF7C3AED), null),
+      (Icons.how_to_reg_rounded, 'Attendance', const Color(0xFF0891B2), null),
+      (Icons.assignment_rounded, 'Assignments', const Color(0xFF1E88E5), null),
     ];
 
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: card,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+    // Shared content, used by both the phone sheet and the wide dialog.
+    Widget buildContent(BuildContext ctx) {
+      return SingleChildScrollView(
+        padding: EdgeInsets.fromLTRB(20, isWide ? 22 : 12, 20, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (!isWide) ...[
               Center(
                 child: Container(
                   width: 40,
@@ -362,87 +380,148 @@ class _MainShellState extends State<MainShell>
                 ),
               ),
               const SizedBox(height: 18),
-              Text(
-                'More',
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w900,
-                  color: text,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                'New features are on the way',
-                style: TextStyle(fontSize: 13, color: sub),
-              ),
-              const SizedBox(height: 18),
-              GridView.count(
-                crossAxisCount: 2,
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                mainAxisSpacing: 12,
-                crossAxisSpacing: 12,
-                childAspectRatio: 1.7,
-                children: [
-                  for (final it in items)
-                    PressScale(
-                      onTap: () {
-                        Navigator.pop(ctx);
-                        AppSnackBar.auto(context, '${it.$2} is coming soon');
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: it.$3.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(18),
-                          border: Border.all(color: it.$3.withOpacity(0.25)),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Row(
-                              children: [
-                                Icon(it.$1, color: it.$3, size: 24),
-                                const Spacer(),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 7,
-                                    vertical: 2,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: it.$3.withOpacity(0.15),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Text(
-                                    'SOON',
-                                    style: TextStyle(
-                                      fontSize: 8.5,
-                                      fontWeight: FontWeight.w800,
-                                      color: it.$3,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            Text(
-                              it.$2,
-                              style: TextStyle(
-                                fontSize: 13.5,
-                                fontWeight: FontWeight.w800,
-                                color: text,
-                              ),
-                            ),
-                          ],
+            ],
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'More',
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w900,
+                          color: text,
                         ),
                       ),
-                    ),
-                ],
+                      const SizedBox(height: 2),
+                      Text(
+                        'New features are on the way',
+                        style: TextStyle(fontSize: 13, color: sub),
+                      ),
+                    ],
+                  ),
+                ),
+                if (isWide)
+                  IconButton(
+                    tooltip: 'Close',
+                    onPressed: () => Navigator.pop(ctx),
+                    icon: Icon(Icons.close_rounded, color: sub),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: items.length,
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                mainAxisSpacing: 12,
+                crossAxisSpacing: 12,
+                mainAxisExtent: 92, // fixed height, never grows with width
               ),
-            ],
+              itemBuilder: (_, i) {
+                final it = items[i];
+                return PressScale(
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    if (it.$4 != null) {
+                      it.$4!();
+                    } else {
+                      AppSnackBar.auto(context, '${it.$2} is coming soon');
+                    }
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: it.$3.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(color: it.$3.withOpacity(0.25)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(it.$1, color: it.$3, size: 24),
+                            const Spacer(),
+                            if (it.$4 == null)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 7,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: it.$3.withOpacity(0.15),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  'SOON',
+                                  style: TextStyle(
+                                    fontSize: 8.5,
+                                    fontWeight: FontWeight.w800,
+                                    color: it.$3,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                        Text(
+                          it.$2,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w800,
+                            color: text,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
+      );
+    }
+
+    // ── Tablet / desktop / web: centered dialog with a max width ──
+    if (isWide) {
+      showDialog(
+        context: context,
+        builder: (ctx) => Dialog(
+          backgroundColor: card,
+          surfaceTintColor: Colors.transparent,
+          insetPadding: const EdgeInsets.all(24),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(28),
+          ),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 460),
+            child: buildContent(ctx),
           ),
         ),
+      );
+      return;
+    }
+
+    // ── Phone: bottom sheet ──
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: card,
+      isScrollControlled: true,
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.sizeOf(context).height * 0.85,
       ),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (ctx) => SafeArea(child: buildContent(ctx)),
     );
   }
 }
@@ -653,11 +732,7 @@ class _Sidebar extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 6),
-                  BellButton(
-                    isDark: isDark,
-                    badgeBorder: background,
-                    size: 40,
-                  ),
+                  BellButton(isDark: isDark, badgeBorder: background, size: 40),
                 ],
               ),
           ],
@@ -726,11 +801,11 @@ class _SidebarMore extends StatelessWidget {
             ),
           ],
         ),
-        child: Row(
+        child: const Row(
           children: [
-            const Icon(Icons.apps_rounded, color: Colors.white, size: 22),
-            const SizedBox(width: 12),
-            const Expanded(
+            Icon(Icons.apps_rounded, color: Colors.white, size: 22),
+            SizedBox(width: 12),
+            Expanded(
               child: Text(
                 'More',
                 style: TextStyle(
@@ -740,20 +815,10 @@ class _SidebarMore extends StatelessWidget {
                 ),
               ),
             ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Text(
-                'SOON',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 8.5,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
+            Icon(
+              Icons.chevron_right_rounded,
+              color: Colors.white70,
+              size: 20,
             ),
           ],
         ),
@@ -830,11 +895,7 @@ class _SidebarItem extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: collapsed
-          ? Tooltip(
-              message: destination.label,
-              preferBelow: false,
-              child: item,
-            )
+          ? Tooltip(message: destination.label, preferBelow: false, child: item)
           : item,
     );
   }
@@ -958,9 +1019,7 @@ class _BarItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = active
-        ? _accent
-        : (isDark ? Colors.white54 : Colors.black45);
+    final color = active ? _accent : (isDark ? Colors.white54 : Colors.black45);
     return Expanded(
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
@@ -973,9 +1032,7 @@ class _BarItem extends StatelessWidget {
               curve: Curves.easeOut,
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
               decoration: BoxDecoration(
-                color: active
-                    ? _accent.withOpacity(0.16)
-                    : Colors.transparent,
+                color: active ? _accent.withOpacity(0.16) : Colors.transparent,
                 borderRadius: BorderRadius.circular(14),
               ),
               child: AnimatedScale(
@@ -1048,7 +1105,9 @@ class _MoreButtonState extends State<_MoreButton>
             ),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF1E88E5).withOpacity(0.25 + 0.25 * _c.value),
+                color: const Color(
+                  0xFF1E88E5,
+                ).withOpacity(0.25 + 0.25 * _c.value),
                 blurRadius: 14 + 10 * _c.value,
                 spreadRadius: 1 + 2 * _c.value,
               ),

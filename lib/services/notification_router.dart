@@ -1,17 +1,34 @@
 // lib/services/notification_router.dart
 import 'package:flutter/material.dart';
 import 'navigation_service.dart';
+import 'class_service.dart';
 import '../screens/main_shell.dart';
 import '../screens/notifications_screen.dart';
 import '../screens/announcement_detail_screen.dart';
+import '../screens/class_screen.dart';
 import '../models/app_notification.dart';
 import '../models/announcement.dart';
 import '../stores/announcement_store.dart';
+import '../screens/class_workspace_screen.dart';
 
 class NotificationRouter {
+  /// Push types that belong to the "Join a class" feature. Each one carries a
+  /// classId in its data, so tapping it opens that class.
+  static const _classTypes = {
+    'class_message',
+    'anon_opened',
+    'class_join_request',
+    'class_approved',
+  };
+
   /// Called when the user taps a notification card inside the app.
   /// Has access to the full [AppNotification] including [data] map.
   static void route(AppNotification n) {
+    if (_classTypes.contains(n.type)) {
+      _routeToClass(n.data['classId']?.toString());
+      return;
+    }
+
     if (n.type == 'announcement') {
       _routeToAnnouncement(n.data['announcementId'] as String?);
       return;
@@ -42,6 +59,16 @@ class NotificationRouter {
         );
         break;
 
+      case 'class_message':
+      case 'anon_opened':
+      case 'class_join_request':
+      case 'class_approved':
+        // No classId available here — open the class list instead.
+        navigator.push(
+          MaterialPageRoute(builder: (_) => const ClassWorkspaceScreen()),
+        );
+        break;
+
       case 'announcement':
         // No announcementId available here — open Notifications screen.
         // The Announcements tab will be visible and the user can tap from there.
@@ -62,6 +89,33 @@ class NotificationRouter {
   }
 
   // ── Private ────────────────────────────────────────────────────────────────
+
+  /// Opens the class chat for [classId]. If the class can't be loaded (no
+  /// internet, or the student is no longer a member) it opens the class list.
+  static Future<void> _routeToClass(String? classId) async {
+    final navigator = NavigationService.navigatorKey.currentState;
+    if (navigator == null) return;
+
+    if (classId == null || classId.isEmpty) {
+      navigator.push(
+        MaterialPageRoute(builder: (_) => const ClassWorkspaceScreen()),
+      );
+      return;
+    }
+
+    try {
+      final details = await ClassService().details(classId);
+      final nav = NavigationService.navigatorKey.currentState;
+      if (nav == null) return;
+      nav.push(
+        MaterialPageRoute(builder: (_) => ClassScreen(room: details.room)),
+      );
+    } catch (_) {
+      NavigationService.navigatorKey.currentState?.push(
+        MaterialPageRoute(builder: (_) => const ClassWorkspaceScreen()),
+      );
+    }
+  }
 
   /// Tries to find the announcement by [announcementId] in the already-loaded
   /// store and opens its detail screen directly.

@@ -1,9 +1,11 @@
 // lib/services/api_service.dart
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+   import 'class_socket.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  CONFIGURATION
@@ -12,6 +14,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 class ApiConfig {
   static const String baseUrl = 'https://gradexbackend.onrender.com/api';
   static const Duration timeout = Duration(seconds: 15);
+  // The token refresh gets a shorter limit so a slow server can't stack
+  // 15s (request) + 15s (refresh) + 15s (retry) on a single call.
+  static const Duration refreshTimeout = Duration(seconds: 10);
   static const String anthropicApiKey = 'your-anthropic-api-key-here';
 }
 
@@ -76,10 +81,24 @@ class TokenStorage {
 //  BASE HTTP CLIENT
 // ─────────────────────────────────────────────────────────────────────────────
 
+/// Outcome of a token refresh attempt.
+/// [rejected] means the server said the refresh token is invalid (log out).
+/// [unavailable] means we couldn't find out (timeout, offline, server asleep)
+/// and the user must NOT be logged out because of it.
+enum _RefreshResult { ok, rejected, unavailable }
+
 class ApiClient {
   static final ApiClient _instance = ApiClient._internal();
   factory ApiClient() => _instance;
   ApiClient._internal();
+
+  static const _timeoutMessage =
+      'Server is taking too long to respond. Please try again.';
+  static const _unavailableMessage =
+      'Could not reach the server. Please try again.';
+
+  // Shared in-flight refresh, so several 401s at once trigger only one refresh.
+  Future<_RefreshResult>? _refreshing;
 
   Future<Map<String, String>> _headers({bool requiresAuth = true}) async {
     final headers = <String, String>{
@@ -93,38 +112,156 @@ class ApiClient {
     return headers;
   }
 
+  // ── Sending ────────────────────────────────────────────────────────────────
+
+  /// Sends one request and turns every network failure into an ApiException
+  /// with a readable message.
+  Future<http.Response> _send(
+    String method,
+    Uri uri,
+    Map<String, String> headers, {
+    Map<String, dynamic>? body,
+  }) async {
+    try {
+      final Future<http.Response> request;
+      switch (method) {
+        case 'GET':
+          request = http.get(uri, headers: headers);
+          break;
+        case 'POST':
+          request = http.post(uri, headers: headers, body: jsonEncode(body));
+          break;
+        case 'PUT':
+          request = http.put(uri, headers: headers, body: jsonEncode(body));
+          break;
+        case 'DELETE':
+          request = http.delete(uri, headers: headers);
+          break;
+        default:
+          throw ArgumentError('Unsupported method: $method');
+      }
+      return await request.timeout(ApiConfig.timeout);
+    } on TimeoutException {
+      throw const ApiException(_timeoutMessage);
+    } on SocketException {
+      throw const ApiException('No internet connection.');
+    } on HttpException {
+      throw const ApiException('Network error.');
+    } on http.ClientException {
+      // Covers failures on web and TLS/handshake errors on mobile.
+      throw const ApiException('No internet connection.');
+    }
+  }
+
+  /// One entry point for get/post/put/delete.
+  Future<Map<String, dynamic>> _request(
+    String method,
+    String path, {
+    Map<String, dynamic>? body,
+    bool requiresAuth = true,
+  }) async {
+    final uri     = Uri.parse('${ApiConfig.baseUrl}$path');
+    final headers = await _headers(requiresAuth: requiresAuth);
+    final response = await _send(method, uri, headers, body: body);
+
+    return _handleResponse(
+      response,
+      retryRequest: requiresAuth
+          ? () async {
+              final h = await _headers();
+              return _send(method, uri, h, body: body);
+            }
+          : null,
+    );
+  }
+
+  // ── Responses ──────────────────────────────────────────────────────────────
+
+  /// Decodes a JSON object body, or returns null if it isn't one
+  /// (e.g. an HTML error page from a sleeping or crashing server).
+  Map<String, dynamic>? _tryDecode(String raw) {
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is Map<String, dynamic>) return decoded;
+    } catch (_) {}
+    return null;
+  }
+
+  ApiException _errorFrom(http.Response response) {
+    final body = _tryDecode(response.body);
+    final message = body?['message'] as String?;
+    if (message != null && message.isNotEmpty) {
+      return ApiException(message, statusCode: response.statusCode);
+    }
+    if (response.statusCode >= 500) {
+      return ApiException(
+        'Server is unavailable right now. Please try again shortly.',
+        statusCode: response.statusCode,
+      );
+    }
+    return ApiException('Request failed', statusCode: response.statusCode);
+  }
+
+  bool _isSuccess(http.Response r) =>
+      r.statusCode >= 200 && r.statusCode < 300;
+
+  Map<String, dynamic> _successBody(http.Response response) {
+    final body = _tryDecode(response.body);
+    if (body == null) {
+      throw ApiException(
+        'Unexpected response from server.',
+        statusCode: response.statusCode,
+      );
+    }
+    return body;
+  }
+
   Future<Map<String, dynamic>> _handleResponse(
     http.Response response, {
     Future<http.Response> Function()? retryRequest,
   }) async {
-    final body = jsonDecode(response.body) as Map<String, dynamic>;
-
-    if (response.statusCode >= 200 && response.statusCode < 300) {
-      return body;
-    }
+    if (_isSuccess(response)) return _successBody(response);
 
     if (response.statusCode == 401 && retryRequest != null) {
-      final refreshed = await _tryRefreshToken();
-      if (refreshed) {
-        final retried     = await retryRequest();
-        final retryBody   = jsonDecode(retried.body) as Map<String, dynamic>;
-        if (retried.statusCode >= 200 && retried.statusCode < 300) {
-          return retryBody;
-        }
+      final result = await _tryRefreshToken();
+
+      switch (result) {
+        case _RefreshResult.ok:
+          final retried = await retryRequest();
+          if (_isSuccess(retried)) return _successBody(retried);
+          if (retried.statusCode == 401) {
+            await TokenStorage.clearTokens();
+            throw const UnauthorizedException();
+          }
+          // Some other failure (e.g. 500): report it, don't log the user out.
+          throw _errorFrom(retried);
+
+        case _RefreshResult.rejected:
+          await TokenStorage.clearTokens();
+          throw const UnauthorizedException();
+
+        case _RefreshResult.unavailable:
+          // Couldn't reach the server to refresh. Keep the tokens so the
+          // user isn't logged out just because the server was slow.
+          throw const ApiException(_unavailableMessage);
       }
-      await TokenStorage.clearTokens();
-      throw const UnauthorizedException();
     }
 
-    final message = body['message'] as String? ?? 'Request failed';
-    throw ApiException(message, statusCode: response.statusCode);
+    throw _errorFrom(response);
   }
 
-  Future<bool> _tryRefreshToken() async {
+  // ── Token refresh ──────────────────────────────────────────────────────────
+
+  Future<_RefreshResult> _tryRefreshToken() {
+    return _refreshing ??= _doRefresh().whenComplete(() => _refreshing = null);
+  }
+
+  Future<_RefreshResult> _doRefresh() async {
     try {
       final refreshToken = await TokenStorage.getRefreshToken();
-      print("=== REFRESH token exists: ${refreshToken != null}");
-      if (refreshToken == null) return false;
+      if (refreshToken == null || refreshToken.isEmpty) {
+        return _RefreshResult.rejected;
+      }
 
       final response = await http
           .post(
@@ -132,118 +269,48 @@ class ApiClient {
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode({'refreshToken': refreshToken}),
           )
-          .timeout(ApiConfig.timeout);
-        print("=== REFRESH status: ${response.statusCode}");
-        print("=== REFRESH body: ${response.body}");
+          .timeout(ApiConfig.refreshTimeout);
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        final data = _tryDecode(response.body);
+        final access  = data?['accessToken']  as String?;
+        final refresh = data?['refreshToken'] as String?;
+        if (access == null || refresh == null) return _RefreshResult.unavailable;
+
         await TokenStorage.saveTokens(
-          accessToken:  data['accessToken']  as String,
-          refreshToken: data['refreshToken'] as String,
+          accessToken:  access,
+          refreshToken: refresh,
         );
-        return true;
+        return _RefreshResult.ok;
       }
-    } catch (_) {}
-    return false;
+
+      if (response.statusCode == 401 || response.statusCode == 403) {
+        return _RefreshResult.rejected;
+      }
+      return _RefreshResult.unavailable; // 5xx, 502 from a waking server, etc.
+    } catch (_) {
+      return _RefreshResult.unavailable; // timeout, offline, anything else
+    }
   }
 
-  Future<Map<String, dynamic>> get(String path) async {
-    final uri     = Uri.parse('${ApiConfig.baseUrl}$path');
-    final headers = await _headers();
-    late http.Response response;
-    try {
-      response = await http.get(uri, headers: headers).timeout(ApiConfig.timeout);
-    } on SocketException {
-      throw const ApiException('No internet connection.');
-    } on HttpException {
-      throw const ApiException('Network error.');
-    }
-    return _handleResponse(
-      response,
-      retryRequest: () async {
-        final h = await _headers();
-        return http.get(uri, headers: h).timeout(ApiConfig.timeout);
-      },
-    );
-  }
+  // ── Public API (unchanged signatures) ──────────────────────────────────────
+
+  Future<Map<String, dynamic>> get(String path) => _request('GET', path);
 
   Future<Map<String, dynamic>> post(
     String path,
     Map<String, dynamic> body, {
     bool requiresAuth = true,
-  }) async {
-    final uri     = Uri.parse('${ApiConfig.baseUrl}$path');
-    final headers = await _headers(requiresAuth: requiresAuth);
-    late http.Response response;
-    try {
-      response = await http
-          .post(uri, headers: headers, body: jsonEncode(body))
-          .timeout(ApiConfig.timeout);
-    } on SocketException {
-      throw const ApiException('No internet connection.');
-    } on HttpException {
-      throw const ApiException('Network error.');
-    }
-    return _handleResponse(
-      response,
-      retryRequest: requiresAuth
-          ? () async {
-              final h = await _headers();
-              return http
-                  .post(uri, headers: h, body: jsonEncode(body))
-                  .timeout(ApiConfig.timeout);
-            }
-          : null,
-    );
-  }
+  }) =>
+      _request('POST', path, body: body, requiresAuth: requiresAuth);
 
   Future<Map<String, dynamic>> put(
     String path,
     Map<String, dynamic> body,
-  ) async {
-    final uri     = Uri.parse('${ApiConfig.baseUrl}$path');
-    final headers = await _headers();
-    late http.Response response;
-    try {
-      response = await http
-          .put(uri, headers: headers, body: jsonEncode(body))
-          .timeout(ApiConfig.timeout);
-    } on SocketException {
-      throw const ApiException('No internet connection.');
-    } on HttpException {
-      throw const ApiException('Network error.');
-    }
-    return _handleResponse(
-      response,
-      retryRequest: () async {
-        final h = await _headers();
-        return http
-            .put(uri, headers: h, body: jsonEncode(body))
-            .timeout(ApiConfig.timeout);
-      },
-    );
-  }
+  ) =>
+      _request('PUT', path, body: body);
 
-  Future<Map<String, dynamic>> delete(String path) async {
-    final uri     = Uri.parse('${ApiConfig.baseUrl}$path');
-    final headers = await _headers();
-    late http.Response response;
-    try {
-      response = await http.delete(uri, headers: headers).timeout(ApiConfig.timeout);
-    } on SocketException {
-      throw const ApiException('No internet connection.');
-    } on HttpException {
-      throw const ApiException('Network error.');
-    }
-    return _handleResponse(
-      response,
-      retryRequest: () async {
-        final h = await _headers();
-        return http.delete(uri, headers: h).timeout(ApiConfig.timeout);
-      },
-    );
-  }
+  Future<Map<String, dynamic>> delete(String path) => _request('DELETE', path);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -294,6 +361,7 @@ class AuthService {
     try {
       await _client.post('/auth/logout', {});
     } catch (_) {}
+    ClassSocket().disconnect();
     await TokenStorage.clearTokens();
   }
 
@@ -386,6 +454,7 @@ class ProfileService {
 
   Future<void> deleteAccount() async {
     await _client.delete('/profile');
+    ClassSocket().disconnect();
     await TokenStorage.clearTokens();
   }
 }
@@ -460,14 +529,14 @@ class CourseService {
     return (data['deleted'] as int?) ?? 0;
   }
 
- Future<List<Map<String, dynamic>>> syncCourses(
-  List<Map<String, dynamic>> localCourses, {
-  List<String> deletedServerIds = const [],
-}) async {
-  final data = await _client.post('/courses/sync', {
-    'courses': localCourses,
-    'deletedServerIds': deletedServerIds,
-  });
-  return List<Map<String, dynamic>>.from(data['courses'] as List);
-}
+  Future<List<Map<String, dynamic>>> syncCourses(
+    List<Map<String, dynamic>> localCourses, {
+    List<String> deletedServerIds = const [],
+  }) async {
+    final data = await _client.post('/courses/sync', {
+      'courses': localCourses,
+      'deletedServerIds': deletedServerIds,
+    });
+    return List<Map<String, dynamic>>.from(data['courses'] as List);
+  }
 }

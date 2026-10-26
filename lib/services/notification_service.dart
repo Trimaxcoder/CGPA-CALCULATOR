@@ -21,6 +21,10 @@ class NotificationService {
   static final _localNotifications = FlutterLocalNotificationsPlugin();
   static bool _initialized = false;
 
+  // Longest we wait on each network call during startup.
+  static const _tokenTimeout = Duration(seconds: 10);
+  static const _saveTokenTimeout = Duration(seconds: 8);
+
   static Future<void> init() async {
     if (_initialized) {
       debugPrint('NotificationService.init() called again — skipping.');
@@ -36,17 +40,8 @@ class NotificationService {
     await _messaging.requestPermission(alert: true, badge: true, sound: true);
     await _initLocalNotifications();
 
-    final token = await _getTokenWithRetry();
-    if (token != null) {
-      await _saveToken(token);
-    } else {
-      debugPrint(
-        'FCM token unavailable after retries — will rely on onTokenRefresh.',
-      );
-    }
-
-    _messaging.onTokenRefresh.listen(_saveToken);
-
+    // CHANGED — listeners are registered BEFORE the slow token work, so
+    // incoming notifications work even if the token/server step is slow.
     FirebaseMessaging.onMessage.listen((message) {
       _showLocalNotification(message);
       _storeNotification(message);
@@ -65,8 +60,20 @@ class NotificationService {
       NotificationRouter.route(notif);
     });
 
-    _initialized =
-        true; // CHANGED — moved here, set once after everything registers
+    _messaging.onTokenRefresh.listen(_saveToken);
+
+    // CHANGED — set here, once everything that can throw has registered.
+    // Token failures below are handled internally and never throw.
+    _initialized = true;
+
+    final token = await _getTokenWithRetry();
+    if (token != null) {
+      await _saveToken(token);
+    } else {
+      debugPrint(
+        'FCM token unavailable after retries — will rely on onTokenRefresh.',
+      );
+    }
   }
 
   /// Fetches the FCM token, retrying with exponential backoff if Play
@@ -81,7 +88,8 @@ class NotificationService {
 
     for (var attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
-        return await _messaging.getToken();
+        // CHANGED — a single attempt can no longer hang forever.
+        return await _messaging.getToken().timeout(_tokenTimeout);
       } catch (e) {
         final isLastAttempt = attempt == maxAttempts;
         debugPrint(
@@ -104,7 +112,6 @@ class NotificationService {
     return _messaging.getInitialMessage();
   }
 
-  // NEW method
   static void routeFromInitialMessage(RemoteMessage message) {
     final notif = AppNotification(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -118,15 +125,31 @@ class NotificationService {
   }
 
   static Future<void> _initLocalNotifications() async {
-    // ── CHANGED: was '@mipmap/ic_launcher' (your square app icon) ──
-    // Now points to a custom white silhouette icon you need to add yourself.
+    // Points to a custom white silhouette icon you need to add yourself.
     const androidSettings = AndroidInitializationSettings('ic_notification');
     const iosSettings = DarwinInitializationSettings();
     const settings = InitializationSettings(
       android: androidSettings,
       iOS: iosSettings,
     );
-    await _localNotifications.initialize(settings);
+    await _localNotifications.initialize(
+      settings,
+      onDidReceiveNotificationResponse: (response) {
+        // Class notifications carry "class:<classId>" so a tap opens the class
+        final payload = response.payload;
+        if (payload == null || !payload.startsWith('class:')) return;
+        NotificationRouter.route(
+          AppNotification(
+            id: DateTime.now().millisecondsSinceEpoch.toString(),
+            title: '',
+            body: '',
+            type: 'class_message',
+            data: {'classId': payload.substring(6)},
+            receivedAt: DateTime.now(),
+          ),
+        );
+      },
+    );
 
     final androidImpl = _localNotifications
         .resolvePlatformSpecificImplementation<
@@ -138,7 +161,7 @@ class NotificationService {
     }
   }
 
-  static Future<void> _showLocalNotification(RemoteMessage message) async {
+    static Future<void> _showLocalNotification(RemoteMessage message) async {
     final notification = message.notification;
     if (notification == null) return;
 
@@ -146,6 +169,14 @@ class NotificationService {
     if (courseCode.isNotEmpty && MutedCoursesStore().isMuted(courseCode)) {
       return; // user muted this course, skip showing the notification
     }
+
+    // Class notifications use one fixed id per class, so a new message
+    // replaces the previous notification instead of piling up.
+    final classId = (message.data['classId'] ?? '').toString();
+    final isClass = classId.isNotEmpty;
+    final notificationId = isClass
+        ? 'class:$classId'.hashCode & 0x7fffffff
+        : DateTime.now().millisecondsSinceEpoch ~/ 1000;
 
     const androidDetails = AndroidNotificationDetails(
       'gradex_channel',
@@ -162,14 +193,18 @@ class NotificationService {
     );
 
     await _localNotifications.show(
-      DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      notificationId,
       notification.title,
       notification.body,
       details,
+      payload: isClass ? 'class:$classId' : null,
     );
   }
 
-  static Future<void> _storeNotification(RemoteMessage message) async {
+   static Future<void> _storeNotification(RemoteMessage message) async {
+    // Chat messages would flood the bell history, so they are not saved
+    if (message.data['type'] == 'class_message') return;
+
     final courseCode = message.data['courseCode'] ?? '';
     if (courseCode.isNotEmpty && MutedCoursesStore().isMuted(courseCode)) {
       return; // also skip saving to bell/badge history
@@ -197,13 +232,17 @@ class NotificationService {
         department = decoded['department'] ?? '';
         level = decoded['level'] ?? '';
       }
-      await _svc.saveNotificationToken(
-        token: token,
-        school: school,
-        faculty: faculty,
-        department: department,
-        level: level,
-      );
+      // CHANGED — a slow server can no longer hold this up indefinitely.
+      // A timeout is caught below like any other failure.
+      await _svc
+          .saveNotificationToken(
+            token: token,
+            school: school,
+            faculty: faculty,
+            department: department,
+            level: level,
+          )
+          .timeout(_saveTokenTimeout);
     } catch (e) {
       debugPrint('Failed to save FCM token: $e');
     }
@@ -229,135 +268,123 @@ class NotificationService {
     return map[day] ?? DateTime.monday;
   }
 
-
-
   static Future<bool> scheduleStudyReminder({
-  required String entryId,
-  required String title,
-  required String day,
-  required String startTime,
-  int minutesBefore = 10,
-}) async {
-  final hasPermission = await canScheduleExactAlarms();
-  if (!hasPermission) {
-    debugPrint('❌ Cannot schedule — exact alarm permission not granted.');
-    return false; // CHANGED — caller now knows it failed
-  }
+    required String entryId,
+    required String title,
+    required String day,
+    required String startTime,
+    int minutesBefore = 10,
+  }) async {
+    final hasPermission = await canScheduleExactAlarms();
+    if (!hasPermission) {
+      debugPrint('❌ Cannot schedule — exact alarm permission not granted.');
+      return false; // caller knows it failed
+    }
 
-  final parts = startTime.split(':');
-  final hour = int.tryParse(parts[0]) ?? 8;
-  final minute = int.tryParse(parts[1]) ?? 0;
-  final weekday = _weekdayFor(day);
+    final parts = startTime.split(':');
+    final hour = int.tryParse(parts[0]) ?? 8;
+    final minute = int.tryParse(parts[1]) ?? 0;
+    final weekday = _weekdayFor(day);
 
-  final now = tz.TZDateTime.now(tz.local);
-  var scheduled = tz.TZDateTime(tz.local, now.year, now.month, now.day, hour, minute)
-      .subtract(Duration(minutes: minutesBefore));
+    final now = tz.TZDateTime.now(tz.local);
+    var scheduled =
+        tz.TZDateTime(tz.local, now.year, now.month, now.day, hour, minute)
+            .subtract(Duration(minutes: minutesBefore));
 
-  while (scheduled.weekday != weekday || scheduled.isBefore(now)) {
-    scheduled = scheduled.add(const Duration(days: 1));
-  }
+    while (scheduled.weekday != weekday || scheduled.isBefore(now)) {
+      scheduled = scheduled.add(const Duration(days: 1));
+    }
 
-  const androidDetails = AndroidNotificationDetails(
-    'study_reminders',
-    'Study Reminders',
-    channelDescription: 'Reminders for bookmarked personal study sessions',
-    importance: Importance.high,
-    priority: Priority.high,
-    icon: 'ic_notification',
-  );
-  const details = NotificationDetails(android: androidDetails, iOS: DarwinNotificationDetails());
-
-  try {
-    await _localNotifications.zonedSchedule(
-      entryId.hashCode,
-      '📖 Study Time!',
-      'Time to study $title — you\'ve got this!',
-      scheduled,
-      details,
-      androidScheduleMode: AndroidScheduleMode.alarmClock,
-      matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime,
+    const androidDetails = AndroidNotificationDetails(
+      'study_reminders',
+      'Study Reminders',
+      channelDescription: 'Reminders for bookmarked personal study sessions',
+      importance: Importance.high,
+      priority: Priority.high,
+      icon: 'ic_notification',
     );
-    return true; // CHANGED
-  } catch (e, st) {
-    debugPrint('❌ zonedSchedule FAILED: $e');
-    debugPrintStack(stackTrace: st);
-    return false; // CHANGED
+    const details = NotificationDetails(
+      android: androidDetails,
+      iOS: DarwinNotificationDetails(),
+    );
+
+    try {
+      await _localNotifications.zonedSchedule(
+        entryId.hashCode,
+        '📖 Study Time!',
+        'Time to study $title — you\'ve got this!',
+        scheduled,
+        details,
+        androidScheduleMode: AndroidScheduleMode.alarmClock,
+        matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime,
+      );
+      return true;
+    } catch (e, st) {
+      debugPrint('❌ zonedSchedule FAILED: $e');
+      debugPrintStack(stackTrace: st);
+      return false;
+    }
   }
-}
-  
 
   static Future<void> cancelStudyReminder(String entryId) async {
     await _localNotifications.cancel(entryId.hashCode);
   }
 
-    // TEMPORARY — for testing only, remove once confirmed working
-  // static Future<void> testImmediateNotification() async {
-  //   const androidDetails = AndroidNotificationDetails(
-  //     'study_reminders',
-  //     'Study Reminders',
-  //     channelDescription: 'Reminders for bookmarked personal study sessions',
-  //     importance: Importance.high,
-  //     priority: Priority.high,
-  //     icon: 'ic_notification',
-  //   );
-  //   const details = NotificationDetails(android: androidDetails, iOS: DarwinNotificationDetails());
-  //   await _localNotifications.show(888888, '🧪 Immediate Test', 'If you see this, basic notifications work', details);
-  // }
+  // ── Personal Reminders toggle support ──
 
+  static Future<bool> canScheduleExactAlarms() async {
+    if (!Platform.isAndroid) return true; // iOS doesn't need this check
+    final androidImpl = _localNotifications
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >();
+    return await androidImpl?.canScheduleExactNotifications() ?? false;
+  }
 
-  
+  static Future<void> openExactAlarmSettings() async {
+    final androidImpl = _localNotifications
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >();
+    await androidImpl?.requestExactAlarmsPermission();
+  }
 
-// ── Personal Reminders toggle support ──
-
-static Future<bool> canScheduleExactAlarms() async {
-  if (!Platform.isAndroid) return true; // iOS doesn't need this check
-  final androidImpl = _localNotifications
-      .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
-  return await androidImpl?.canScheduleExactNotifications() ?? false;
-}
-
-static Future<void> openExactAlarmSettings() async {
-  final androidImpl = _localNotifications
-      .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
-  await androidImpl?.requestExactAlarmsPermission();
-}
-
-/// Schedules a one-off verification notification ~10 seconds out.
-/// Used right after the user enables Personal Reminders, so they get
-/// immediate proof it works instead of waiting days for a real class.
-
-
-
-
-static Future<void> scheduleVerificationTest() async {
-  const androidDetails = AndroidNotificationDetails(
-    'study_reminders',
-    'Study Reminders',
-    channelDescription: 'Reminders for bookmarked personal study sessions',
-    importance: Importance.high,
-    priority: Priority.high,
-    icon: 'ic_notification',
-  );
-  const details = NotificationDetails(android: androidDetails, iOS: DarwinNotificationDetails());
-
-  final scheduled = tz.TZDateTime.now(tz.local).add(const Duration(seconds: 10));
-  debugPrint('🧪 Verification test scheduled for: $scheduled (now: ${tz.TZDateTime.now(tz.local)})');
-
-  try {
-    await _localNotifications.zonedSchedule(
-      777777,
-      '✅ Reminders are working!',
-      'Personal study reminders are set up correctly.',
-      scheduled,
-      details,
-      androidScheduleMode: AndroidScheduleMode.alarmClock,
+  /// Schedules a one-off verification notification ~10 seconds out.
+  /// Used right after the user enables Personal Reminders, so they get
+  /// immediate proof it works instead of waiting days for a real class.
+  static Future<void> scheduleVerificationTest() async {
+    const androidDetails = AndroidNotificationDetails(
+      'study_reminders',
+      'Study Reminders',
+      channelDescription: 'Reminders for bookmarked personal study sessions',
+      importance: Importance.high,
+      priority: Priority.high,
+      icon: 'ic_notification',
     );
-    debugPrint('✅ Verification test zonedSchedule call completed without error');
-  } catch (e, st) {
-    debugPrint('❌ Verification test FAILED: $e');
-    debugPrintStack(stackTrace: st);
+    const details = NotificationDetails(
+      android: androidDetails,
+      iOS: DarwinNotificationDetails(),
+    );
+
+    final scheduled =
+        tz.TZDateTime.now(tz.local).add(const Duration(seconds: 10));
+    debugPrint(
+      '🧪 Verification test scheduled for: $scheduled (now: ${tz.TZDateTime.now(tz.local)})',
+    );
+
+    try {
+      await _localNotifications.zonedSchedule(
+        777777,
+        '✅ Reminders are working!',
+        'Personal study reminders are set up correctly.',
+        scheduled,
+        details,
+        androidScheduleMode: AndroidScheduleMode.alarmClock,
+      );
+      debugPrint('✅ Verification test zonedSchedule call completed without error');
+    } catch (e, st) {
+      debugPrint('❌ Verification test FAILED: $e');
+      debugPrintStack(stackTrace: st);
+    }
   }
 }
-   
-}
-
