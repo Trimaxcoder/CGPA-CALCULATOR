@@ -4,12 +4,14 @@
 // ══════════════════════════════════════════════════════════
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/studentProfile_model.dart';
 import '../providers/theme_notifier.dart';
 import '../services/api_service.dart';
+import '../services/class_service.dart';
 import '../uniport_courses.dart';
 import '../utils/responsive.dart';
 import '../widgets/animations.dart';
@@ -33,6 +35,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   final _fk = GlobalKey<FormState>();
   late final TextEditingController _nameC;
+  late final TextEditingController _usernameC;
   late final TextEditingController _emailC;
   late final TextEditingController _matricC;
   late final TextEditingController _schoolC;
@@ -41,6 +44,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
   late String _level;
   bool _saving = false;
 
+  // The username shown in classes. It lives on the server, so it is loaded
+  // after the screen opens.
+  String _origUsername = '';
+  bool _usernameLoaded = false;
+
   static const _levels = ['100', '200', '300', '400', '500', '600', '700'];
 
   @override
@@ -48,13 +56,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
     super.initState();
     final p = widget.profile;
     _nameC = TextEditingController(text: p.name);
+    _usernameC = TextEditingController();
     _emailC = TextEditingController(text: p.email);
     _matricC = TextEditingController(text: p.matricNumber);
     _schoolC = TextEditingController(text: p.school);
     _facC = TextEditingController(text: p.faculty);
     _deptC = TextEditingController(text: p.department);
     _level = p.level.isNotEmpty ? p.level : '100';
-    for (final c in [_nameC, _emailC, _matricC, _schoolC, _facC, _deptC]) {
+    _loadUsername();
+    for (final c in [_nameC, _usernameC, _emailC, _matricC, _schoolC, _facC, _deptC]) {
       c.addListener(_refresh);
     }
   }
@@ -63,9 +73,32 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (mounted) setState(() {});
   }
 
+  Future<void> _loadUsername() async {
+    try {
+      final u = await ClassService().myUsername();
+      if (!mounted) return;
+      setState(() {
+        _origUsername = u;
+        _usernameLoaded = true;
+        if (_usernameC.text.isEmpty) _usernameC.text = u;
+      });
+    } catch (_) {
+      // Offline: the field stays empty and can still be filled in.
+    }
+  }
+
+  String get _typedUsername => _usernameC.text.trim().toLowerCase();
+
+  bool get _usernameChanged => _usernameLoaded
+      ? _typedUsername != _origUsername
+      : _typedUsername.isNotEmpty;
+
+  String _cleanError(Object e) =>
+      e.toString().replaceFirst('Exception: ', '');
+
   @override
   void dispose() {
-    for (final c in [_nameC, _emailC, _matricC, _schoolC, _facC, _deptC]) {
+    for (final c in [_nameC, _usernameC, _emailC, _matricC, _schoolC, _facC, _deptC]) {
       c.dispose();
     }
     super.dispose();
@@ -74,6 +107,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool get _dirty {
     final p = widget.profile;
     return _nameC.text.trim() != p.name ||
+        _usernameChanged ||
         _emailC.text.trim() != p.email ||
         _matricC.text.trim() != p.matricNumber ||
         _schoolC.text.trim() != p.school ||
@@ -123,6 +157,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (!_fk.currentState!.validate()) return;
     setState(() => _saving = true);
 
+    // Save the username first. If it is taken, nothing else is saved and the
+    // person can fix it right away.
+    if (_usernameChanged) {
+      try {
+        final saved = await ClassService().setUsername(_typedUsername);
+        _origUsername = saved;
+        _usernameLoaded = true;
+      } catch (e) {
+        if (!mounted) return;
+        setState(() => _saving = false);
+        AppSnackBar.showError(context, _cleanError(e));
+        return;
+      }
+    }
+
     final school = _findBestMatch(_schoolC.text, getAllSchools()) ?? _schoolC.text.trim();
     final faculty = _findBestMatch(_facC.text, getFaculties()) ?? _facC.text.trim();
     final dept = _findBestMatch(_deptC.text, getDepartments(faculty)) ??
@@ -159,9 +208,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   // ── styling helpers ───────────────────────────────────────
-  InputDecoration _dec(String label, IconData icon, bool isDark) =>
+  InputDecoration _dec(
+    String label,
+    IconData icon,
+    bool isDark, {
+    String? helper,
+  }) =>
       InputDecoration(
         labelText: label,
+        helperText: helper,
+        helperMaxLines: 3,
+        helperStyle: TextStyle(
+          color: isDark ? Colors.white38 : Colors.black45,
+          fontSize: 12,
+        ),
         labelStyle: TextStyle(
           color: isDark ? Colors.white54 : Colors.black45,
           fontSize: 14,
@@ -240,13 +300,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
     String? Function(String?) validator, {
     TextInputType? keyboard,
     TextCapitalization cap = TextCapitalization.none,
+    String? helper,
+    List<TextInputFormatter>? formatters,
   }) => TextFormField(
     controller: c,
     keyboardType: keyboard,
     textCapitalization: cap,
     style: TextStyle(color: isDark ? Colors.white : Colors.black87),
     validator: validator,
-    decoration: _dec(label, icon, isDark),
+    inputFormatters: formatters,
+    decoration: _dec(label, icon, isDark, helper: helper),
   );
 
   List<Widget> _formChildren(bool isDark) {
@@ -310,6 +373,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
           isDark,
           (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
           cap: TextCapitalization.words,
+        ),
+        _textField(
+          _usernameC,
+          'Username (optional)',
+          Icons.alternate_email_rounded,
+          isDark,
+          (v) {
+            final t = (v ?? '').trim();
+            if (t.isEmpty) return null;
+            if (!RegExp(r'^[A-Za-z0-9_.]{3,20}$').hasMatch(t)) {
+              return '3 to 20 letters, numbers, _ or .';
+            }
+            return null;
+          },
+          helper: 'Shown in your classes instead of your full name. '
+              'Leave it empty to use your full name.',
+          formatters: [
+            FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z0-9_.]')),
+            LengthLimitingTextInputFormatter(20),
+          ],
         ),
         _textField(
           _emailC,

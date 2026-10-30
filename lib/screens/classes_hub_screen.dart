@@ -398,12 +398,7 @@ class _ClassesHubScreenState extends State<ClassesHubScreen> {
       onRefresh: () => _load(silent: true),
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: EdgeInsets.fromLTRB(
-          widget.embedded ? 12 : 20,
-          8,
-          widget.embedded ? 12 : 20,
-          32,
-        ),
+        padding: const EdgeInsets.fromLTRB(0, 4, 0, 32),
         children: [
           if (_error != null && _classes.isEmpty)
             _errorView(p)
@@ -461,6 +456,7 @@ class _ClassesHubScreenState extends State<ClassesHubScreen> {
     );
   }
 
+  /// One class as a list row (like a chat list), not a card.
   Widget _classCard(ClassRoom c, _Palette p) {
     final role = c.isOwner ? 'Owner' : (c.isAdmin ? 'Admin' : 'Member');
     final members = '${c.memberCount} ${c.memberCount == 1 ? 'member' : 'members'}';
@@ -468,88 +464,92 @@ class _ClassesHubScreenState extends State<ClassesHubScreen> {
     final initial = c.name.isNotEmpty ? c.name[0].toUpperCase() : 'C';
     final selected = widget.embedded && c.id == widget.selectedId;
 
-    return Padding(
-      padding: EdgeInsets.only(bottom: widget.embedded ? 10 : 12),
-      child: PressScale(
+    return Material(
+      color: selected ? _accent.withValues(alpha: 0.13) : Colors.transparent,
+      child: InkWell(
         onTap: () => _open(c),
-        child: Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: selected ? _accent.withValues(alpha: 0.14) : p.card,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(
-              color: selected ? _accent.withValues(alpha: 0.55) : p.border,
-            ),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 46,
-                height: 46,
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [Color(0xFF1E88E5), Color(0xFF0D47A1)],
-                  ),
-                ),
-                child: Center(
-                  child: Text(
-                    initial,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w800,
-                      fontSize: 18,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      c.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w800,
-                        color: p.text,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+              child: Row(
+                children: [
+                  Container(
+                    width: 50,
+                    height: 50,
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [Color(0xFF1E88E5), Color(0xFF0D47A1)],
                       ),
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 12.5, color: p.sub),
+                    child: Center(
+                      child: Text(
+                        initial,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 19,
+                        ),
+                      ),
                     ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          c.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: p.text,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          subtitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 13, color: p.sub),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (c.isPending)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Text(
+                        'PENDING',
+                        style: TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.orange,
+                        ),
+                      ),
+                    ),
+                ],
               ),
-              if (c.isPending)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: Colors.orange.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Text(
-                    'PENDING',
-                    style: TextStyle(
-                      fontSize: 9,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.orange,
-                    ),
-                  ),
-                )
-              else if (!widget.embedded)
-                Icon(Icons.chevron_right_rounded, color: p.sub),
-            ],
-          ),
+            ),
+            // thin line that starts under the name, like a chat list
+            Padding(
+              padding: const EdgeInsets.only(left: 80),
+              child: Divider(height: 1, thickness: 1, color: p.border),
+            ),
+          ],
         ),
       ),
     );

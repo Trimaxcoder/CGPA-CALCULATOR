@@ -3,6 +3,8 @@
 // Data classes for the "Join a class" feature. Every fromMap matches the JSON
 // that the backend (routes/classes.js and socket/index.js) sends.
 
+import 'dart:typed_data';
+
 DateTime _parseDate(dynamic v) {
   if (v is String) {
     final d = DateTime.tryParse(v);
@@ -173,6 +175,79 @@ class ReplyPreview {
       );
 }
 
+/// A photo, document or voice note attached to a chat message.
+class ChatAttachment {
+  final String kind; // 'image' | 'file' | 'audio'
+  final String url; // empty while it is still uploading
+  final String name;
+  final int size; // bytes
+  final String mime;
+  final int duration; // seconds, voice notes only
+
+  /// Only on the sender's own device, while the file is uploading, so the
+  /// photo can show instantly. Never sent to or received from the server.
+  final Uint8List? localBytes;
+
+  const ChatAttachment({
+    required this.kind,
+    required this.url,
+    required this.name,
+    required this.size,
+    required this.mime,
+    this.duration = 0,
+    this.localBytes,
+  });
+
+  bool get isUploaded => url.isNotEmpty;
+  bool get isImage => kind == 'image';
+  bool get isAudio => kind == 'audio';
+  bool get isFile => kind == 'file';
+
+  factory ChatAttachment.fromMap(Map<String, dynamic> m) => ChatAttachment(
+        kind: (m['kind'] ?? 'file') as String,
+        url: (m['url'] ?? '') as String,
+        name: (m['name'] ?? '') as String,
+        size: (m['size'] as num?)?.toInt() ?? 0,
+        mime: (m['mime'] ?? '') as String,
+        duration: (m['duration'] as num?)?.toInt() ?? 0,
+      );
+
+  /// What the socket sends to the server.
+  Map<String, dynamic> toSendMap() => {
+        'kind': kind,
+        'url': url,
+        'name': name,
+        'size': size,
+        'mime': mime,
+        'duration': duration,
+      };
+
+  ChatAttachment copyWith({String? url, int? size, int? duration}) =>
+      ChatAttachment(
+        kind: kind,
+        url: url ?? this.url,
+        name: name,
+        size: size ?? this.size,
+        mime: mime,
+        duration: duration ?? this.duration,
+        localBytes: localBytes,
+      );
+
+  /// "Photo", "Voice note" or the file name.
+  String get label {
+    if (isImage) return 'Photo';
+    if (isAudio) return 'Voice note';
+    return name.isEmpty ? 'File' : name;
+  }
+
+  /// "340 KB", "2.1 MB"
+  String get sizeLabel {
+    if (size < 1024) return '$size B';
+    if (size < 1024 * 1024) return '${(size / 1024).round()} KB';
+    return '${(size / (1024 * 1024)).toStringAsFixed(1)} MB';
+  }
+}
+
 class ChatMessage {
   /// Server id. For a message that is still sending, this holds the clientId
   /// until the server confirms it.
@@ -187,6 +262,7 @@ class ChatMessage {
   final ReplyPreview? replyTo;
   final DateTime createdAt;
   final SendState sendState;
+  final ChatAttachment? attachment;
 
   const ChatMessage({
     required this.id,
@@ -200,11 +276,20 @@ class ChatMessage {
     required this.replyTo,
     required this.createdAt,
     this.sendState = SendState.sent,
+    this.attachment,
   });
+
+  /// Text for reply bars and pinned bars: the message text, or a short
+  /// description when the message is only a photo, file or voice note.
+  String get previewText {
+    if (text.isNotEmpty) return text;
+    return attachment?.label ?? '';
+  }
 
   factory ChatMessage.fromMap(Map<String, dynamic> m) {
     final sender = _asMap(m['sender']);
     final reply = m['replyTo'];
+    final att = m['attachment'];
     return ChatMessage(
       id: m['id'] as String,
       clientId: m['clientId'] as String?,
@@ -216,6 +301,7 @@ class ChatMessage {
       pinned: m['pinned'] == true,
       replyTo: reply is Map ? ReplyPreview.fromMap(_asMap(reply)) : null,
       createdAt: _parseDate(m['createdAt']),
+      attachment: att is Map ? ChatAttachment.fromMap(_asMap(att)) : null,
     );
   }
 
@@ -225,6 +311,8 @@ class ChatMessage {
     bool? pinned,
     String? text,
     SendState? sendState,
+    ChatAttachment? attachment,
+    bool clearAttachment = false,
   }) =>
       ChatMessage(
         id: id ?? this.id,
@@ -238,6 +326,7 @@ class ChatMessage {
         replyTo: replyTo,
         createdAt: createdAt,
         sendState: sendState ?? this.sendState,
+        attachment: clearAttachment ? null : (attachment ?? this.attachment),
       );
 }
 
@@ -315,6 +404,122 @@ class AnonPost {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+//  CLASS INFO (the screen opened by tapping the class name)
+// ─────────────────────────────────────────────────────────────────────────────
+
+class ClassAdmin {
+  final String userId;
+  final String name;
+  final bool isOwner;
+
+  const ClassAdmin({
+    required this.userId,
+    required this.name,
+    required this.isOwner,
+  });
+
+  factory ClassAdmin.fromMap(Map<String, dynamic> m) => ClassAdmin(
+        userId: (m['userId'] ?? '') as String,
+        name: (m['name'] ?? 'Student') as String,
+        isOwner: m['isOwner'] == true,
+      );
+}
+
+class SharedImage {
+  final String id;
+  final String url;
+
+  const SharedImage({required this.id, required this.url});
+
+  factory SharedImage.fromMap(Map<String, dynamic> m) => SharedImage(
+        id: (m['id'] ?? '') as String,
+        url: (m['url'] ?? '') as String,
+      );
+}
+
+class SharedFile {
+  final String id;
+  final String name;
+  final String url;
+  final int size;
+  final String mime;
+
+  const SharedFile({
+    required this.id,
+    required this.name,
+    required this.url,
+    required this.size,
+    required this.mime,
+  });
+
+  factory SharedFile.fromMap(Map<String, dynamic> m) => SharedFile(
+        id: (m['id'] ?? '') as String,
+        name: (m['name'] ?? '') as String,
+        url: (m['url'] ?? '') as String,
+        size: (m['size'] as num?)?.toInt() ?? 0,
+        mime: (m['mime'] ?? '') as String,
+      );
+
+  String get label => name.isEmpty ? 'File' : name;
+
+  String get sizeLabel {
+    if (size < 1024) return '$size B';
+    if (size < 1024 * 1024) return '${(size / 1024).round()} KB';
+    return '${(size / (1024 * 1024)).toStringAsFixed(1)} MB';
+  }
+}
+
+class ClassInfo {
+  final DateTime createdAt;
+  final String createdByName;
+  final List<ClassAdmin> admins;
+  final DateTime myJoinedAt;
+  final int pinnedCount;
+  final int imageCount;
+  final int fileCount;
+  final int audioCount;
+  final List<SharedImage> recentImages;
+  final List<SharedFile> recentFiles;
+
+  const ClassInfo({
+    required this.createdAt,
+    required this.createdByName,
+    required this.admins,
+    required this.myJoinedAt,
+    required this.pinnedCount,
+    required this.imageCount,
+    required this.fileCount,
+    required this.audioCount,
+    required this.recentImages,
+    required this.recentFiles,
+  });
+
+  int get mediaTotal => imageCount + fileCount + audioCount;
+
+  factory ClassInfo.fromMap(Map<String, dynamic> m) {
+    final media = _asMap(m['media']);
+    return ClassInfo(
+      createdAt: _parseDate(m['createdAt']),
+      createdByName: (_asMap(m['createdBy'])['name'] ?? 'Unknown') as String,
+      admins: ((m['admins'] as List?) ?? const [])
+          .map((e) => ClassAdmin.fromMap(_asMap(e)))
+          .toList(),
+      myJoinedAt: _parseDate(m['myJoinedAt']),
+      pinnedCount: (m['pinnedCount'] as num?)?.toInt() ?? 0,
+      imageCount: (media['images'] as num?)?.toInt() ?? 0,
+      fileCount: (media['files'] as num?)?.toInt() ?? 0,
+      audioCount: (media['audio'] as num?)?.toInt() ?? 0,
+      recentImages: ((media['recentImages'] as List?) ?? const [])
+          .map((e) => SharedImage.fromMap(_asMap(e)))
+          .toList(),
+      recentFiles: ((media['recentFiles'] as List?) ?? const [])
+          .map((e) => SharedFile.fromMap(_asMap(e)))
+          .toList(),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 //  RESPONSE WRAPPERS
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -324,10 +529,17 @@ class ClassDetails {
   final AnonSession? activeSession;
   final List<ChatMessage> pinned;
 
+  /// Newest message any classmate's app has received / has seen. Used for the
+  /// tick marks on my own messages. Null when nobody has yet.
+  final String? deliveredUpTo;
+  final String? readUpTo;
+
   const ClassDetails({
     required this.room,
     required this.activeSession,
     required this.pinned,
+    this.deliveredUpTo,
+    this.readUpTo,
   });
 
   factory ClassDetails.fromMap(Map<String, dynamic> m) => ClassDetails(
@@ -338,6 +550,8 @@ class ClassDetails {
         pinned: ((m['pinned'] as List?) ?? const [])
             .map((e) => ChatMessage.fromMap(_asMap(e)))
             .toList(),
+        deliveredUpTo: _asMap(m['receipts'])['delivered'] as String?,
+        readUpTo: _asMap(m['receipts'])['read'] as String?,
       );
 }
 

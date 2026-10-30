@@ -30,6 +30,20 @@ class ClassEvent {
   const ClassEvent(this.name, this.classId, this.data);
 }
 
+/// Someone's app received, or they read, messages up to [upToId].
+class ReceiptEvent {
+  final String classId;
+  final String kind; // 'delivered' | 'read'
+  final String upToId;
+  final List<String> userIds;
+  const ReceiptEvent({
+    required this.classId,
+    required this.kind,
+    required this.upToId,
+    required this.userIds,
+  });
+}
+
 class TypingEvent {
   final String classId;
   final String userId;
@@ -70,6 +84,11 @@ class SocketAck {
         return 'You can no longer post in this session.';
       case 'INVALID_TEXT':
         return 'That message is empty or too long.';
+      case 'INVALID_ATTACHMENT':
+        return 'That file could not be sent. Please try again.';
+      case 'UPLOAD_FAILED':
+        final why = (data['message'] ?? '').toString();
+        return why.isNotEmpty ? why : 'The upload failed. Please try again.';
       case 'OFFLINE':
         return 'You are offline. Reconnecting...';
       case 'TIMEOUT':
@@ -113,6 +132,7 @@ class ClassSocket with WidgetsBindingObserver {
   final _messageDeleted = StreamController<Map<String, dynamic>>.broadcast();
   final _messagePinned = StreamController<Map<String, dynamic>>.broadcast();
   final _typing = StreamController<TypingEvent>.broadcast();
+  final _receipts = StreamController<ReceiptEvent>.broadcast();
   final _anonOpened = StreamController<AnonSession>.broadcast();
   final _anonClosed = StreamController<AnonSession>.broadcast();
   final _anonNew = StreamController<AnonPost>.broadcast();
@@ -128,6 +148,7 @@ class ClassSocket with WidgetsBindingObserver {
   Stream<Map<String, dynamic>> get onMessagePinned => _messagePinned.stream;
 
   Stream<TypingEvent> get onTyping => _typing.stream;
+  Stream<ReceiptEvent> get onReceipt => _receipts.stream;
   Stream<AnonSession> get onAnonOpened => _anonOpened.stream;
   Stream<AnonSession> get onAnonClosed => _anonClosed.stream;
   Stream<AnonPost> get onAnonNew => _anonNew.stream;
@@ -265,6 +286,17 @@ class ClassSocket with WidgetsBindingObserver {
     _listen(s, 'message:new', (d) => _messageNew.add(ChatMessage.fromMap(_asMap(d))));
     _listen(s, 'message:deleted', (d) => _messageDeleted.add(_asMap(d)));
     _listen(s, 'message:pinned', (d) => _messagePinned.add(_asMap(d)));
+    _listen(s, 'receipt:update', (d) {
+      final m = _asMap(d);
+      _receipts.add(ReceiptEvent(
+        classId: (m['classId'] ?? '') as String,
+        kind: (m['kind'] ?? 'delivered') as String,
+        upToId: (m['upToId'] ?? '') as String,
+        userIds: ((m['userIds'] as List?) ?? const [])
+            .map((e) => e.toString())
+            .toList(),
+      ));
+    });
     _listen(s, 'typing', (d) {
       final m = _asMap(d);
       _typing.add(TypingEvent(
@@ -383,17 +415,27 @@ class ClassSocket with WidgetsBindingObserver {
     required String text,
     required String clientId,
     String? replyTo,
+    Map<String, dynamic>? attachment,
   }) {
     return _emit('message:send', {
       'classId': classId,
       'text': text,
       'clientId': clientId,
       'replyTo': ?replyTo,
+      'attachment': ?attachment,
     });
   }
 
   Future<SocketAck> deleteMessage(String messageId) {
     return _emit('message:delete', {'messageId': messageId});
+  }
+
+  /// Tell the class "I have seen everything up to this message".
+  /// Fire and forget.
+  void markRead(String classId, String upToId) {
+    final s = _socket;
+    if (s == null || !s.connected) return;
+    s.emit('message:read', {'classId': classId, 'upToId': upToId});
   }
 
   /// Fire and forget: no answer is needed.

@@ -20,6 +20,23 @@ class ClassService {
   //  CLASSES
   // ══════════════════════════════════════════════════════════════════════════
 
+  // ══════════════════════════════════════════════════════════════════════════
+  //  USERNAME (the name shown in classes)
+  // ══════════════════════════════════════════════════════════════════════════
+
+  /// The username I set for classes, or '' when I use my full name.
+  Future<String> myUsername() async {
+    final data = await _client.get('/auth/username');
+    return (data['username'] ?? '') as String;
+  }
+
+  /// Save a username. An empty string removes it, so classes show the full
+  /// name again. Throws with a readable message if it is taken or invalid.
+  Future<String> setUsername(String username) async {
+    final data = await _client.post('/auth/username', {'username': username});
+    return (data['username'] ?? '') as String;
+  }
+
   /// Classes I'm in, including ones still waiting for approval.
   Future<List<ClassRoom>> myClasses() async {
     final data = await _client.get('/classes');
@@ -52,6 +69,13 @@ class ClassService {
     return ClassDetails.fromMap(data);
   }
 
+  /// Everything the class info screen shows: created date, who created it,
+  /// admins, and shared photos, files and voice notes.
+  Future<ClassInfo> info(String classId) async {
+    final data = await _client.get('/classes/$classId/info');
+    return ClassInfo.fromMap(data['info'] as Map<String, dynamic>);
+  }
+
   /// Admin: change class settings. Only the fields you pass are changed.
   Future<ClassRoom> update(
     String classId, {
@@ -61,10 +85,10 @@ class ClassService {
     bool? chatLocked,
   }) async {
     final data = await _client.put('/classes/$classId', {
-      'name': ?name,
-      'description': ?description,
-      'requireApproval': ?requireApproval,
-      'chatLocked': ?chatLocked,
+      if (name != null) 'name': name,
+      if (description != null) 'description': description,
+      if (requireApproval != null) 'requireApproval': requireApproval,
+      if (chatLocked != null) 'chatLocked': chatLocked,
     });
     return ClassRoom.fromMap(data['class'] as Map<String, dynamic>);
   }
@@ -165,7 +189,10 @@ class ClassService {
     return AnonSession.fromMap(data['session'] as Map<String, dynamic>);
   }
 
-  Future<AnonSession> closeAnonSession(String classId, String sessionId) async {
+  Future<AnonSession> closeAnonSession(
+    String classId,
+    String sessionId,
+  ) async {
     final data = await _client.post(
       '/classes/$classId/anon/$sessionId/close',
       {},

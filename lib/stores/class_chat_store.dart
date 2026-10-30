@@ -19,8 +19,12 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import '../models/class_models.dart';
 import '../services/api_service.dart';
+import '../services/attachment_service.dart';
 import '../services/class_service.dart';
 import '../services/class_socket.dart';
+
+/// What the tick marks next to one of my messages should show.
+enum TickState { sending, failed, sent, delivered, read }
 
 class ClassChatStore extends ChangeNotifier {
   ClassChatStore(this.classId, {ClassRoom? initialRoom}) : _room = initialRoom;
@@ -28,6 +32,7 @@ class ClassChatStore extends ChangeNotifier {
   final String classId;
   final _service = ClassService();
   final _socket = ClassSocket();
+  final _files = AttachmentService();
   final _random = Random();
 
   // ── State ──────────────────────────────────────────────────────────────────
@@ -54,6 +59,12 @@ class ClassChatStore extends ChangeNotifier {
   // typing (me)
   bool _iAmTyping = false;
   Timer? _stopTypingTimer;
+
+  // receipts: newest message ids that other members have received / seen
+  String _deliveredUpTo = '';
+  String _readUpTo = '';
+  String _lastReadSent = '';
+  Timer? _readTimer;
 
   final List<StreamSubscription<dynamic>> _subs = [];
   bool _wasOnline = false;
@@ -102,6 +113,7 @@ class ClassChatStore extends ChangeNotifier {
       ..add(_socket.onMessageDeleted.listen(_onDeleted))
       ..add(_socket.onMessagePinned.listen(_onPinned))
       ..add(_socket.onTyping.listen(_onTyping))
+      ..add(_socket.onReceipt.listen(_onReceipt))
       ..add(_socket.onAnonOpened.listen(_onAnonOpened))
       ..add(_socket.onAnonClosed.listen(_onAnonClosed))
       ..add(_socket.onClassEvent.listen(_onClassEvent));
@@ -124,6 +136,7 @@ class ClassChatStore extends ChangeNotifier {
       t.cancel();
     }
     _stopTypingTimer?.cancel();
+    _readTimer?.cancel();
     _socket.connected.removeListener(_onConnectionChanged);
     _socket.leaveRoom(classId);
     super.dispose();
@@ -152,8 +165,13 @@ class ClassChatStore extends ChangeNotifier {
       _room = details.room;
       _activeSession = details.activeSession;
       _pinned = details.pinned;
+      _raiseReceipts(
+        delivered: details.deliveredUpTo,
+        read: details.readUpTo,
+      );
       _hasMore = page.hasMore;
       _merge(page.messages);
+      _markReadSoon();
     } on ApiException catch (e) {
       _error = e.message;
     } catch (_) {
@@ -215,7 +233,12 @@ class ClassChatStore extends ChangeNotifier {
       _room = details.room;
       _activeSession = details.activeSession;
       _pinned = details.pinned;
+      _raiseReceipts(
+        delivered: details.deliveredUpTo,
+        read: details.readUpTo,
+      );
       _merge(page.messages);
+      _markReadSoon();
       _notify();
     } catch (_) {
       // Try again on the next reconnect
@@ -246,6 +269,7 @@ class ClassChatStore extends ChangeNotifier {
     final online = _socket.connected.value;
     if (online && !_wasOnline) {
       _wasOnline = true;
+      _lastReadSent = ''; // tell the server again after a reconnect
       if (!_loading) unawaited(_syncLatest());
     } else if (!online) {
       _wasOnline = false;
@@ -273,14 +297,7 @@ class ClassChatStore extends ChangeNotifier {
 
     ReplyPreview? preview;
     if (replyTo != null) {
-      preview = ReplyPreview(
-        id: replyTo.id,
-        text: replyTo.text.length > 120
-            ? replyTo.text.substring(0, 120)
-            : replyTo.text,
-        deleted: false,
-        senderName: replyTo.senderName,
-      );
+      preview = _previewOf(replyTo);
     }
 
     _messages.add(
@@ -303,16 +320,103 @@ class ClassChatStore extends ChangeNotifier {
     return _deliver(clientId, clean, replyTo?.id);
   }
 
+  ReplyPreview _previewOf(ChatMessage m) {
+    final t = m.previewText;
+    return ReplyPreview(
+      id: m.id,
+      text: t.length > 120 ? t.substring(0, 120) : t,
+      deleted: false,
+      senderName: m.senderName,
+    );
+  }
+
+  /// Sends a photo, document or voice note (with an optional caption).
+  /// It shows in the chat right away while it uploads. If the upload or the
+  /// send fails it stays in the list as "failed" so it can be retried.
+  Future<SocketAck> sendAttachment(
+    PickedAttachment picked, {
+    String caption = '',
+    ChatMessage? replyTo,
+    int duration = 0,
+  }) {
+    userStoppedTyping();
+    final clientId = _newClientId();
+
+    _messages.add(
+      ChatMessage(
+        id: clientId,
+        clientId: clientId,
+        classId: classId,
+        senderId: _myId,
+        senderName: _myName,
+        text: caption.trim(),
+        deleted: false,
+        pinned: false,
+        replyTo: replyTo == null ? null : _previewOf(replyTo),
+        createdAt: DateTime.now(),
+        sendState: SendState.sending,
+        attachment: ChatAttachment(
+          kind: picked.kind,
+          url: '',
+          name: picked.name,
+          size: picked.size,
+          mime: picked.mime,
+          duration: duration,
+          localBytes: picked.bytes,
+        ),
+      ),
+    );
+    _notify();
+
+    return _uploadAndDeliver(clientId);
+  }
+
+  /// Uploads the file first (if that has not happened yet), then sends the
+  /// message. Used for new attachments and for "try again".
+  Future<SocketAck> _uploadAndDeliver(String clientId) async {
+    var i = _messages.indexWhere((m) => m.id == clientId);
+    if (i == -1) {
+      return const SocketAck(ok: false, error: 'NOT_FOUND');
+    }
+
+    final m = _messages[i];
+    var att = m.attachment;
+
+    if (att != null && !att.isUploaded) {
+      try {
+        att = await _files.upload(classId, att);
+      } on UploadException catch (e) {
+        final ack = SocketAck(
+          ok: false,
+          error: 'UPLOAD_FAILED',
+          data: {'message': e.message},
+        );
+        _markFailed(clientId, ack);
+        return ack;
+      }
+
+      // The student may have discarded it while it was uploading
+      i = _messages.indexWhere((x) => x.id == clientId);
+      if (i == -1) return const SocketAck(ok: false, error: 'NOT_FOUND');
+      _messages[i] = _messages[i].copyWith(attachment: att);
+      _notify();
+    }
+
+    return _deliver(clientId, m.text, m.replyTo?.id, attachment: att);
+  }
+
   Future<SocketAck> _deliver(
     String clientId,
     String text,
-    String? replyToId,
-  ) async {
+    String? replyToId, {
+    ChatAttachment? attachment,
+  }) async {
     final ack = await _socket.sendMessage(
       classId: classId,
       text: text,
       clientId: clientId,
       replyTo: replyToId,
+      attachment: attachment?.toSendMap(),
     );
 
     if (ack.ok) {
@@ -369,7 +473,7 @@ class ClassChatStore extends ChangeNotifier {
     _messages[i] = m.copyWith(sendState: SendState.sending);
     _failReasons.remove(messageId);
     _notify();
-    return _deliver(messageId, m.text, m.replyTo?.id);
+    return _uploadAndDeliver(messageId);
   }
 
   /// Remove a message that failed to send.
@@ -448,6 +552,74 @@ class ClassChatStore extends ChangeNotifier {
   void _onNew(ChatMessage m) {
     if (m.classId != classId) return;
     _replacePending(m.clientId ?? '', m);
+    _markReadSoon();
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  //  RECEIPTS (ticks)
+  // ══════════════════════════════════════════════════════════════════════════
+
+  /// Receipt ids only ever move forward. Ids sort by time, so comparing them
+  /// as text works.
+  void _raiseReceipts({String? delivered, String? read}) {
+    if (read != null && read.compareTo(_readUpTo) > 0) _readUpTo = read;
+    if (delivered != null && delivered.compareTo(_deliveredUpTo) > 0) {
+      _deliveredUpTo = delivered;
+    }
+    // seen implies received
+    if (_readUpTo.compareTo(_deliveredUpTo) > 0) _deliveredUpTo = _readUpTo;
+  }
+
+  void _onReceipt(ReceiptEvent e) {
+    if (e.classId != classId) return;
+
+    // Only other people count. My own receipts say nothing about my messages.
+    final others = e.userIds.where((id) => id != _myId);
+    if (others.isEmpty) return;
+
+    if (e.kind == 'read') {
+      _raiseReceipts(read: e.upToId, delivered: e.upToId);
+    } else {
+      _raiseReceipts(delivered: e.upToId);
+    }
+    _notify();
+  }
+
+  /// Ticks for one of my messages:
+  ///  sent       one silver tick (reached the server only)
+  ///  delivered  two silver ticks (a classmate's app has it)
+  ///  read       two gold ticks (a classmate has seen it)
+  TickState tickOf(ChatMessage m) {
+    if (m.sendState == SendState.sending) return TickState.sending;
+    if (m.sendState == SendState.failed) return TickState.failed;
+    if (_readUpTo.isNotEmpty && m.id.compareTo(_readUpTo) <= 0) {
+      return TickState.read;
+    }
+    if (_deliveredUpTo.isNotEmpty && m.id.compareTo(_deliveredUpTo) <= 0) {
+      return TickState.delivered;
+    }
+    return TickState.sent;
+  }
+
+  /// Tells the class I have seen the newest message. Waits a moment so a burst
+  /// of messages causes one update, not many.
+  void _markReadSoon() {
+    _readTimer?.cancel();
+    _readTimer = Timer(const Duration(milliseconds: 600), () {
+      if (_disposed || !_socket.connected.value) return;
+
+      String newest = '';
+      for (final m in _messages.reversed) {
+        if (m.sendState == SendState.sent) {
+          newest = m.id;
+          break;
+        }
+      }
+      if (newest.isEmpty || newest.compareTo(_lastReadSent) <= 0) return;
+
+      _lastReadSent = newest;
+      _socket.markRead(classId, newest);
+    });
   }
 
   void _onDeleted(Map<String, dynamic> d) {
@@ -461,6 +633,7 @@ class ClassChatStore extends ChangeNotifier {
         deleted: true,
         text: '',
         pinned: false,
+        clearAttachment: true,
       );
     }
     _pinned = _pinned.where((m) => m.id != id).toList();
