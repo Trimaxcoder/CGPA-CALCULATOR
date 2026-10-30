@@ -22,13 +22,40 @@ class AnnouncementStore extends ChangeNotifier {
   final Set<String> _unreadIds = {};
   final Set<String> _readIds   = {};
 
+  // How many of each kind we pull on a refresh. Fetching the two scopes
+  // separately means a burst of general announcements can never push a
+  // student's class announcements out of the list (or the other way round).
+  static const _pageSize = 30;
+
   List<Announcement> get items =>
       List.unmodifiable(_allFetched.where((a) => !_hiddenIds.contains(a.id)));
+
+  /// General announcements (from the super admin)
+  List<Announcement> get globalItems =>
+      items.where((a) => a.isGlobal).toList();
+
+  /// Announcements for the student's own class (from their course reps)
+  List<Announcement> get classItems =>
+      items.where((a) => !a.isGlobal).toList();
+
   bool get loading => _loading;
   String? get error => _error;
-  int get unreadCount => _unreadIds.length;
+  int get unreadCount =>
+      _unreadIds.where((id) => !_hiddenIds.contains(id)).length;
+  int get unreadGlobalCount =>
+      globalItems.where((a) => _unreadIds.contains(a.id)).length;
+  int get unreadClassCount =>
+      classItems.where((a) => _unreadIds.contains(a.id)).length;
 
   bool isUnread(String id) => _unreadIds.contains(id);
+
+  /// Find an already-loaded announcement (e.g. when a push is tapped).
+  Announcement? byId(String id) {
+    for (final a in _allFetched) {
+      if (a.id == id) return a;
+    }
+    return null;
+  }
 
   static const _cacheKey  = 'announcements_cache';
   static const _unreadKey = 'announcements_unread';
@@ -46,7 +73,13 @@ class AnnouncementStore extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final fresh = await AnnouncementService.fetchAnnouncements();
+      final pages = await Future.wait([
+        AnnouncementService.fetchPage(scope: 'global', limit: _pageSize),
+        AnnouncementService.fetchPage(scope: 'class', limit: _pageSize),
+      ]);
+
+      final fresh = [...pages[0].items, ...pages[1].items]
+        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
       // Mark brand-new items (never seen, never hidden) as unread
       final existingIds = _allFetched.map((a) => a.id).toSet();
@@ -59,6 +92,7 @@ class AnnouncementStore extends ChangeNotifier {
 
       _allFetched = fresh;
       await _persistCache();
+      await _persistReadState();
     } catch (e) {
       _error = e.toString();
     } finally {
@@ -82,6 +116,32 @@ class AnnouncementStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Mark a specific set as read (e.g. only the tab being viewed).
+  Future<void> markManyRead(Iterable<String> ids) async {
+    var changed = false;
+    for (final id in ids) {
+      if (_unreadIds.remove(id)) {
+        _readIds.add(id);
+        changed = true;
+      }
+    }
+    if (changed) {
+      await _persistReadState();
+      notifyListeners();
+    }
+  }
+
+  /// Hide a specific set on this device (e.g. only the tab being viewed).
+  Future<void> hideMany(Iterable<String> ids) async {
+    for (final id in ids) {
+      _hiddenIds.add(id);
+      _unreadIds.remove(id);
+    }
+    await _persistHidden();
+    await _persistReadState();
+    notifyListeners();
+  }
+
   // ── Permanent local delete (students) ────────────────────────────────────
   // Hides the announcement on THIS device forever. It still exists on the
   // server / for other users — this is "delete for me", like clearing an
@@ -90,6 +150,7 @@ class AnnouncementStore extends ChangeNotifier {
     _hiddenIds.add(id);
     _unreadIds.remove(id);
     await _persistHidden();
+    await _persistReadState();
     notifyListeners();
   }
 
@@ -99,6 +160,7 @@ class AnnouncementStore extends ChangeNotifier {
     }
     _unreadIds.clear();
     await _persistHidden();
+    await _persistReadState();
     notifyListeners();
   }
 
@@ -119,6 +181,28 @@ class AnnouncementStore extends ChangeNotifier {
       _allFetched[idx] = updated;
       notifyListeners();
     }
+  }
+
+  // ── Logout ────────────────────────────────────────────────────────────────
+  // Call this when the user logs out. Without it, the next person to log in
+  // on this device would briefly see the previous user's cached announcements
+  // (possibly from a different class) and inherit their hidden/unread state.
+  Future<void> clear() async {
+    _allFetched = [];
+    _hiddenIds.clear();
+    _unreadIds.clear();
+    _readIds.clear();
+    _error = null;
+    _loading = false;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_cacheKey);
+      await prefs.remove(_unreadKey);
+      await prefs.remove(_hiddenKey);
+    } catch (e) {
+      debugPrint('AnnouncementStore.clear: $e');
+    }
+    notifyListeners();
   }
 
   // ── Persistence ───────────────────────────────────────────────────────────
@@ -192,6 +276,7 @@ class AnnouncementStore extends ChangeNotifier {
 
   Map<String, dynamic> _toMap(Announcement a) => {
         '_id':        a.id,
+        'scope':      a.scope, // must be cached, or general ones reload as class
         'adminName':  a.adminName,
         'school':     a.school,
         'faculty':    a.faculty,

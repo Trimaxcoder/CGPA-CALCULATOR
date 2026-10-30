@@ -30,6 +30,9 @@ class _NotificationsScreenState extends State<NotificationsScreen>
 
   static const Color _primary = Color(0xFF1565C0);
 
+  /// Announcements filter: 'all' | 'general' | 'class'
+  String _annFilter = 'all';
+
   @override
   void initState() {
     super.initState();
@@ -54,12 +57,21 @@ class _NotificationsScreenState extends State<NotificationsScreen>
     super.dispose();
   }
 
+  void _setFilter(String f) => setState(() => _annFilter = f);
+
   String _timeAgo(DateTime t) {
-    final diff = DateTime.now().difference(t);
+    final now = DateTime.now();
+    final diff = now.difference(t);
     if (diff.inMinutes < 1) return 'Just now';
     if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
     if (diff.inHours < 24) return '${diff.inHours}h ago';
-    return '${diff.inDays}d ago';
+    if (diff.inDays < 7) return '${diff.inDays}d ago';
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    final year = t.year == now.year ? '' : ' ${t.year}';
+    return '${t.day} ${months[t.month - 1]}$year';
   }
 
   IconData _iconFor(String type) {
@@ -123,6 +135,8 @@ class _NotificationsScreenState extends State<NotificationsScreen>
                 isDark: isDark,
                 store: annStore,
                 timeAgo: _timeAgo,
+                filter: _annFilter,
+                onFilter: _setFilter,
                 desktop: true,
               ),
       );
@@ -167,6 +181,8 @@ class _NotificationsScreenState extends State<NotificationsScreen>
                   isDark: isDark,
                   store: annStore,
                   timeAgo: _timeAgo,
+                  filter: _annFilter,
+                  onFilter: _setFilter,
                 ),
               ],
             ),
@@ -477,6 +493,8 @@ class _NotificationsTab extends StatelessWidget {
                     ),
                     label: const Text(
                       'Mark all as read',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(color: _primary),
                     ),
                   ),
@@ -491,6 +509,8 @@ class _NotificationsTab extends StatelessWidget {
                     ),
                     label: const Text(
                       'Clear all',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(color: Colors.red),
                     ),
                   ),
@@ -510,35 +530,35 @@ class _NotificationsTab extends StatelessWidget {
                   color: const Color(0xFF1565C0),
                   onRefresh: () => store.load(),
                   child: ListView.builder(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  padding: EdgeInsets.symmetric(
-                    horizontal: responsiveSidePadding(
-                      MediaQuery.sizeOf(context).width,
-                      maxWidth: 720,
-                    ),
-                    vertical: 8,
-                  ),
-                  itemCount: items.length,
-                  itemBuilder: (_, i) {
-                    final n = items[i];
-                    return Dismissible(
-                      key: Key(n.id),
-                      direction: DismissDirection.endToStart,
-                      background: const _DismissBackground(),
-                      onDismissed: (_) => store.remove(n.id),
-                      child: _NotifCard(
-                        n: n,
-                        isDark: isDark,
-                        icon: iconFor(n.type),
-                        timeLabel: timeAgo(n.receivedAt),
-                        onTap: () {
-                          store.markAsRead(n.id);
-                          NotificationRouter.route(n);
-                        },
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: responsiveSidePadding(
+                        MediaQuery.sizeOf(context).width,
+                        maxWidth: 720,
                       ),
-                    );
-                  },
-                ),
+                      vertical: 8,
+                    ),
+                    itemCount: items.length,
+                    itemBuilder: (_, i) {
+                      final n = items[i];
+                      return Dismissible(
+                        key: Key(n.id),
+                        direction: DismissDirection.endToStart,
+                        background: const _DismissBackground(),
+                        onDismissed: (_) => store.remove(n.id),
+                        child: _NotifCard(
+                          n: n,
+                          isDark: isDark,
+                          icon: iconFor(n.type),
+                          timeLabel: timeAgo(n.receivedAt),
+                          onTap: () {
+                            store.markAsRead(n.id);
+                            NotificationRouter.route(n);
+                          },
+                        ),
+                      );
+                    },
+                  ),
                 ),
         ),
       ],
@@ -559,13 +579,17 @@ class _NotificationsTab extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  Tab 2 — Announcements
+//  Tab 2 — Announcements (General + My class)
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _AnnouncementsTab extends StatelessWidget {
   final bool isDark;
   final AnnouncementStore store;
   final String Function(DateTime) timeAgo;
+
+  /// 'all' | 'general' | 'class'
+  final String filter;
+  final ValueChanged<String> onFilter;
   final bool desktop;
 
   static const Color _primary = Color(0xFF1565C0);
@@ -574,8 +598,32 @@ class _AnnouncementsTab extends StatelessWidget {
     required this.isDark,
     required this.store,
     required this.timeAgo,
+    required this.filter,
+    required this.onFilter,
     this.desktop = false,
   });
+
+  List<Announcement> get _visible {
+    switch (filter) {
+      case 'general':
+        return store.globalItems;
+      case 'class':
+        return store.classItems;
+      default:
+        return store.items;
+    }
+  }
+
+  String get _emptyLabel {
+    switch (filter) {
+      case 'general':
+        return 'No general announcements yet';
+      case 'class':
+        return 'No class announcements yet';
+      default:
+        return 'No announcements yet';
+    }
+  }
 
   void _open(BuildContext context, Announcement a) {
     store.markRead(a.id);
@@ -583,6 +631,34 @@ class _AnnouncementsTab extends StatelessWidget {
       context,
       MaterialPageRoute(
         builder: (_) => AnnouncementDetailScreen(announcement: a),
+      ),
+    );
+  }
+
+  /// All / General / My class chips, with unread counts.
+  /// Scrolls sideways on very narrow screens instead of overflowing.
+  Widget _filterBar() {
+    final options = [
+      ('all', 'All', store.unreadCount),
+      ('general', 'General', store.unreadGlobalCount),
+      ('class', 'My class', store.unreadClassCount),
+    ];
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          for (final o in options)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: _FilterChip(
+                label: o.$2,
+                unread: o.$3,
+                selected: filter == o.$1,
+                isDark: isDark,
+                onTap: () => onFilter(o.$1),
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -611,24 +687,48 @@ class _AnnouncementsTab extends StatelessWidget {
       );
     }
 
-    final items = store.items;
+    final items = _visible;
+    final hasAny = store.items.isNotEmpty;
+    final noneUnread = items.every((a) => !store.isUnread(a.id));
 
     // ── Desktop ────────────────────────────────────────────
     if (desktop) {
       return Column(
         children: [
-          if (items.isNotEmpty)
-            _desktopActions(
-              isDark: isDark,
-              onMarkAll: store.unreadCount == 0 ? null : store.markAllRead,
-              onClear: () => _confirmClearAll(context),
+          if (hasAny)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: Row(
+                children: [
+                  Expanded(child: _filterBar()),
+                  const SizedBox(width: 12),
+                  if (items.isNotEmpty) ...[
+                    DeskButton(
+                      icon: Icons.done_all_rounded,
+                      label: 'Mark all as read',
+                      isDark: isDark,
+                      onTap: noneUnread
+                          ? null
+                          : () => store.markManyRead(items.map((a) => a.id)),
+                    ),
+                    const SizedBox(width: 10),
+                    DeskButton(
+                      icon: Icons.delete_sweep_rounded,
+                      label: 'Clear all',
+                      color: Colors.red,
+                      isDark: isDark,
+                      onTap: () => _confirmClearAll(context, items),
+                    ),
+                  ],
+                ],
+              ),
             ),
           Expanded(
             child: items.isEmpty
                 ? _EmptyState(
                     isDark: isDark,
                     icon: Icons.campaign_outlined,
-                    label: 'No announcements yet',
+                    label: _emptyLabel,
                   )
                 : ListView(
                     padding: const EdgeInsets.only(bottom: 40),
@@ -656,19 +756,32 @@ class _AnnouncementsTab extends StatelessWidget {
       );
     }
 
+    // ── Phone / tablet ─────────────────────────────────────
+    final side = responsiveSidePadding(
+      MediaQuery.sizeOf(context).width,
+      maxWidth: 720,
+    );
+
     return Column(
       children: [
+        // ── Filter chips ─────────────────────────────────────────────────
+        if (hasAny)
+          Padding(
+            padding: EdgeInsets.fromLTRB(side, 6, side, 0),
+            child: _filterBar(),
+          ),
+
         // ── Action row ───────────────────────────────────────────────────
         if (items.isNotEmpty)
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
             child: Row(
               children: [
                 Expanded(
                   child: TextButton.icon(
-                    onPressed: store.unreadCount == 0
+                    onPressed: noneUnread
                         ? null
-                        : store.markAllRead,
+                        : () => store.markManyRead(items.map((a) => a.id)),
                     icon: const Icon(
                       Icons.done_all_rounded,
                       size: 18,
@@ -676,13 +789,15 @@ class _AnnouncementsTab extends StatelessWidget {
                     ),
                     label: const Text(
                       'Mark all as read',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(color: _primary),
                     ),
                   ),
                 ),
                 Expanded(
                   child: TextButton.icon(
-                    onPressed: () => _confirmClearAll(context),
+                    onPressed: () => _confirmClearAll(context, items),
                     icon: const Icon(
                       Icons.delete_sweep_rounded,
                       size: 18,
@@ -690,6 +805,8 @@ class _AnnouncementsTab extends StatelessWidget {
                     ),
                     label: const Text(
                       'Clear all',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(color: Colors.red),
                     ),
                   ),
@@ -704,17 +821,16 @@ class _AnnouncementsTab extends StatelessWidget {
               ? _EmptyState(
                   isDark: isDark,
                   icon: Icons.campaign_outlined,
-                  label: 'No announcements yet',
+                  label: _emptyLabel,
                   onRefresh: store.refresh,
                 )
               : RefreshIndicator(
+                  color: _primary,
                   onRefresh: store.refresh,
                   child: ListView.builder(
+                    physics: const AlwaysScrollableScrollPhysics(),
                     padding: EdgeInsets.symmetric(
-                      horizontal: responsiveSidePadding(
-                        MediaQuery.sizeOf(context).width,
-                        maxWidth: 720,
-                      ),
+                      horizontal: side,
                       vertical: 8,
                     ),
                     itemCount: items.length,
@@ -742,22 +858,90 @@ class _AnnouncementsTab extends StatelessWidget {
     );
   }
 
-  Future<void> _confirmClearAll(BuildContext context) async {
+  /// Clears only what the current filter is showing.
+  Future<void> _confirmClearAll(
+    BuildContext context,
+    List<Announcement> visible,
+  ) async {
+    final what = filter == 'general'
+        ? 'general announcements'
+        : filter == 'class'
+            ? 'class announcements'
+            : 'announcements';
+
     final ok = await showConfirmDialog(
       context,
-      title: 'Clear all announcements?',
+      title: 'Clear all $what?',
       message: 'This only removes them from your view.',
       confirmLabel: 'Clear all',
       icon: Icons.delete_sweep_rounded,
       color: Colors.red,
     );
-    if (ok) store.hideAllLocal();
+    if (ok) store.hideMany(visible.map((a) => a.id));
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Shared small widgets
 // ─────────────────────────────────────────────────────────────────────────────
+
+class _FilterChip extends StatelessWidget {
+  final String label;
+  final int unread;
+  final bool selected;
+  final bool isDark;
+  final VoidCallback onTap;
+
+  static const Color _primary = Color(0xFF1565C0);
+
+  const _FilterChip({
+    required this.label,
+    required this.unread,
+    required this.selected,
+    required this.isDark,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    onTap: onTap,
+    child: MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: selected
+              ? _primary
+              : _primary.withOpacity(isDark ? 0.16 : 0.08),
+          borderRadius: BorderRadius.circular(20),
+          border: selected
+              ? null
+              : Border.all(color: _primary.withOpacity(0.3)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: selected
+                    ? Colors.white
+                    : (isDark ? Colors.white70 : _primary),
+              ),
+            ),
+            if (unread > 0) ...[
+              const SizedBox(width: 6),
+              _Badge(unread),
+            ],
+          ],
+        ),
+      ),
+    ),
+  );
+}
 
 class _Badge extends StatelessWidget {
   final int count;
@@ -832,6 +1016,7 @@ class _EmptyState extends StatelessWidget {
           const SizedBox(height: 16),
           Text(
             label,
+            textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 15,
               fontWeight: FontWeight.w600,
@@ -1026,6 +1211,10 @@ class _AnnouncementCard extends StatelessWidget {
     final sub = isDark ? Colors.white60 : Colors.black54;
     final faint = isDark ? Colors.white38 : Colors.black38;
 
+    // General announcements get a solid pill and a globe icon so they stand
+    // apart from class announcements (tinted pill, group icon).
+    final isGlobal = a.isGlobal;
+
     return FadeSlideIn(
       child: PressScale(
         onTap: onTap,
@@ -1037,7 +1226,9 @@ class _AnnouncementCard extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _iconBlock(Icons.campaign_rounded),
+              _iconBlock(
+                isGlobal ? Icons.public_rounded : Icons.groups_rounded,
+              ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -1084,14 +1275,14 @@ class _AnnouncementCard extends StatelessWidget {
                             vertical: 2,
                           ),
                           decoration: BoxDecoration(
-                            color: blue.withOpacity(0.1),
+                            color: isGlobal ? blue : blue.withOpacity(0.1),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
-                            a.levelLabel,
-                            style: const TextStyle(
+                            isGlobal ? 'General' : a.levelLabel,
+                            style: TextStyle(
                               fontSize: 10,
-                              color: blue,
+                              color: isGlobal ? Colors.white : blue,
                               fontWeight: FontWeight.w800,
                             ),
                           ),
@@ -1114,6 +1305,17 @@ class _AnnouncementCard extends StatelessWidget {
                           timeLabel,
                           style: TextStyle(fontSize: 11, color: faint),
                         ),
+                        if (a.wasEdited) ...[
+                          const SizedBox(width: 6),
+                          Text(
+                            '· edited',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontStyle: FontStyle.italic,
+                              color: faint,
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ],

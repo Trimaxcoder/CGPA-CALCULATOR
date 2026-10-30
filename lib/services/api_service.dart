@@ -5,7 +5,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-   import 'class_socket.dart';
+import '../stores/announcement_store.dart';
+import 'class_socket.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  CONFIGURATION
@@ -69,6 +70,7 @@ class TokenStorage {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_accessKey);
     await prefs.remove(_refreshKey);
+    await AnnouncementStore().clear();
   }
 
   static Future<bool> hasTokens() async {
@@ -362,6 +364,7 @@ class AuthService {
       await _client.post('/auth/logout', {});
     } catch (_) {}
     ClassSocket().disconnect();
+    await AnnouncementStore().clear(); 
     await TokenStorage.clearTokens();
   }
 

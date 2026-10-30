@@ -138,21 +138,36 @@ class MyApp extends StatefulWidget {
   State<MyApp> createState() => _MyAppState();
 }
 
-class _MyAppState extends State<MyApp> {
+class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _checkInitialMessage();
   }
 
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  /// Every time the app comes back to the front, make sure this phone's
+  /// notification address is registered on the server (it may have failed
+  /// earlier, e.g. while the student was not signed in yet).
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(NotificationService.onAppResumed());
+    }
+  }
+
+  /// The app was fully closed and a notification tap opened it. The tap waits
+  /// inside NotificationRouter until the splash screen has finished.
   Future<void> _checkInitialMessage() async {
     final message = await NotificationService.getInitialMessage();
     if (message == null) return;
-
-    // Wait until the first frame is drawn before navigating
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      NotificationService.routeFromInitialMessage(message);
-    });
+    NotificationService.routeFromInitialMessage(message);
   }
 
   // Bottom sheets stay phone-sized (and centered) on wide screens.
@@ -189,6 +204,7 @@ class _MyAppState extends State<MyApp> {
         builder: (context, theme, _) => MaterialApp(
           title: 'SchoolLife',
           navigatorKey: NavigationService.navigatorKey,
+          navigatorObservers: [NotificationRouter.observer],
           debugShowCheckedModeBanner: false,
           scrollBehavior: _AppScrollBehavior(),
           theme: ThemeData(

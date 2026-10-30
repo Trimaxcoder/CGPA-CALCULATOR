@@ -1,4 +1,5 @@
 // lib/services/notification_router.dart
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'navigation_service.dart';
 import 'class_service.dart';
@@ -11,7 +12,60 @@ import '../models/announcement.dart';
 import '../stores/announcement_store.dart';
 import '../screens/class_workspace_screen.dart';
 
+/// Watches the navigator so the router knows when the splash screen is gone.
+/// The splash screen is the app's first page (route name "/"). It replaces
+/// itself with the real home page after it has checked the login.
+class _SplashWatcher extends NavigatorObserver {
+  @override
+  void didReplace({Route<dynamic>? newRoute, Route<dynamic>? oldRoute}) {
+    if (oldRoute?.settings.name == '/') NotificationRouter._markReady();
+  }
+
+  @override
+  void didRemove(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    if (route.settings.name == '/') NotificationRouter._markReady();
+  }
+
+  @override
+  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    if (previousRoute?.settings.name == '/') NotificationRouter._markReady();
+  }
+}
+
 class NotificationRouter {
+  /// Give this to MaterialApp(navigatorObservers: [...]).
+  static final NavigatorObserver observer = _SplashWatcher();
+
+  static bool _ready = false;
+  static AppNotification? _pending;
+  static Timer? _safetyTimer;
+
+  /// Opens the right screen for a tapped notification. If the app was closed
+  /// and is still starting up (splash screen), the tap is kept and carried
+  /// out as soon as the home page is on screen. Otherwise a navigation made
+  /// now would be wiped out by the splash screen replacing itself.
+  static void routeWhenReady(AppNotification n) {
+    if (_ready) {
+      route(n);
+      return;
+    }
+    _pending = n;
+    // Safety net: never keep a tap waiting forever
+    _safetyTimer ??= Timer(const Duration(seconds: 12), _markReady);
+  }
+
+  static void _markReady() {
+    _ready = true;
+    _safetyTimer?.cancel();
+    _safetyTimer = null;
+
+    final n = _pending;
+    _pending = null;
+    if (n == null) return;
+    // Let the home page finish building first
+    Future.delayed(const Duration(milliseconds: 600), () => route(n));
+  }
+
   /// Push types that belong to the "Join a class" feature. Each one carries a
   /// classId in its data, so tapping it opens that class.
   static const _classTypes = {
@@ -45,6 +99,7 @@ class NotificationRouter {
 
     switch (type) {
       case 'class_reminder':
+      case 'study_reminder':
       case 'emergency_toggle':
       case 'test_toggle':
       case 'attendance_toggle':

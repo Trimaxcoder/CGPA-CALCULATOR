@@ -55,7 +55,12 @@ class AnnouncementDetailScreen extends StatelessWidget {
           const SizedBox(height: 12),
           Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(20, 4, 20, 40),
+              padding: EdgeInsets.fromLTRB(
+                20,
+                4,
+                20,
+                MediaQuery.of(context).padding.bottom + 40,
+              ),
               child: Align(
                 alignment: Alignment.topCenter,
                 child: ConstrainedBox(
@@ -92,24 +97,24 @@ class AnnouncementDetailScreen extends StatelessWidget {
     required double bodySize,
   }) {
     final a = announcement;
+
+    // General announcements get one "General" chip; class announcements
+    // show where they were posted (empty parts are skipped).
+    final scopeChips = <Widget>[
+      if (a.isGlobal)
+        const _Chip(label: 'General', color: _primary, textColor: Colors.white)
+      else ...[
+        if (a.school.isNotEmpty) _Chip(label: a.school),
+        if (a.faculty.isNotEmpty) _Chip(label: a.faculty),
+        if (a.department.isNotEmpty) _Chip(label: a.department),
+        _Chip(label: a.levelLabel, color: _primary, textColor: Colors.white),
+      ],
+    ];
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Scope chips
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            _Chip(label: a.school),
-            _Chip(label: a.faculty),
-            _Chip(label: a.department),
-            _Chip(
-              label: a.levelLabel,
-              color: _primary,
-              textColor: Colors.white,
-            ),
-          ],
-        ),
+        Wrap(spacing: 8, runSpacing: 8, children: scopeChips),
 
         const SizedBox(height: 20),
 
@@ -145,6 +150,7 @@ class AnnouncementDetailScreen extends StatelessWidget {
                 children: [
                   Text(
                     a.adminName,
+                    overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       fontWeight: FontWeight.w700,
                       fontSize: 13,
@@ -152,7 +158,9 @@ class AnnouncementDetailScreen extends StatelessWidget {
                     ),
                   ),
                   Text(
-                    _formatDate(a.createdAt),
+                    a.wasEdited
+                        ? '${_formatDate(a.createdAt)} · edited'
+                        : _formatDate(a.createdAt),
                     style: TextStyle(
                       fontSize: 11,
                       color: isDark ? Colors.white38 : Colors.black38,
@@ -207,8 +215,7 @@ class _Chip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding:
-            const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         decoration: BoxDecoration(
           color: color ?? _primary.withOpacity(0.08),
           borderRadius: BorderRadius.circular(20),
