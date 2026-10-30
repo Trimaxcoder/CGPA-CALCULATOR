@@ -50,6 +50,9 @@ class ClassChatStore extends ChangeNotifier {
   bool _disposed = false;
 
   String _myId = '';
+
+  /// My own user id ('' until it is known)
+  String get myId => _myId;
   String _myName = 'You';
 
   // typing (other people)
@@ -120,6 +123,8 @@ class ClassChatStore extends ChangeNotifier {
       ..add(_socket.onMessageNew.listen(_onNew))
       ..add(_socket.onMessageDeleted.listen(_onDeleted))
       ..add(_socket.onMessagePinned.listen(_onPinned))
+      ..add(_socket.onReaction.listen(_onReaction))
+      ..add(_socket.onMessageEdited.listen(_onEdited))
       ..add(_socket.onTyping.listen(_onTyping))
       ..add(_socket.onReceipt.listen(_onReceipt))
       ..add(_socket.onAnonOpened.listen(_onAnonOpened))
@@ -541,6 +546,108 @@ class ClassChatStore extends ChangeNotifier {
   Future<SocketAck> deleteMessage(String messageId) =>
       _socket.deleteMessage(messageId);
 
+  /// Forward a message to other classes. The copies appear in those classes,
+  /// not in this one. Check `ack.data['results']` for what happened to each.
+  Future<SocketAck> forward(ChatMessage m, List<String> classIds) =>
+      _socket.forwardMessage(m.id, classIds);
+
+  /// Change the text of one of my messages. The new text shows at once; the
+  /// old text comes back if the server says no.
+  Future<SocketAck> editMessage(ChatMessage m, String text) async {
+    final clean = text.trim();
+    final i = _messages.indexWhere((x) => x.id == m.id);
+    if (i == -1) return const SocketAck(ok: false, error: 'NOT_FOUND');
+
+    final old = _messages[i];
+    _messages[i] = old.copyWith(text: clean, editedAt: DateTime.now());
+    _notify();
+
+    final ack = await _socket.editMessage(m.id, clean);
+    if (!ack.ok) {
+      final j = _messages.indexWhere((x) => x.id == m.id);
+      if (j != -1) {
+        _messages[j] = _messages[j].copyWith(text: old.text);
+        _notify();
+      }
+    }
+    return ack;
+  }
+
+  void _onEdited(Map<String, dynamic> d) {
+    if (d['classId'] != classId) return;
+    final id = d['id'] as String?;
+    if (id == null) return;
+
+    final text = (d['text'] ?? '') as String;
+    final at = DateTime.tryParse('${d['editedAt']}')?.toLocal();
+
+    final i = _messages.indexWhere((m) => m.id == id);
+    if (i != -1) {
+      _messages[i] = _messages[i].copyWith(
+        text: text,
+        editedAt: at,
+        mentions: Mention.parseList(d['mentions']),
+      );
+    }
+    _pinned = [
+      for (final p in _pinned) p.id == id ? p.copyWith(text: text) : p,
+    ];
+    _notify();
+  }
+
+  /// The emoji I reacted with on [m] ('' if none).
+  String myReactionOn(ChatMessage m) => m.myReaction(_myId);
+
+  /// React to a message. Tapping the emoji I already used removes it. The
+  /// change shows at once, and is undone if the server says no.
+  Future<SocketAck> react(ChatMessage m, String emoji) async {
+    if (_myId.isEmpty || m.sendState != SendState.sent || m.deleted) {
+      return const SocketAck(ok: false, error: 'NOT_FOUND');
+    }
+
+    final i = _messages.indexWhere((x) => x.id == m.id);
+    if (i == -1) return const SocketAck(ok: false, error: 'NOT_FOUND');
+
+    final before = _messages[i].reactions;
+    final had = _messages[i].myReaction(_myId);
+    final next = had == emoji ? '' : emoji;
+
+    // Take my old reaction off, then add the new one
+    final updated = <String, List<String>>{};
+    before.forEach((e, ids) {
+      final rest = ids.where((id) => id != _myId).toList();
+      if (rest.isNotEmpty) updated[e] = rest;
+    });
+    if (next.isNotEmpty) {
+      updated[next] = [...(updated[next] ?? const <String>[]), _myId];
+    }
+    _messages[i] = _messages[i].copyWith(reactions: updated);
+    _notify();
+
+    final ack = await _socket.setReaction(m.id, emoji);
+    if (!ack.ok) {
+      final j = _messages.indexWhere((x) => x.id == m.id);
+      if (j != -1) {
+        _messages[j] = _messages[j].copyWith(reactions: before);
+        _notify();
+      }
+    }
+    return ack;
+  }
+
+  void _onReaction(Map<String, dynamic> d) {
+    if (d['classId'] != classId) return;
+    final id = d['id'] as String?;
+    if (id == null) return;
+
+    final i = _messages.indexWhere((m) => m.id == id);
+    if (i == -1) return;
+    _messages[i] = _messages[i].copyWith(
+      reactions: ChatMessage.parseReactions(d['reactions']),
+    );
+    _notify();
+  }
+
   /// Admin: pin or unpin. Throws ApiException on failure.
   Future<void> pin(String messageId, {required bool pinned}) =>
       _service.pinMessage(classId, messageId, pinned: pinned);
@@ -681,6 +788,7 @@ class ClassChatStore extends ChangeNotifier {
         text: '',
         pinned: false,
         clearAttachment: true,
+        reactions: const {},
       );
     }
     _pinned = _pinned.where((m) => m.id != id).toList();

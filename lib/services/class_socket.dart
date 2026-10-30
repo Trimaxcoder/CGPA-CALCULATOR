@@ -97,6 +97,8 @@ class SocketAck {
       case 'UPLOAD_FAILED':
         final why = (data['message'] ?? '').toString();
         return why.isNotEmpty ? why : 'The upload failed. Please try again.';
+      case 'EDIT_EXPIRED':
+        return 'You can only edit a message for 15 minutes after sending it.';
       case 'OFFLINE':
         return 'You are offline. Reconnecting...';
       case 'TIMEOUT':
@@ -147,6 +149,8 @@ class ClassSocket with WidgetsBindingObserver {
   final _anonHidden = StreamController<Map<String, dynamic>>.broadcast();
   final _classEvents = StreamController<ClassEvent>.broadcast();
   final _classActivity = StreamController<ClassActivity>.broadcast();
+  final _reactions = StreamController<Map<String, dynamic>>.broadcast();
+  final _messageEdited = StreamController<Map<String, dynamic>>.broadcast();
 
   Stream<ChatMessage> get onMessageNew => _messageNew.stream;
 
@@ -166,6 +170,12 @@ class ClassSocket with WidgetsBindingObserver {
   Stream<Map<String, dynamic>> get onAnonHidden => _anonHidden.stream;
 
   Stream<ClassEvent> get onClassEvent => _classEvents.stream;
+
+  /// Someone edited one of their messages.
+  Stream<Map<String, dynamic>> get onMessageEdited => _messageEdited.stream;
+
+  /// Someone reacted to a message (or took their reaction back).
+  Stream<Map<String, dynamic>> get onReaction => _reactions.stream;
 
   /// A message was sent in any class I belong to.
   Stream<ClassActivity> get onClassActivity => _classActivity.stream;
@@ -308,6 +318,8 @@ class ClassSocket with WidgetsBindingObserver {
         last: LastMessage.fromMap(_asMap(last)),
       ));
     });
+    _listen(s, 'message:edited', (d) => _messageEdited.add(_asMap(d)));
+    _listen(s, 'message:reaction', (d) => _reactions.add(_asMap(d)));
     _listen(s, 'message:deleted', (d) => _messageDeleted.add(_asMap(d)));
     _listen(s, 'message:pinned', (d) => _messagePinned.add(_asMap(d)));
     _listen(s, 'receipt:update', (d) {
@@ -399,7 +411,11 @@ class ClassSocket with WidgetsBindingObserver {
 
   // ── Sending ────────────────────────────────────────────────────────────────
 
-  Future<SocketAck> _emit(String event, Map<String, dynamic> payload) {
+  Future<SocketAck> _emit(
+    String event,
+    Map<String, dynamic> payload, {
+    Duration timeout = const Duration(seconds: 10),
+  }) {
     final s = _socket;
     if (s == null || !s.connected) {
       return Future.value(const SocketAck(ok: false, error: 'OFFLINE'));
@@ -417,7 +433,7 @@ class ClassSocket with WidgetsBindingObserver {
     });
 
     return done.future.timeout(
-      const Duration(seconds: 10),
+      timeout,
       onTimeout: () => const SocketAck(ok: false, error: 'TIMEOUT'),
     );
   }
@@ -450,6 +466,27 @@ class ClassSocket with WidgetsBindingObserver {
       'replyTo': ?replyTo,
       'attachment': ?attachment,
     });
+  }
+
+  /// Send a copy of a message to other classes. The answer has a `results`
+  /// list with one entry per class: { classId, ok, error }. Copying a file can
+  /// take a while, so this waits longer than a normal message.
+  Future<SocketAck> forwardMessage(String messageId, List<String> classIds) {
+    return _emit(
+      'message:forward',
+      {'messageId': messageId, 'classIds': classIds},
+      timeout: const Duration(seconds: 60),
+    );
+  }
+
+  /// Change the text of one of my messages (allowed for 15 minutes).
+  Future<SocketAck> editMessage(String messageId, String text) {
+    return _emit('message:edit', {'messageId': messageId, 'text': text});
+  }
+
+  /// React with [emoji]. Sending the emoji I already used takes it back.
+  Future<SocketAck> setReaction(String messageId, String emoji) {
+    return _emit('reaction:set', {'messageId': messageId, 'emoji': emoji});
   }
 
   Future<SocketAck> deleteMessage(String messageId) {

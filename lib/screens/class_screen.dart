@@ -23,6 +23,8 @@ import '../models/class_models.dart';
 import '../providers/theme_notifier.dart';
 import '../services/api_service.dart';
 import '../services/attachment_service.dart';
+import '../services/class_service.dart';
+import '../services/class_socket.dart';
 import '../services/voice_player.dart';
 import '../services/voice_recorder.dart';
 import '../stores/class_chat_store.dart';
@@ -30,10 +32,22 @@ import '../widgets/chat_doodle_background.dart';
 import '../widgets/snackBar.dart';
 import 'anon_screen.dart';
 import 'class_info_screen.dart';
+import 'class_forward_sheet.dart';
 import 'class_search_screen.dart';
 
 const _blue = Color(0xFF1565C0);
 const _accent = Color(0xFF1E88E5);
+
+/// The six quick reactions. Written as escapes so they match the server
+/// exactly (the heart carries an invisible variation selector).
+const _reactionEmoji = [
+  '\u{1F44D}',
+  '\u2764\uFE0F',
+  '\u{1F602}',
+  '\u{1F62E}',
+  '\u{1F622}',
+  '\u{1F64F}',
+];
 
 const _senderColors = [
   Color(0xFF1E88E5),
@@ -126,8 +140,29 @@ class _ClassScreenState extends State<ClassScreen> {
   late final VoiceRecorder _voice = VoiceRecorder(onLimit: _finishRecording);
 
   ChatMessage? _replyingTo;
+
+  /// The message whose text is being edited right now (null = normal typing)
+  ChatMessage? _editing;
+
+  /// How long after sending a message its text can still be edited
+  static const _editWindow = Duration(minutes: 15);
+
   bool _closing = false;
   bool _hasText = false;
+
+  // ── @mentions ──────────────────────────────────────────────────────────────
+  final _classService = ClassService();
+
+  /// Members who can be tagged: active, with a username, not me.
+  List<ClassMember> _mentionPool = [];
+  bool _poolLoading = false;
+  bool _poolLoaded = false;
+
+  /// What has been typed after the "@" at the cursor (null = not tagging)
+  String? _mentionQuery;
+
+  /// Where that "@" sits in the text
+  int _mentionStart = 0;
 
   /// Panes wider than this show the messages in a centred column.
   static const double _wideAt = 880;
@@ -166,6 +201,235 @@ class _ClassScreenState extends State<ClassScreen> {
   void _onInputChanged() {
     final has = _input.text.trim().isNotEmpty;
     if (has != _hasText && mounted) setState(() => _hasText = has);
+    _updateMentionQuery();
+  }
+
+  /// Looks at the word just before the cursor. If it starts with "@", the
+  /// member suggestions open.
+  void _updateMentionQuery() {
+    final text = _input.text;
+    final sel = _input.selection;
+
+    String? query;
+    var start = 0;
+    if (sel.isValid && sel.isCollapsed && sel.baseOffset <= text.length) {
+      final before = text.substring(0, sel.baseOffset);
+      final hit = RegExp(r'(^|\s)@([A-Za-z0-9_.]{0,20})$').firstMatch(before);
+      if (hit != null) {
+        query = hit.group(2)!.toLowerCase();
+        start = before.length - query.length - 1;
+      }
+    }
+
+    if (query == _mentionQuery && start == _mentionStart) return;
+    if (!mounted) return;
+    setState(() {
+      _mentionQuery = query;
+      _mentionStart = start;
+    });
+    if (query != null && !_poolLoaded && !_poolLoading) _loadMentionPool();
+  }
+
+  Future<void> _loadMentionPool() async {
+    setState(() => _poolLoading = true);
+    try {
+      final all = await _classService.members(widget.room.id);
+      if (!mounted) return;
+      final me = _store.myId;
+      setState(() {
+        _mentionPool = all
+            .where((m) => m.status == 'active' && m.username.isNotEmpty && m.userId != me)
+            .toList();
+        _poolLoaded = true;
+        _poolLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      // Try again the next time "@" is typed
+      setState(() => _poolLoading = false);
+    }
+  }
+
+  List<ClassMember> get _mentionMatches {
+    final q = _mentionQuery;
+    if (q == null) return const [];
+    final starts = <ClassMember>[];
+    final contains = <ClassMember>[];
+    for (final m in _mentionPool) {
+      final u = m.username.toLowerCase();
+      if (u.startsWith(q)) {
+        starts.add(m);
+      } else if (u.contains(q) || m.name.toLowerCase().contains(q)) {
+        contains.add(m);
+      }
+    }
+    return [...starts, ...contains].take(6).toList();
+  }
+
+  /// Replaces the "@abc" being typed with "@username " and moves on.
+  void _pickMention(ClassMember m) {
+    final text = _input.text;
+    final end = _input.selection.baseOffset.clamp(0, text.length);
+    final start = _mentionStart.clamp(0, end);
+    final insert = '@${m.username} ';
+    final next = text.replaceRange(start, end, insert);
+    _input.value = TextEditingValue(
+      text: next,
+      selection: TextSelection.collapsed(offset: start + insert.length),
+    );
+    _focus.requestFocus();
+  }
+
+  /// The suggestion list that opens above the message box.
+  Widget _mentionBar(_Pal p) {
+    if (_mentionQuery == null) return const SizedBox.shrink();
+
+    final matches = _mentionMatches;
+    Widget content;
+
+    if (_poolLoading && !_poolLoaded) {
+      content = const Padding(
+        padding: EdgeInsets.all(14),
+        child: Center(
+          child: SizedBox(
+            width: 20,
+            height: 20,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        ),
+      );
+    } else if (matches.isEmpty) {
+      content = Padding(
+        padding: const EdgeInsets.all(14),
+        child: Text(
+          _mentionPool.isEmpty
+              ? 'Nobody here can be tagged yet. Members need to set a username in their profile.'
+              : 'No member matches "@${_mentionQuery!}".',
+          style: TextStyle(fontSize: 13, color: p.sub, height: 1.35),
+        ),
+      );
+    } else {
+      content = ListView.builder(
+        shrinkWrap: true,
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        itemCount: matches.length,
+        itemBuilder: (_, i) {
+          final m = matches[i];
+          final initial = m.name.isEmpty ? '?' : m.name[0].toUpperCase();
+          return InkWell(
+            onTap: () => _pickMention(m),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 16,
+                    backgroundColor: _accent,
+                    child: Text(
+                      initial,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '@${m.username}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 14.5,
+                            fontWeight: FontWeight.w800,
+                            color: p.text,
+                          ),
+                        ),
+                        if (m.name.isNotEmpty && m.name != m.username)
+                          Text(
+                            m.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(fontSize: 12, color: p.sub),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      );
+    }
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 8),
+      constraints: const BoxConstraints(maxHeight: 230),
+      decoration: BoxDecoration(
+        color: p.bg,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: p.border),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(14),
+        child: content,
+      ),
+    );
+  }
+
+  /// The message text as spans, with every tagged @name in bold colour.
+  /// Only names the server confirmed as class members are highlighted.
+  List<InlineSpan> _textSpans(
+    ChatMessage m,
+    TextStyle base, {
+    required bool mine,
+  }) {
+    if (m.mentions.isEmpty) return [TextSpan(text: m.text, style: base)];
+
+    final names = m.mentions.map((x) => x.username).toList()
+      ..sort((a, b) => b.length.compareTo(a.length));
+    final re = RegExp(
+      '@(${names.map(RegExp.escape).join('|')})(?![A-Za-z0-9_])',
+      caseSensitive: false,
+    );
+    final me = _store.myId;
+    final text = m.text;
+    final spans = <InlineSpan>[];
+    var at = 0;
+
+    for (final hit in re.allMatches(text)) {
+      // "a@name" is an email, not a tag
+      if (hit.start > 0 && RegExp(r'[A-Za-z0-9_.@]').hasMatch(text[hit.start - 1])) {
+        continue;
+      }
+      if (hit.start > at) {
+        spans.add(TextSpan(text: text.substring(at, hit.start), style: base));
+      }
+      final name = hit.group(1)!.toLowerCase();
+      final isMe = m.mentions.any(
+        (x) => x.username.toLowerCase() == name && x.userId == me,
+      );
+      spans.add(TextSpan(
+        text: hit.group(0),
+        style: base.copyWith(
+          fontWeight: FontWeight.w800,
+          color: mine ? const Color(0xFFBBDEFB) : _accent,
+          backgroundColor:
+              isMe ? _accent.withValues(alpha: 0.2) : null,
+        ),
+      ));
+      at = hit.end;
+    }
+    if (at < text.length) {
+      spans.add(TextSpan(text: text.substring(at), style: base));
+    }
+    return spans;
   }
 
   /// Desktop behaviour (embedded only): Enter sends, Shift+Enter = new line.
@@ -206,7 +470,103 @@ class _ClassScreenState extends State<ClassScreen> {
 
   // ── Sending ────────────────────────────────────────────────────────────────
 
+  bool _canEdit(ChatMessage m) {
+    final room = _store.room ?? widget.room;
+    final a = m.attachment;
+    return _store.isMine(m) &&
+        m.sendState == SendState.sent &&
+        !m.deleted &&
+        !room.archived &&
+        !(room.chatLocked && !room.isAdmin) &&
+        !(a != null && a.isAudio) &&
+        DateTime.now().difference(m.createdAt) < _editWindow;
+  }
+
+  void _startEdit(ChatMessage m) {
+    setState(() {
+      _editing = m;
+      _replyingTo = null;
+    });
+    _input.value = TextEditingValue(
+      text: m.text,
+      selection: TextSelection.collapsed(offset: m.text.length),
+    );
+    _focus.requestFocus();
+  }
+
+  /// Pick one or more classes and send them a copy of this message.
+  Future<void> _startForward(ChatMessage m) async {
+    final picked = await showForwardPicker(
+      context,
+      currentClassId: widget.room.id,
+      preview: m.previewText,
+    );
+    if (picked == null || picked.isEmpty || !mounted) return;
+
+    AppSnackBar.auto(context, 'Forwarding...');
+    final ack = await _store.forward(m, [for (final c in picked) c.id]);
+    if (!mounted) return;
+
+    final raw = ack.data['results'];
+    if (raw is! List) {
+      AppSnackBar.auto(context, ack.errorText);
+      return;
+    }
+
+    final names = {for (final c in picked) c.id: c.name};
+    final done = <String>[];
+    String? failure;
+    for (final r in raw) {
+      if (r is! Map) continue;
+      final id = '${r['classId']}';
+      if (r['ok'] == true) {
+        done.add(names[id] ?? 'a class');
+      } else {
+        failure ??= SocketAck(ok: false, error: r['error'] as String?).errorText;
+      }
+    }
+
+    final String text;
+    if (done.isEmpty) {
+      text = failure ?? 'Could not forward the message.';
+    } else {
+      final where = done.length == 1 ? done.first : '${done.length} classes';
+      text = failure == null
+          ? 'Forwarded to $where'
+          : 'Forwarded to $where. Some failed: $failure';
+    }
+    AppSnackBar.auto(context, text);
+  }
+
+  void _cancelEdit() {
+    setState(() => _editing = null);
+    _input.clear();
+  }
+
+  Future<void> _submitEdit() async {
+    final m = _editing;
+    if (m == null) return;
+
+    final text = _input.text.trim();
+    // A text message cannot become empty. A photo or file may lose its caption.
+    if (text.isEmpty && m.attachment == null) return;
+
+    setState(() => _editing = null);
+    _input.clear();
+    if (text == m.text) return; // nothing changed
+
+    final ack = await _store.editMessage(m, text);
+    if (!ack.ok && ack.error != 'OFFLINE' && mounted) {
+      AppSnackBar.auto(context, ack.errorText);
+    }
+  }
+
   Future<void> _send() async {
+    if (_editing != null) {
+      await _submitEdit();
+      return;
+    }
+
     final text = _input.text.trim();
     if (text.isEmpty) return;
 
@@ -737,6 +1097,14 @@ class _ClassScreenState extends State<ClassScreen> {
         setState(() => _replyingTo = m);
         _focus.requestFocus();
       }));
+      actions.add(_Action(
+        Icons.shortcut_rounded,
+        'Forward',
+        () => _startForward(m),
+      ));
+      if (_canEdit(m)) {
+        actions.add(_Action(Icons.edit_outlined, 'Edit', () => _startEdit(m)));
+      }
       if (m.text.isNotEmpty) {
         actions.add(_Action(Icons.copy_rounded, 'Copy', () {
           Clipboard.setData(ClipboardData(text: m.text));
@@ -777,6 +1145,7 @@ class _ClassScreenState extends State<ClassScreen> {
           children: [
             _handle(p),
             const SizedBox(height: 8),
+            if (m.sendState != SendState.failed) _emojiRow(p, m, ctx),
             for (final a in actions)
               ListTile(
                 leading: Icon(
@@ -1400,6 +1769,18 @@ class _ClassScreenState extends State<ClassScreen> {
             padding: const EdgeInsets.only(right: 4),
             child: Icon(Icons.push_pin_rounded, size: 11, color: subFg),
           ),
+        if (m.editedAt != null && !m.deleted)
+          Padding(
+            padding: const EdgeInsets.only(right: 4),
+            child: Text(
+              'edited',
+              style: TextStyle(
+                fontSize: 10.5,
+                fontStyle: FontStyle.italic,
+                color: subFg,
+              ),
+            ),
+          ),
         Text(
           TimeOfDay.fromDateTime(m.createdAt).format(context),
           style: TextStyle(fontSize: 10.5, color: subFg),
@@ -1426,7 +1807,9 @@ class _ClassScreenState extends State<ClassScreen> {
         !failed &&
         m.attachment == null &&
         m.text.isNotEmpty;
-    final reserve = (mine ? 86.0 : 62.0) + (m.pinned ? 15.0 : 0.0);
+    final reserve = (mine ? 86.0 : 62.0) +
+        (m.pinned ? 15.0 : 0.0) +
+        (m.editedAt != null ? 38.0 : 0.0);
 
     final Widget body;
     if (inlineStamp) {
@@ -1435,9 +1818,10 @@ class _ClassScreenState extends State<ClassScreen> {
           Text.rich(
             TextSpan(
               children: [
-                TextSpan(
-                  text: m.text,
-                  style: TextStyle(fontSize: 15, color: fg, height: 1.25),
+                ..._textSpans(
+                  m,
+                  TextStyle(fontSize: 15, color: fg, height: 1.25),
+                  mine: mine,
                 ),
                 WidgetSpan(
                   alignment: PlaceholderAlignment.middle,
@@ -1469,9 +1853,14 @@ class _ClassScreenState extends State<ClassScreen> {
             if (m.attachment != null && m.text.isNotEmpty)
               const SizedBox(height: 6),
             if (m.text.isNotEmpty)
-              Text(
-                m.text,
-                style: TextStyle(fontSize: 15, color: fg, height: 1.25),
+              Text.rich(
+                TextSpan(
+                  children: _textSpans(
+                    m,
+                    TextStyle(fontSize: 15, color: fg, height: 1.25),
+                    mine: mine,
+                  ),
+                ),
               ),
           ],
           if (failed)
@@ -1496,7 +1885,7 @@ class _ClassScreenState extends State<ClassScreen> {
       padding: EdgeInsets.only(top: topGap),
       child: Align(
         alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
-        child: GestureDetector(
+        child: _withReactions(p, m, mine, _swipeable(m, GestureDetector(
           onLongPress: () => _showActions(m),
           // desktop: right-click opens the same menu
           onSecondaryTap: () => _showActions(m),
@@ -1538,6 +1927,25 @@ class _ClassScreenState extends State<ClassScreen> {
                         ),
                       ),
                     ),
+                  if (m.forwarded && !m.deleted)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 3),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.shortcut_rounded, size: 13, color: subFg),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Forwarded',
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              fontStyle: FontStyle.italic,
+                              color: subFg,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   if (m.replyTo != null && !m.deleted)
                     _replyBox(p, m.replyTo!, mine),
                   body,
@@ -1545,7 +1953,124 @@ class _ClassScreenState extends State<ClassScreen> {
               ),
             ),
           ),
+        ))),
+      ),
+    );
+  }
+
+  // ── Swipe to reply, reactions ──────────────────────────────────────────────
+
+  /// Phones: drag a message to the right to reply to it.
+  Widget _swipeable(ChatMessage m, Widget child) {
+    final room = _store.room ?? widget.room;
+    final canReply = !widget.embedded &&
+        m.sendState == SendState.sent &&
+        !m.deleted &&
+        !room.archived &&
+        !(room.chatLocked && !room.isAdmin);
+    if (!canReply) return child;
+
+    return _SwipeToReply(
+      onReply: () {
+        setState(() => _replyingTo = m);
+        _focus.requestFocus();
+      },
+      child: child,
+    );
+  }
+
+  /// The bubble, with the reactions it has received shown underneath.
+  Widget _withReactions(_Pal p, ChatMessage m, bool mine, Widget bubble) {
+    if (m.deleted || m.reactions.isEmpty) return bubble;
+
+    final mineEmoji = _store.myReactionOn(m);
+    final entries = m.reactions.entries.toList()
+      ..sort((a, b) => b.value.length.compareTo(a.value.length));
+
+    return Column(
+      crossAxisAlignment: mine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        bubble,
+        Padding(
+          padding: const EdgeInsets.only(top: 3),
+          child: Wrap(
+            spacing: 4,
+            runSpacing: 4,
+            children: [
+              for (final e in entries)
+                InkWell(
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: () => _react(m, e.key),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: e.key == mineEmoji
+                          ? _accent.withValues(alpha: 0.18)
+                          : p.field,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: e.key == mineEmoji ? _accent : p.border,
+                      ),
+                    ),
+                    child: Text(
+                      '${e.key} ${e.value.length}',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                        color: p.text,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
+      ],
+    );
+  }
+
+  Future<void> _react(ChatMessage m, String emoji) async {
+    final ack = await _store.react(m, emoji);
+    if (!ack.ok && ack.error != 'NOT_FOUND' && mounted) {
+      AppSnackBar.auto(context, ack.errorText);
+    }
+  }
+
+  /// The row of quick reactions at the top of the message menu.
+  Widget _emojiRow(_Pal p, ChatMessage m, BuildContext sheetContext) {
+    final mineEmoji = _store.myReactionOn(m);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+      child: Wrap(
+        alignment: WrapAlignment.center,
+        spacing: 6,
+        runSpacing: 6,
+        children: [
+          for (final e in _reactionEmoji)
+            InkWell(
+              customBorder: const CircleBorder(),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _react(m, e);
+              },
+              child: Container(
+                width: 46,
+                height: 46,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: e == mineEmoji
+                      ? _accent.withValues(alpha: 0.2)
+                      : p.field,
+                  border: e == mineEmoji
+                      ? Border.all(color: _accent, width: 1.5)
+                      : null,
+                ),
+                child: Text(e, style: const TextStyle(fontSize: 24)),
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -1682,7 +2207,11 @@ class _ClassScreenState extends State<ClassScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (_replyingTo != null && !_voice.isRecording) _replyBar(p, _replyingTo!),
+          if (_editing != null)
+            _editBar(p, _editing!)
+          else if (_replyingTo != null && !_voice.isRecording)
+            _replyBar(p, _replyingTo!),
+          if (!_voice.isRecording) _mentionBar(p),
           ListenableBuilder(
             listenable: _voice,
             builder: (context, _) =>
@@ -1712,7 +2241,7 @@ class _ClassScreenState extends State<ClassScreen> {
                   key: _plusKey,
                   tooltip: 'Attach',
                   icon: Icon(Icons.add_rounded, color: p.sub, size: 26),
-                  onPressed: _showAttachMenu,
+                  onPressed: _editing != null ? null : _showAttachMenu,
                 ),
                 Expanded(
                   child: TextField(
@@ -1746,9 +2275,13 @@ class _ClassScreenState extends State<ClassScreen> {
         const SizedBox(width: 8),
         // Outside the box: microphone by default, send while typing
         _roundButton(
-          icon: _hasText ? Icons.send_rounded : Icons.mic_rounded,
-          onTap: _hasText ? _send : _startRecording,
-          tooltip: _hasText ? 'Send' : 'Record a voice note',
+          icon: _editing != null
+              ? Icons.check_rounded
+              : (_hasText ? Icons.send_rounded : Icons.mic_rounded),
+          onTap: (_hasText || _editing != null) ? _send : _startRecording,
+          tooltip: _editing != null
+              ? 'Save changes'
+              : (_hasText ? 'Send' : 'Record a voice note'),
         ),
       ],
     );
@@ -1919,6 +2452,58 @@ class _ClassScreenState extends State<ClassScreen> {
     if (!ack.ok && ack.error != 'OFFLINE' && mounted) {
       AppSnackBar.auto(context, ack.errorText);
     }
+  }
+
+  /// Shown above the input while editing a message.
+  Widget _editBar(_Pal p, ChatMessage m) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          color: p.field,
+          child: IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Container(width: 3, color: _accent),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(10, 6, 4, 6),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Editing message',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                            color: _accent,
+                          ),
+                        ),
+                        Text(
+                          m.previewText,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 13, color: p.sub),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Cancel',
+                  icon: Icon(Icons.close_rounded, size: 18, color: p.sub),
+                  onPressed: _cancelEdit,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _replyBar(_Pal p, ChatMessage m) {
@@ -2175,6 +2760,85 @@ class _ImageViewer extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  SWIPE TO REPLY
+// ══════════════════════════════════════════════════════════════════════════════
+
+/// Drag the child to the right: a reply arrow appears, and letting go after
+/// a short pull starts a reply. The child springs back either way.
+class _SwipeToReply extends StatefulWidget {
+  const _SwipeToReply({required this.onReply, required this.child});
+
+  final VoidCallback onReply;
+  final Widget child;
+
+  @override
+  State<_SwipeToReply> createState() => _SwipeToReplyState();
+}
+
+class _SwipeToReplyState extends State<_SwipeToReply>
+    with SingleTickerProviderStateMixin {
+  static const _trigger = 56.0;
+  static const _maxPull = 72.0;
+
+  late final AnimationController _back = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 170),
+  )..addListener(() {
+      setState(() => _dx = _from * (1 - Curves.easeOut.transform(_back.value)));
+    });
+
+  double _dx = 0;
+  double _from = 0;
+
+  @override
+  void dispose() {
+    _back.dispose();
+    super.dispose();
+  }
+
+  void _update(DragUpdateDetails d) {
+    _back.stop();
+    final next = (_dx + d.delta.dx).clamp(0.0, _maxPull).toDouble();
+    if (_dx < _trigger && next >= _trigger) HapticFeedback.lightImpact();
+    setState(() => _dx = next);
+  }
+
+  void _end(DragEndDetails _) {
+    if (_dx >= _trigger) widget.onReply();
+    _from = _dx;
+    _back.forward(from: 0);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onHorizontalDragUpdate: _update,
+      onHorizontalDragEnd: _end,
+      onHorizontalDragCancel: () => _end(DragEndDetails()),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          if (_dx > 4)
+            Positioned(
+              left: 0,
+              top: 0,
+              bottom: 0,
+              child: Center(
+                child: Opacity(
+                  opacity: (_dx / _trigger).clamp(0.0, 1.0).toDouble(),
+                  child: const Icon(Icons.reply_rounded, color: _accent),
+                ),
+              ),
+            ),
+          Transform.translate(offset: Offset(_dx, 0), child: widget.child),
+        ],
       ),
     );
   }

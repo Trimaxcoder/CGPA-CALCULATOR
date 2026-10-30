@@ -157,6 +157,9 @@ class ClassRoom {
 class ClassMember {
   final String userId;
   final String name;
+
+  /// The @name other students type to tag this person ('' = none set)
+  final String username;
   final String department;
   final String level;
   final String role; // 'admin' | 'member'
@@ -168,6 +171,7 @@ class ClassMember {
   const ClassMember({
     required this.userId,
     required this.name,
+    this.username = '',
     required this.department,
     required this.level,
     required this.role,
@@ -183,6 +187,7 @@ class ClassMember {
   factory ClassMember.fromMap(Map<String, dynamic> m) => ClassMember(
         userId: m['userId'] as String,
         name: (m['name'] ?? 'Student') as String,
+        username: (m['username'] ?? '') as String,
         department: (m['department'] ?? '') as String,
         level: (m['level'] ?? '') as String,
         role: (m['role'] ?? 'member') as String,
@@ -199,6 +204,28 @@ class ClassMember {
 
 /// Local-only status used for instant ("optimistic") sending in the chat UI.
 enum SendState { sent, sending, failed }
+
+/// A person tagged with @username in a message.
+class Mention {
+  final String userId;
+  final String username;
+
+  const Mention({required this.userId, required this.username});
+
+  static List<Mention> parseList(dynamic raw) {
+    if (raw is! List) return const [];
+    final out = <Mention>[];
+    for (final e in raw) {
+      if (e is Map && e['username'] != null) {
+        out.add(Mention(
+          userId: '${e['id'] ?? ''}',
+          username: '${e['username']}',
+        ));
+      }
+    }
+    return out;
+  }
+}
 
 class ReplyPreview {
   final String id;
@@ -310,6 +337,18 @@ class ChatMessage {
   final SendState sendState;
   final ChatAttachment? attachment;
 
+  /// emoji -> ids of the people who reacted with it
+  final Map<String, List<String>> reactions;
+
+  /// When the text was last edited (null = never edited)
+  final DateTime? editedAt;
+
+  /// true when this message was forwarded from another chat
+  final bool forwarded;
+
+  /// People tagged with @username in the text
+  final List<Mention> mentions;
+
   const ChatMessage({
     required this.id,
     required this.clientId,
@@ -323,7 +362,24 @@ class ChatMessage {
     required this.createdAt,
     this.sendState = SendState.sent,
     this.attachment,
+    this.reactions = const {},
+    this.editedAt,
+    this.forwarded = false,
+    this.mentions = const [],
   });
+
+  /// true when this message tags me
+  bool mentionsUser(String userId) =>
+      userId.isNotEmpty && mentions.any((x) => x.userId == userId);
+
+  /// The emoji I reacted with on this message, or '' if none.
+  String myReaction(String myId) {
+    if (myId.isEmpty) return '';
+    for (final e in reactions.entries) {
+      if (e.value.contains(myId)) return e.key;
+    }
+    return '';
+  }
 
   /// Text for reply bars and pinned bars: the message text, or a short
   /// description when the message is only a photo, file or voice note.
@@ -348,7 +404,23 @@ class ChatMessage {
       replyTo: reply is Map ? ReplyPreview.fromMap(_asMap(reply)) : null,
       createdAt: _parseDate(m['createdAt']),
       attachment: att is Map ? ChatAttachment.fromMap(_asMap(att)) : null,
+      reactions: parseReactions(m['reactions']),
+      editedAt: _parseDateOrNull(m['editedAt']),
+      forwarded: m['forwarded'] == true,
+      mentions: Mention.parseList(m['mentions']),
     );
+  }
+
+  /// {"👍": ["id", ...]}  (as sent by the server)  ->  a typed map.
+  static Map<String, List<String>> parseReactions(dynamic raw) {
+    if (raw is! Map) return const {};
+    final out = <String, List<String>>{};
+    raw.forEach((k, v) {
+      if (v is List && v.isNotEmpty) {
+        out['$k'] = v.map((e) => e.toString()).toList();
+      }
+    });
+    return out;
   }
 
   ChatMessage copyWith({
@@ -359,6 +431,9 @@ class ChatMessage {
     SendState? sendState,
     ChatAttachment? attachment,
     bool clearAttachment = false,
+    Map<String, List<String>>? reactions,
+    DateTime? editedAt,
+    List<Mention>? mentions,
   }) =>
       ChatMessage(
         id: id ?? this.id,
@@ -373,6 +448,10 @@ class ChatMessage {
         createdAt: createdAt,
         sendState: sendState ?? this.sendState,
         attachment: clearAttachment ? null : (attachment ?? this.attachment),
+        reactions: reactions ?? this.reactions,
+        editedAt: editedAt ?? this.editedAt,
+        forwarded: forwarded,
+        mentions: mentions ?? this.mentions,
       );
 }
 
