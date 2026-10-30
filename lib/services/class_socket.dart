@@ -30,6 +30,14 @@ class ClassEvent {
   const ClassEvent(this.name, this.classId, this.data);
 }
 
+/// A new message arrived in one of my classes (even one that is not open).
+/// Used by the class list for the last message and the unread count.
+class ClassActivity {
+  final String classId;
+  final LastMessage last;
+  const ClassActivity({required this.classId, required this.last});
+}
+
 /// Someone's app received, or they read, messages up to [upToId].
 class ReceiptEvent {
   final String classId;
@@ -138,6 +146,7 @@ class ClassSocket with WidgetsBindingObserver {
   final _anonNew = StreamController<AnonPost>.broadcast();
   final _anonHidden = StreamController<Map<String, dynamic>>.broadcast();
   final _classEvents = StreamController<ClassEvent>.broadcast();
+  final _classActivity = StreamController<ClassActivity>.broadcast();
 
   Stream<ChatMessage> get onMessageNew => _messageNew.stream;
 
@@ -157,6 +166,12 @@ class ClassSocket with WidgetsBindingObserver {
   Stream<Map<String, dynamic>> get onAnonHidden => _anonHidden.stream;
 
   Stream<ClassEvent> get onClassEvent => _classEvents.stream;
+
+  /// A message was sent in any class I belong to.
+  Stream<ClassActivity> get onClassActivity => _classActivity.stream;
+
+  /// The id of the student this connection belongs to ('' when logged out).
+  String get myUserId => _socketUser;
 
   // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -284,6 +299,15 @@ class ClassSocket with WidgetsBindingObserver {
 
     // ── Chat ─────────────────────────────────────────────────────────────────
     _listen(s, 'message:new', (d) => _messageNew.add(ChatMessage.fromMap(_asMap(d))));
+    _listen(s, 'class:activity', (d) {
+      final m = _asMap(d);
+      final last = m['lastMessage'];
+      if (last is! Map) return;
+      _classActivity.add(ClassActivity(
+        classId: (m['classId'] ?? '') as String,
+        last: LastMessage.fromMap(_asMap(last)),
+      ));
+    });
     _listen(s, 'message:deleted', (d) => _messageDeleted.add(_asMap(d)));
     _listen(s, 'message:pinned', (d) => _messagePinned.add(_asMap(d)));
     _listen(s, 'receipt:update', (d) {
@@ -323,6 +347,8 @@ class ClassSocket with WidgetsBindingObserver {
       'class:approved',
       'class:removed',
       'class:archived',
+      'class:cleared',
+      'class:preferences',
     ]) {
       _listen(s, name, (d) {
         final m = _asMap(d);

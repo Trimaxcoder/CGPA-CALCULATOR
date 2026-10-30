@@ -78,6 +78,7 @@ class _ClassesHubScreenState extends State<ClassesHubScreen> {
   bool _loading = true;
   String? _error;
   StreamSubscription<ClassEvent>? _sub;
+  StreamSubscription<ClassActivity>? _activitySub;
 
   @override
   void initState() {
@@ -85,15 +86,75 @@ class _ClassesHubScreenState extends State<ClassesHubScreen> {
     _socket.connect();
     // Approved, removed, class archived, member counts... refresh quietly
     _sub = _socket.onClassEvent.listen((_) => _load(silent: true));
+    // A new message in any of my classes: update its row straight away
+    _activitySub = _socket.onClassActivity.listen(_onActivity);
     classListRefresh.addListener(_onRefreshSignal);
     _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant ClassesHubScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Desktop: opening a class in the chat pane means its messages are read
+    final id = widget.selectedId;
+    if (id != null && id != oldWidget.selectedId) _clearUnread(id);
   }
 
   @override
   void dispose() {
     classListRefresh.removeListener(_onRefreshSignal);
     _sub?.cancel();
+    _activitySub?.cancel();
     super.dispose();
+  }
+
+  /// Newest activity first. Classes still waiting for approval go last.
+  List<ClassRoom> _sorted(List<ClassRoom> list) {
+    final out = [...list];
+    DateTime stamp(ClassRoom c) => c.lastMessage?.createdAt ?? c.createdAt;
+    out.sort((a, b) {
+      final pa = a.isPending ? 1 : 0;
+      final pb = b.isPending ? 1 : 0;
+      if (pa != pb) return pa - pb;
+      return stamp(b).compareTo(stamp(a));
+    });
+    return out;
+  }
+
+  void _onActivity(ClassActivity a) {
+    if (!mounted) return;
+    final i = _classes.indexWhere((c) => c.id == a.classId);
+    if (i == -1) {
+      _load(silent: true); // a class this list does not know yet
+      return;
+    }
+
+    final c = _classes[i];
+    final mine = a.last.senderId == _socket.myUserId;
+    final viewing = widget.embedded && widget.selectedId == c.id;
+
+    final updated = c.copyWith(
+      lastMessage: a.last,
+      // My own messages never count as unread. Neither do messages in the
+      // chat that is open on screen right now.
+      unread: viewing ? 0 : (mine ? c.unread : c.unread + 1),
+    );
+
+    setState(() {
+      final list = [..._classes];
+      list[i] = updated;
+      _classes = _sorted(list);
+    });
+  }
+
+  void _clearUnread(String classId) {
+    final i = _classes.indexWhere((c) => c.id == classId);
+    if (i == -1 || _classes[i].unread == 0) return;
+    setState(() {
+      final list = [..._classes];
+      list[i] = list[i].copyWith(unread: 0);
+      _classes = list;
+    });
   }
 
   void _onRefreshSignal() => _load(silent: true);
@@ -108,8 +169,16 @@ class _ClassesHubScreenState extends State<ClassesHubScreen> {
     try {
       final list = await _service.myClasses();
       if (!mounted) return;
+      // The chat that is open on screen is being read, so it has no unread
+      final open = widget.selectedId;
+      final fixed = [
+        for (final c in list)
+          (widget.embedded && c.id == open && c.unread > 0)
+              ? c.copyWith(unread: 0)
+              : c,
+      ];
       setState(() {
-        _classes = list;
+        _classes = _sorted(fixed);
         _loading = false;
         _error = null;
       });
@@ -235,6 +304,8 @@ class _ClassesHubScreenState extends State<ClassesHubScreen> {
       return;
     }
 
+    _clearUnread(c.id);
+
     // Desktop: show the chat in the right-hand pane
     final onSelect = widget.onSelect;
     if (onSelect != null) {
@@ -246,7 +317,9 @@ class _ClassesHubScreenState extends State<ClassesHubScreen> {
     Navigator.of(context)
         .push(classSlideRoute<void>(ClassScreen(room: c)))
         .then((_) {
-      if (mounted) _load(silent: true);
+      if (!mounted) return;
+      _clearUnread(c.id);
+      _load(silent: true);
     });
   }
 
@@ -456,13 +529,43 @@ class _ClassesHubScreenState extends State<ClassesHubScreen> {
     );
   }
 
+  /// "3:20 PM" today, "Yesterday", the weekday this week, otherwise "12/10/26".
+  String _timeLabel(DateTime d) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final day = DateTime(d.year, d.month, d.day);
+    final diff = today.difference(day).inDays;
+
+    if (diff <= 0) {
+      final h12 = d.hour % 12 == 0 ? 12 : d.hour % 12;
+      final mm = d.minute.toString().padLeft(2, '0');
+      return '$h12:$mm ${d.hour >= 12 ? 'PM' : 'AM'}';
+    }
+    if (diff == 1) return 'Yesterday';
+    if (diff < 7) {
+      const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+      return days[d.weekday - 1];
+    }
+    final yy = (d.year % 100).toString().padLeft(2, '0');
+    return '${d.day}/${d.month}/$yy';
+  }
+
+  /// "You: hello", "Ada: see you at 10" or "No messages yet".
+  String _previewLine(ClassRoom c) {
+    if (c.isPending) return 'Waiting for approval';
+    final last = c.lastMessage;
+    if (last == null) return 'No messages yet';
+    if (last.deleted) return last.text;
+    final mine = last.senderId == _socket.myUserId;
+    return '${mine ? 'You' : last.senderName}: ${last.text}';
+  }
+
   /// One class as a list row (like a chat list), not a card.
   Widget _classCard(ClassRoom c, _Palette p) {
-    final role = c.isOwner ? 'Owner' : (c.isAdmin ? 'Admin' : 'Member');
-    final members = '${c.memberCount} ${c.memberCount == 1 ? 'member' : 'members'}';
-    final subtitle = c.isPending ? 'Waiting for approval' : '$members · $role';
     final initial = c.name.isNotEmpty ? c.name[0].toUpperCase() : 'C';
     final selected = widget.embedded && c.id == widget.selectedId;
+    final hasUnread = c.unread > 0 && !c.isPending;
+    final last = c.lastMessage;
 
     return Material(
       color: selected ? _accent.withValues(alpha: 0.13) : Colors.transparent,
@@ -502,45 +605,103 @@ class _ClassesHubScreenState extends State<ClassesHubScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          c.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                            color: p.text,
-                          ),
+                        // Line 1: class name and the time of the last message
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                c.name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                  color: p.text,
+                                ),
+                              ),
+                            ),
+                            if (last != null && !c.isPending) ...[
+                              const SizedBox(width: 8),
+                              Text(
+                                _timeLabel(last.createdAt),
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight:
+                                      hasUnread ? FontWeight.w800 : FontWeight.w500,
+                                  color: hasUnread ? _accent : p.sub,
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
-                        const SizedBox(height: 2),
-                        Text(
-                          subtitle,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(fontSize: 13, color: p.sub),
+                        const SizedBox(height: 3),
+                        // Line 2: last message and the unread count
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                _previewLine(c),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 13.5,
+                                  fontWeight:
+                                      hasUnread ? FontWeight.w700 : FontWeight.w400,
+                                  color: hasUnread ? p.text : p.sub,
+                                ),
+                              ),
+                            ),
+                            if (c.isPending) ...[
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 3,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.orange.withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Text(
+                                  'PENDING',
+                                  style: TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w800,
+                                    color: Colors.orange,
+                                  ),
+                                ),
+                              ),
+                            ] else if (hasUnread) ...[
+                              const SizedBox(width: 8),
+                              Container(
+                                constraints: const BoxConstraints(
+                                  minWidth: 20,
+                                  minHeight: 20,
+                                ),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(
+                                  color: _accent,
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Text(
+                                  c.unread > 99 ? '99+' : '${c.unread}',
+                                  style: const TextStyle(
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w800,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
                       ],
                     ),
                   ),
-                  if (c.isPending)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 3,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.orange.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Text(
-                        'PENDING',
-                        style: TextStyle(
-                          fontSize: 9,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.orange,
-                        ),
-                      ),
-                    ),
                 ],
               ),
             ),

@@ -22,6 +22,37 @@ Map<String, dynamic> _asMap(dynamic v) =>
     v is Map ? v.cast<String, dynamic>() : <String, dynamic>{};
 
 // ─────────────────────────────────────────────────────────────────────────────
+//  LAST MESSAGE (shown on the class list)
+// ─────────────────────────────────────────────────────────────────────────────
+
+class LastMessage {
+  final String id;
+  final String text; // already shortened by the server: "Photo", "Voice note"...
+  final String senderId;
+  final String senderName;
+  final DateTime createdAt;
+  final bool deleted;
+
+  const LastMessage({
+    required this.id,
+    required this.text,
+    required this.senderId,
+    required this.senderName,
+    required this.createdAt,
+    required this.deleted,
+  });
+
+  factory LastMessage.fromMap(Map<String, dynamic> m) => LastMessage(
+        id: (m['id'] ?? '') as String,
+        text: (m['text'] ?? '') as String,
+        senderId: (m['senderId'] ?? '') as String,
+        senderName: (m['senderName'] ?? 'Student') as String,
+        createdAt: _parseDate(m['createdAt']),
+        deleted: m['deleted'] == true,
+      );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 //  CLASS
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -40,6 +71,11 @@ class ClassRoom {
   final String? inviteLink; // only present for active members
   final DateTime createdAt;
 
+  /// Newest message, and how many messages from others I have not read.
+  /// Only filled in by the class list, not by the other class calls.
+  final LastMessage? lastMessage;
+  final int unread;
+
   const ClassRoom({
     required this.id,
     required this.name,
@@ -54,6 +90,8 @@ class ClassRoom {
     required this.joinCode,
     required this.inviteLink,
     required this.createdAt,
+    this.lastMessage,
+    this.unread = 0,
   });
 
   bool get isAdmin => myRole == 'admin' && myStatus == 'active';
@@ -74,6 +112,10 @@ class ClassRoom {
         joinCode: m['joinCode'] as String?,
         inviteLink: m['inviteLink'] as String?,
         createdAt: _parseDate(m['createdAt']),
+        lastMessage: m['lastMessage'] is Map
+            ? LastMessage.fromMap(_asMap(m['lastMessage']))
+            : null,
+        unread: (m['unread'] as num?)?.toInt() ?? 0,
       );
 
   ClassRoom copyWith({
@@ -86,6 +128,8 @@ class ClassRoom {
     String? myStatus,
     String? joinCode,
     String? inviteLink,
+    LastMessage? lastMessage,
+    int? unread,
   }) =>
       ClassRoom(
         id: id,
@@ -101,6 +145,8 @@ class ClassRoom {
         joinCode: joinCode ?? this.joinCode,
         inviteLink: inviteLink ?? this.inviteLink,
         createdAt: createdAt,
+        lastMessage: lastMessage ?? this.lastMessage,
+        unread: unread ?? this.unread,
       );
 }
 
@@ -475,6 +521,7 @@ class ClassInfo {
   final List<ClassAdmin> admins;
   final DateTime myJoinedAt;
   final int pinnedCount;
+  final int disappearAfter; // my "disappearing messages" time, seconds (0 = off)
   final int imageCount;
   final int fileCount;
   final int audioCount;
@@ -487,6 +534,7 @@ class ClassInfo {
     required this.admins,
     required this.myJoinedAt,
     required this.pinnedCount,
+    required this.disappearAfter,
     required this.imageCount,
     required this.fileCount,
     required this.audioCount,
@@ -506,6 +554,7 @@ class ClassInfo {
           .toList(),
       myJoinedAt: _parseDate(m['myJoinedAt']),
       pinnedCount: (m['pinnedCount'] as num?)?.toInt() ?? 0,
+      disappearAfter: (m['disappearAfter'] as num?)?.toInt() ?? 0,
       imageCount: (media['images'] as num?)?.toInt() ?? 0,
       fileCount: (media['files'] as num?)?.toInt() ?? 0,
       audioCount: (media['audio'] as num?)?.toInt() ?? 0,
@@ -534,12 +583,19 @@ class ClassDetails {
   final String? deliveredUpTo;
   final String? readUpTo;
 
+  /// My own chat settings for this class: how long until messages disappear
+  /// for me (seconds, 0 = never), and when I last cleared the chat.
+  final int disappearAfter;
+  final DateTime? clearedAt;
+
   const ClassDetails({
     required this.room,
     required this.activeSession,
     required this.pinned,
     this.deliveredUpTo,
     this.readUpTo,
+    this.disappearAfter = 0,
+    this.clearedAt,
   });
 
   factory ClassDetails.fromMap(Map<String, dynamic> m) => ClassDetails(
@@ -552,6 +608,9 @@ class ClassDetails {
             .toList(),
         deliveredUpTo: _asMap(m['receipts'])['delivered'] as String?,
         readUpTo: _asMap(m['receipts'])['read'] as String?,
+        disappearAfter:
+            (_asMap(m['my'])['disappearAfter'] as num?)?.toInt() ?? 0,
+        clearedAt: _parseDateOrNull(_asMap(m['my'])['clearedAt']),
       );
 }
 

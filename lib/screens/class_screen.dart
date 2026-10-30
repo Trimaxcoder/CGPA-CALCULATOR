@@ -30,6 +30,7 @@ import '../widgets/chat_doodle_background.dart';
 import '../widgets/snackBar.dart';
 import 'anon_screen.dart';
 import 'class_info_screen.dart';
+import 'class_search_screen.dart';
 
 const _blue = Color(0xFF1565C0);
 const _accent = Color(0xFF1E88E5);
@@ -974,6 +975,12 @@ class _ClassScreenState extends State<ClassScreen> {
     );
   }
 
+  void _openSearch(ClassRoom room) {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => ClassSearchScreen(room: room)),
+    );
+  }
+
   void _openAnon(ClassRoom room) {
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => AnonScreen(room: room)),
@@ -1123,6 +1130,11 @@ class _ClassScreenState extends State<ClassScreen> {
               ],
             ),
             onPressed: () => _openAnon(room),
+          ),
+          IconButton(
+            tooltip: 'Search messages',
+            icon: Icon(Icons.search_rounded, color: p.text),
+            onPressed: () => _openSearch(room),
           ),
           IconButton(
             tooltip: 'Class info',

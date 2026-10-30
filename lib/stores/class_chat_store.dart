@@ -69,6 +69,11 @@ class ClassChatStore extends ChangeNotifier {
   final List<StreamSubscription<dynamic>> _subs = [];
   bool _wasOnline = false;
 
+  // my private chat settings (see "Clear chat" and "Disappearing messages")
+  int _disappearAfter = 0; // seconds, 0 = off
+  DateTime? _clearedAt;
+  Timer? _expiryTimer;
+
   // ── Read-only view for the screen ──────────────────────────────────────────
   ClassRoom? get room => _room;
   AnonSession? get activeSession => _activeSession;
@@ -86,6 +91,9 @@ class ClassChatStore extends ChangeNotifier {
   bool get online => _socket.connected.value;
 
   List<String> get typingNames => _typingNames.values.toList();
+
+  /// My "disappearing messages" time in seconds (0 = off).
+  int get disappearAfter => _disappearAfter;
 
   /// Is this message mine? (Messages still sending or failed are always mine.)
   bool isMine(ChatMessage m) =>
@@ -122,6 +130,11 @@ class ClassChatStore extends ChangeNotifier {
     // If we are offline right now, ClassSocket joins as soon as it connects.
     unawaited(_socket.joinRoom(classId));
 
+    // Messages that have expired for me are removed while the chat is open
+    _expiryTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (_disappearAfter > 0) _pruneHidden();
+    });
+
     await load();
   }
 
@@ -137,6 +150,7 @@ class ClassChatStore extends ChangeNotifier {
     }
     _stopTypingTimer?.cancel();
     _readTimer?.cancel();
+    _expiryTimer?.cancel();
     _socket.connected.removeListener(_onConnectionChanged);
     _socket.leaveRoom(classId);
     super.dispose();
@@ -165,12 +179,15 @@ class ClassChatStore extends ChangeNotifier {
       _room = details.room;
       _activeSession = details.activeSession;
       _pinned = details.pinned;
+      _disappearAfter = details.disappearAfter;
+      _clearedAt = details.clearedAt;
       _raiseReceipts(
         delivered: details.deliveredUpTo,
         read: details.readUpTo,
       );
       _hasMore = page.hasMore;
       _merge(page.messages);
+      _pruneHidden();
       _markReadSoon();
     } on ApiException catch (e) {
       _error = e.message;
@@ -193,6 +210,9 @@ class ClassChatStore extends ChangeNotifier {
         final name = (profile['name'] ?? '').toString().trim();
         if (name.isNotEmpty) _myName = name;
       }
+      // If I chose a username, that is the name the class sees
+      final username = (me['username'] ?? '').toString().trim();
+      if (username.isNotEmpty) _myName = username;
     } catch (_) {
       // Not fatal: _myId is also learned from the first message we send
     }
@@ -233,11 +253,14 @@ class ClassChatStore extends ChangeNotifier {
       _room = details.room;
       _activeSession = details.activeSession;
       _pinned = details.pinned;
+      _disappearAfter = details.disappearAfter;
+      _clearedAt = details.clearedAt;
       _raiseReceipts(
         delivered: details.deliveredUpTo,
         read: details.readUpTo,
       );
       _merge(page.messages);
+      _pruneHidden();
       _markReadSoon();
       _notify();
     } catch (_) {
@@ -248,6 +271,30 @@ class ClassChatStore extends ChangeNotifier {
   /// Reloads the class details and catches up on messages. Call it after
   /// coming back from a settings or members screen.
   Future<void> refresh() => _syncLatest();
+
+  /// Removes the messages that are hidden for me: the ones from before I
+  /// cleared the chat, and the ones older than my "disappearing messages"
+  /// time. Messages that are still sending are kept.
+  void _pruneHidden() {
+    DateTime? hideBefore = _clearedAt;
+    if (_disappearAfter > 0) {
+      final cutoff = DateTime.now().subtract(Duration(seconds: _disappearAfter));
+      if (hideBefore == null || cutoff.isAfter(hideBefore)) hideBefore = cutoff;
+    }
+    final limit = hideBefore;
+    if (limit == null) return;
+
+    final before = _messages.length;
+    final pinnedBefore = _pinned.length;
+    _messages.removeWhere(
+      (m) => m.sendState == SendState.sent && !m.createdAt.isAfter(limit),
+    );
+    _pinned = _pinned.where((m) => m.createdAt.isAfter(limit)).toList();
+
+    if (_messages.length != before || _pinned.length != pinnedBefore) {
+      _notify();
+    }
+  }
 
   /// Adds new messages and updates existing ones (matched by id).
   void _merge(List<ChatMessage> incoming) {
@@ -691,6 +738,18 @@ class ClassChatStore extends ChangeNotifier {
         break;
       case 'class:archived':
         _room = _room?.copyWith(archived: true);
+        break;
+      case 'class:cleared':
+        // I cleared the chat (maybe on another device of mine)
+        _clearedAt =
+            DateTime.tryParse('${e.data['clearedAt']}')?.toLocal() ??
+                DateTime.now();
+        _hasMore = false;
+        _pruneHidden();
+        break;
+      case 'class:preferences':
+        _disappearAfter = (e.data['disappearAfter'] as num?)?.toInt() ?? 0;
+        _pruneHidden();
         break;
       case 'class:removed':
         _removed = true;

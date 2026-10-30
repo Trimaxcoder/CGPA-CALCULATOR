@@ -76,6 +76,22 @@ class ClassService {
     return ClassInfo.fromMap(data['info'] as Map<String, dynamic>);
   }
 
+  /// Clear the chat for me only. Other members keep their messages.
+  Future<DateTime> clearChat(String classId) async {
+    final data = await _client.post('/classes/$classId/clear', {});
+    return DateTime.tryParse('${data['clearedAt']}')?.toLocal() ??
+        DateTime.now();
+  }
+
+  /// My own "disappearing messages" time for this class, in seconds:
+  /// 0 (off), 86400 (24 hours), 604800 (7 days) or 7776000 (90 days).
+  Future<int> setDisappearing(String classId, int seconds) async {
+    final data = await _client.put('/classes/$classId/disappearing', {
+      'seconds': seconds,
+    });
+    return (data['disappearAfter'] as num?)?.toInt() ?? seconds;
+  }
+
   /// Admin: change class settings. Only the fields you pass are changed.
   Future<ClassRoom> update(
     String classId, {
@@ -151,6 +167,36 @@ class ClassService {
       messages: _parseList(data['messages'], ChatMessage.fromMap),
       hasMore: data['hasMore'] == true,
     );
+  }
+
+  /// Search this class's messages (and file names). Newest first. Pass the
+  /// id of the last result as [before] to get the next page.
+  Future<MessagePage> searchMessages(
+    String classId,
+    String query, {
+    String? before,
+    int limit = 30,
+  }) async {
+    final params = [
+      'q=${Uri.encodeQueryComponent(query)}',
+      'limit=$limit',
+      if (before != null) 'before=$before',
+    ].join('&');
+    final data = await _client.get('/classes/$classId/search?$params');
+    return MessagePage(
+      messages: _parseList(data['messages'], ChatMessage.fromMap),
+      hasMore: data['hasMore'] == true,
+    );
+  }
+
+  /// One message with the messages just before and after it, oldest first.
+  Future<List<ChatMessage>> messageContext(
+    String classId,
+    String messageId,
+  ) async {
+    final data =
+        await _client.get('/classes/$classId/messages/$messageId/context');
+    return _parseList(data['messages'], ChatMessage.fromMap);
   }
 
   /// Admin: pin or unpin a message.

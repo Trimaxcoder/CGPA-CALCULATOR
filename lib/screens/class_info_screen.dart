@@ -74,6 +74,9 @@ class _ClassInfoScreenState extends State<ClassInfoScreen> {
   bool _loading = true;
   String? _error;
 
+  /// My "disappearing messages" time in seconds (0 = off)
+  int _disappearAfter = 0;
+
   ClassRoom get _room => widget.room;
 
   @override
@@ -92,6 +95,7 @@ class _ClassInfoScreenState extends State<ClassInfoScreen> {
       if (!mounted) return;
       setState(() {
         _info = info;
+        _disappearAfter = info.disappearAfter;
         _loading = false;
       });
     } on ApiException catch (e) {
@@ -171,6 +175,142 @@ class _ClassInfoScreenState extends State<ClassInfoScreen> {
         ),
       ),
     );
+  }
+
+  static const _disappearChoices = <(int, String)>[
+    (0, 'Off'),
+    (24 * 3600, '24 hours'),
+    (7 * 24 * 3600, '7 days'),
+    (90 * 24 * 3600, '90 days'),
+  ];
+
+  String _disappearLabel(int seconds) {
+    for (final c in _disappearChoices) {
+      if (c.$1 == seconds) return c.$2;
+    }
+    return 'Off';
+  }
+
+  Future<void> _pickDisappearing() async {
+    final p = _Pal(context.read<ThemeNotifier>().isDarkMode);
+
+    final chosen = await showModalBottomSheet<int>(
+      context: context,
+      backgroundColor: p.card,
+      isScrollControlled: true,
+      constraints: const BoxConstraints(maxWidth: 560),
+      builder: (ctx) => SafeArea(
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(8, 12, 8, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: p.isDark ? Colors.white24 : Colors.black12,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+                  child: Text(
+                    'Disappearing messages',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                      color: p.text,
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  child: Text(
+                    'Messages older than this disappear from your chat, on all '
+                    'your devices. Other members are not affected, and the '
+                    'files are removed from storage once everyone has cleared '
+                    'them.',
+                    style: TextStyle(fontSize: 13, height: 1.4, color: p.sub),
+                  ),
+                ),
+                for (final c in _disappearChoices)
+                  ListTile(
+                    title: Text(
+                      c.$2,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: p.text,
+                      ),
+                    ),
+                    trailing: c.$1 == _disappearAfter
+                        ? const Icon(Icons.check_circle_rounded, color: _accent)
+                        : Icon(Icons.circle_outlined, color: p.sub),
+                    onTap: () => Navigator.pop(ctx, c.$1),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    if (chosen == null || chosen == _disappearAfter || !mounted) return;
+
+    try {
+      final saved = await _service.setDisappearing(_room.id, chosen);
+      if (!mounted) return;
+      setState(() => _disappearAfter = saved);
+      AppSnackBar.auto(
+        context,
+        saved == 0
+            ? 'Disappearing messages are off'
+            : 'Messages now disappear after ${_disappearLabel(saved)}',
+      );
+    } on ApiException catch (e) {
+      if (mounted) AppSnackBar.auto(context, e.message);
+    } catch (_) {
+      if (mounted) AppSnackBar.auto(context, 'Something went wrong.');
+    }
+  }
+
+  Future<void> _confirmClear() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Clear chat?'),
+        content: const Text(
+          'All messages will be removed from your chat, on all your devices. '
+          'Other members keep their messages. This cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Clear', style: TextStyle(color: Colors.redAccent)),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+
+    try {
+      await _service.clearChat(_room.id);
+      if (!mounted) return;
+      AppSnackBar.auto(context, 'Chat cleared');
+      _load(); // the shared media counts change too
+    } on ApiException catch (e) {
+      if (mounted) AppSnackBar.auto(context, e.message);
+    } catch (_) {
+      if (mounted) AppSnackBar.auto(context, 'Something went wrong.');
+    }
   }
 
   void _openMembers() {
@@ -610,6 +750,100 @@ class _ClassInfoScreenState extends State<ClassInfoScreen> {
     );
   }
 
+  /// A tappable line: icon, title, small text underneath, and an arrow.
+  Widget _tapRow(
+    _Pal p,
+    IconData icon,
+    String title,
+    String sub,
+    VoidCallback onTap, {
+    bool danger = false,
+    String? value,
+  }) {
+    final color = danger ? Colors.redAccent : _accent;
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Row(
+          children: [
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, size: 18, color: color),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 14.5,
+                      fontWeight: FontWeight.w700,
+                      color: danger ? Colors.redAccent : p.text,
+                    ),
+                  ),
+                  const SizedBox(height: 1),
+                  Text(
+                    sub,
+                    style: TextStyle(fontSize: 12, color: p.sub, height: 1.25),
+                  ),
+                ],
+              ),
+            ),
+            if (value != null) ...[
+              const SizedBox(width: 8),
+              Text(
+                value,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                  color: _accent,
+                ),
+              ),
+            ],
+            const SizedBox(width: 4),
+            Icon(Icons.chevron_right_rounded, size: 20, color: p.sub),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _chatCard(_Pal p) {
+    if (_info == null) return const SizedBox.shrink();
+
+    return _card(
+      p,
+      label: 'Your chat',
+      children: [
+        _tapRow(
+          p,
+          Icons.timer_outlined,
+          'Disappearing messages',
+          'Old messages disappear from your chat',
+          _pickDisappearing,
+          value: _disappearLabel(_disappearAfter),
+        ),
+        _tapRow(
+          p,
+          Icons.delete_sweep_outlined,
+          'Clear chat',
+          'Remove all messages from your chat. Others keep theirs.',
+          _confirmClear,
+          danger: true,
+        ),
+      ],
+    );
+  }
+
   Widget _adminsCard(_Pal p) {
     final info = _info;
     if (info == null || info.admins.isEmpty) return const SizedBox.shrink();
@@ -780,6 +1014,7 @@ class _ClassInfoScreenState extends State<ClassInfoScreen> {
                       if (_error != null) _errorBox(p),
                       _inviteCard(p),
                       _mediaCard(p),
+                      _chatCard(p),
                       _adminsCard(p),
                       _actionButton(
                         p,
