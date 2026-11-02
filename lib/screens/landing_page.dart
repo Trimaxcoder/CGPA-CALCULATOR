@@ -638,25 +638,34 @@ class _LandingPageState extends State<LandingPage>
     try {
       final googleSignIn = GoogleSignIn(
         scopes: ['email', 'profile'],
-        clientId:
-            '36781799836-r0fa4p6ogpj2u45k670vvh5p5fqrc4vb.apps.googleusercontent.com',
+        clientId: kIsWeb
+            ? '36781799836-2vi1s0vj9r5sai75ujebr7q534uek74n.apps.googleusercontent.com'
+            : null,
+        serverClientId: kIsWeb
+            ? null
+            : '36781799836-2vi1s0vj9r5sai75ujebr7q534uek74n.apps.googleusercontent.com',
       );
 
       if (!kIsWeb) await googleSignIn.signOut();
 
       final googleUser = await googleSignIn.signIn();
-
       if (googleUser == null) return;
 
       final googleAuth = await googleUser.authentication;
       final idToken = googleAuth.idToken;
+      final accessToken = googleAuth.accessToken;
 
-      if (idToken == null) {
-        AppSnackBar.showError(context, 'Google sign-in failed. Try again.');
+      if (idToken == null && accessToken == null) {
+        if (mounted) {
+          AppSnackBar.showError(context, 'Google sign-in failed. Try again.');
+        }
         return;
       }
 
-      final userData = await AuthService().loginWithGoogle(idToken: idToken);
+      final userData = await AuthService().loginWithGoogle(
+        idToken: idToken,
+        accessToken: accessToken,
+      );
 
       if (userData['profile'] != null) {
         final profile = StudentProfile.fromMap(
@@ -666,18 +675,18 @@ class _LandingPageState extends State<LandingPage>
         await prefs.setString('profile', jsonEncode(profile.toMap()));
       }
 
-      if (!context.mounted) return;
+      if (!mounted) return;
       Navigator.of(
         context,
       ).pushAndRemoveUntil(fadeRoute(const MainShell()), (_) => false);
     } on ApiException catch (e) {
-      print("=== API ERROR: ${e.message}");
+      debugPrint('API ERROR: ${e.message}');
       if (mounted) AppSnackBar.showError(context, e.message);
     } catch (e, stack) {
-      print("=== GOOGLE ERROR: $e");
-      print("=== STACK: $stack");
-      if (mounted)
+      debugPrint('GOOGLE ERROR: $e\n$stack');
+      if (mounted) {
         AppSnackBar.showError(context, 'Google sign-in failed. Try again.');
+      }
     }
   }
 

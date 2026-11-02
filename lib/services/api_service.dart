@@ -404,19 +404,23 @@ class AuthService {
   // ── Google Sign-In ─────────────────────────────────────────────────────────
   /// Sends the Google [idToken] to your backend and saves the returned tokens.
   Future<Map<String, dynamic>> loginWithGoogle({
-    required String idToken,
-  }) async {
-    final data = await _client.post(
-      '/auth/google',
-      {'idToken': idToken},
-      requiresAuth: false,
-    );
-    await TokenStorage.saveTokens(
-      accessToken:  data['accessToken']  as String,
-      refreshToken: data['refreshToken'] as String,
-    );
-    return data['user'] as Map<String, dynamic>;
-  }
+  String? idToken,
+  String? accessToken,
+}) async {
+  final data = await _client.post(
+    '/auth/google',
+    {
+      if (idToken != null) 'idToken': idToken,
+      if (accessToken != null) 'accessToken': accessToken,
+    },
+    requiresAuth: false,
+  );
+  await TokenStorage.saveTokens(
+    accessToken: data['accessToken'] as String,
+    refreshToken: data['refreshToken'] as String,
+  );
+  return data['user'] as Map<String, dynamic>;
+}
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -18,6 +18,7 @@ import 'registerscreen.dart';
 import '../widgets/app_dialog.dart';
 import '../widgets/google_button.dart';
 import '../widgets/snackBar.dart';
+import '../widgets/legal_links.dart';
 import 'landing_page.dart';
 
 class SignInScreen extends StatefulWidget {
@@ -209,8 +210,12 @@ class _SignInScreenState extends State<SignInScreen> {
     try {
       final googleSignIn = GoogleSignIn(
         scopes: ['email', 'profile'],
-        clientId:
-            '36781799836-r0fa4p6ogpj2u45k670vvh5p5fqrc4vb.apps.googleusercontent.com',
+        clientId: kIsWeb
+            ? '36781799836-2vi1s0vj9r5sai75ujebr7q534uek74n.apps.googleusercontent.com'
+            : null,
+        serverClientId: kIsWeb
+            ? null
+            : '36781799836-2vi1s0vj9r5sai75ujebr7q534uek74n.apps.googleusercontent.com',
       );
 
       if (!kIsWeb) await googleSignIn.signOut();
@@ -220,16 +225,25 @@ class _SignInScreenState extends State<SignInScreen> {
 
       final googleAuth = await googleUser.authentication;
       final idToken = googleAuth.idToken;
+      final accessToken = googleAuth.accessToken;
 
-      if (idToken == null) {
-        if (mounted)
+      if (idToken == null && accessToken == null) {
+        if (mounted) {
           AppSnackBar.showError(context, 'Google sign-in failed. Try again.');
+        }
         return;
       }
 
       setState(() => _loading = true);
 
-      final userData = await AuthService().loginWithGoogle(idToken: idToken);
+      debugPrint(
+        'SENDING to backend: idToken=${idToken != null}, accessToken=${accessToken != null}',
+      );
+
+      final userData = await AuthService().loginWithGoogle(
+        idToken: idToken,
+        accessToken: accessToken,
+      );
 
       if (userData['profile'] != null) {
         final profile = StudentProfile.fromMap(
@@ -244,22 +258,23 @@ class _SignInScreenState extends State<SignInScreen> {
         context,
       ).pushAndRemoveUntil(fadeRoute(const MainShell()), (_) => false);
     } on ApiException catch (e) {
+      debugPrint('GOOGLE API ERROR: ${e.message} (status ${e.statusCode})');
       if (mounted) AppSnackBar.showError(context, e.message);
-    } catch (e) {
-      if (mounted)
+    } catch (e, stack) {
+      debugPrint('GOOGLE ERROR: $e\n$stack');
+      if (mounted) {
         AppSnackBar.showError(context, 'Google sign-in failed. Try again.');
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
   }
 
-  void _goBack() => Navigator.of(
-    context,
-  ).pushReplacement(fadeRoute(const LandingPage()));
+  void _goBack() =>
+      Navigator.of(context).pushReplacement(fadeRoute(const LandingPage()));
 
-  void _goRegister() => Navigator.of(
-    context,
-  ).pushReplacement(fadeRoute(const RegisterScreen()));
+  void _goRegister() =>
+      Navigator.of(context).pushReplacement(fadeRoute(const RegisterScreen()));
 
   // ══════════════════════════════════════════════════════════
   //  BUILD
@@ -830,7 +845,11 @@ class _SignInScreenState extends State<SignInScreen> {
             ),
             child: ElevatedButton.icon(
               onPressed: _loading ? null : _signInWithBiometrics,
-              icon: const Icon(Icons.fingerprint, size: 24, color: Colors.white),
+              icon: const Icon(
+                Icons.fingerprint,
+                size: 24,
+                color: Colors.white,
+              ),
               label: const Text(
                 'Sign in with Fingerprint',
                 style: TextStyle(
@@ -894,7 +913,11 @@ class _SignInScreenState extends State<SignInScreen> {
               )
             : GoogleButton(onPressed: _handleGoogleSignIn),
       ),
-      const SizedBox(height: 28),
+      const SizedBox(height: 12),
+
+      // Google sign-in can create a new account, so show the consent line.
+      Center(child: LegalNotice(light: light)),
+      const SizedBox(height: 24),
 
       // ── Register link ────────────────────────────
       Center(

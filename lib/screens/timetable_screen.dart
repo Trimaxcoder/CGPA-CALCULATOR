@@ -15,6 +15,8 @@ import 'compose_announcement_screen.dart';
 import '../widgets/animations.dart';
 import '../widgets/app_dialog.dart';
 import '../widgets/class_card.dart';
+import '../models/term_info.dart';
+import '../widgets/term_banner.dart';
 
 class TimetableScreen extends StatefulWidget {
   const TimetableScreen({super.key});
@@ -35,9 +37,12 @@ class _TimetableScreenState extends State<TimetableScreen>
   List<PersonalEntry> _personal = [];
 
   bool _loading = true;
-  bool _isAdmin = false;
+    bool _isAdmin = false;
   bool _isSuperAdmin = false;
 
+  TermInfo? _term;
+  bool _setupNeeded = false;
+  bool _preparing = false;
   static const Color _primary = Color(0xFF1565C0);
 
   /// Max width of the timetable content on big screens.
@@ -129,10 +134,13 @@ class _TimetableScreenState extends State<TimetableScreen>
     } catch (_) {}
   }
 
-  Future<void> _loadLectures() async {
+    Future<void> _loadLectures() async {
     try {
-      final list = await _svc.getLectures();
-      _lectures = list.map(LectureEntry.fromMap).toList();
+      final r = await _svc.getLectureTimetable();
+      _lectures = r.entries.map(LectureEntry.fromMap).toList();
+      _term = r.term;
+      _setupNeeded = r.setupNeeded;
+      _preparing = r.preparing;
     } catch (_) {}
   }
 
@@ -415,9 +423,20 @@ class _TimetableScreenState extends State<TimetableScreen>
             // ── Lecture / Personal / Exam switch ──
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: _mobileSegmented(isDark),
+                            child: _mobileSegmented(isDark),
             ),
             const SizedBox(height: 14),
+
+            if (_typeTabCtrl.index != 1)
+              TermBanner(
+                term: _term,
+                setupNeeded: _setupNeeded,
+                preparing: _preparing,
+                isAdmin: _isAdmin,
+                isDark: isDark,
+                onSetupDone: () => _loadAll(silent: true),
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+              ),
 
             Expanded(
               child: _loading
@@ -548,8 +567,18 @@ class _TimetableScreenState extends State<TimetableScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _desktopHeader(isDark, tab),
+                                   _desktopHeader(isDark, tab),
                   const SizedBox(height: 22),
+                  if (tab != 1)
+                    TermBanner(
+                      term: _term,
+                      setupNeeded: _setupNeeded,
+                      preparing: _preparing,
+                      isAdmin: _isAdmin,
+                      isDark: isDark,
+                      onSetupDone: () => _loadAll(silent: true),
+                      padding: const EdgeInsets.only(bottom: 16),
+                    ),
                   Expanded(
                     child: _loading
                         ? const Center(child: CircularProgressIndicator())

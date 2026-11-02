@@ -5,11 +5,14 @@
 
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../models/class_models.dart';
 import '../providers/theme_notifier.dart';
 import '../stores/anon_store.dart';
+import '../services/class_socket.dart' show SocketAck;
 import '../widgets/snackBar.dart';
+import 'class_forward_sheet.dart';
 
 const _blue = Color(0xFF1565C0);
 const _accent = Color(0xFF1E88E5);
@@ -30,6 +33,21 @@ class _Pal {
       ? Colors.white.withValues(alpha: 0.07)
       : Colors.black.withValues(alpha: 0.05);
 }
+
+/// The font of the anonymous messages. To try another one, change only this
+/// function, for example GoogleFonts.nunito or GoogleFonts.baloo2.
+TextStyle _noteFont({
+  required double size,
+  required Color color,
+  double height = 1.4,
+}) =>
+    GoogleFonts.poppins(
+      fontSize: size,
+      color: color,
+      height: height,
+      fontWeight: FontWeight.w600,
+      letterSpacing: 0.1,
+    );
 
 String _shortDate(DateTime d) {
   const months = [
@@ -64,6 +82,10 @@ class _AnonScreenState extends State<AnonScreen> {
   late final AnonStore _store;
   final _input = TextEditingController();
   final _scroll = ScrollController();
+  final _focus = FocusNode();
+
+  /// The post the student is answering (null = writing a normal post)
+  AnonPost? _replyingTo;
 
   bool get _isAdmin => widget.room.isAdmin;
 
@@ -79,6 +101,7 @@ class _AnonScreenState extends State<AnonScreen> {
   void dispose() {
     _store.dispose();
     _input.dispose();
+    _focus.dispose();
     _scroll.dispose();
     super.dispose();
   }
@@ -95,11 +118,12 @@ class _AnonScreenState extends State<AnonScreen> {
     final text = _input.text.trim();
     if (text.isEmpty || _store.sending) return;
 
-    final ack = await _store.sendPost(text);
+    final ack = await _store.sendPost(text, replyTo: _replyingTo?.id);
     if (!mounted) return;
 
     if (ack.ok) {
       _input.clear();
+      setState(() => _replyingTo = null);
       if (_scroll.hasClients) {
         _scroll.animateTo(
           0,
@@ -110,6 +134,58 @@ class _AnonScreenState extends State<AnonScreen> {
     } else {
       AppSnackBar.auto(context, ack.errorText);
     }
+  }
+
+  void _startReply(AnonPost post) {
+    setState(() => _replyingTo = post);
+    _focus.requestFocus();
+  }
+
+  /// Copies a post into the open anonymous session of other classes. The
+  /// copy has no author, so nobody can tell who shared it.
+  Future<void> _share(AnonPost post) async {
+    final picked = await showForwardPicker(
+      context,
+      currentClassId: widget.room.id,
+      preview: post.text,
+      anonymous: true,
+    );
+    if (picked == null || picked.isEmpty || !mounted) return;
+
+    AppSnackBar.auto(context, 'Sharing...');
+    final ack = await _store.sharePost(post.id, [for (final c in picked) c.id]);
+    if (!mounted) return;
+
+    final raw = ack.data['results'];
+    if (raw is! List) {
+      AppSnackBar.auto(context, ack.errorText);
+      return;
+    }
+
+    final names = {for (final c in picked) c.id: c.name};
+    final done = <String>[];
+    String? failure;
+    for (final r in raw) {
+      if (r is! Map) continue;
+      if (r['ok'] == true) {
+        done.add(names['${r['classId']}'] ?? 'a class');
+      } else {
+        failure ??= r['error'] == 'SESSION_CLOSED'
+            ? 'a class has no open anonymous session'
+            : SocketAck(ok: false, error: r['error'] as String?).errorText;
+      }
+    }
+
+    final String text;
+    if (done.isEmpty) {
+      text = failure ?? 'Could not share the post.';
+    } else {
+      final where = done.length == 1 ? done.first : '${done.length} classes';
+      text = failure == null
+          ? 'Shared anonymously to $where'
+          : 'Shared to $where. Some failed: $failure';
+    }
+    AppSnackBar.auto(context, text);
   }
 
   Future<void> _showStart() async {
@@ -629,53 +705,284 @@ class _AnonScreenState extends State<AnonScreen> {
     );
   }
 
+  /// One anonymous post. A gradient header carries the session question and
+  /// a light panel below it carries the message.
   Widget _postCard(_Pal p, AnonPost post) {
+    final session = _store.viewing;
+    final dark = p.isDark;
+    final panel = dark ? const Color(0xFF1C2127) : const Color(0xFFEEF1F6);
+    final canReply =
+        session != null && session.isOpen && !widget.room.archived;
+
+    // A slim blue band on top. Darker than before in light mode.
+    final headerColors = dark
+        ? const [Color(0xFF1565C0), Color(0xFF0D47A1), Color(0xFF0A2F6B)]
+        : const [Color(0xFF1E88E5), Color(0xFF1565C0), Color(0xFF0D47A1)];
+
     return Padding(
-      padding: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.only(top: 14),
       child: GestureDetector(
         onLongPress: _isAdmin ? () => _showPostActions(post) : null,
         child: Container(
           width: double.infinity,
-          padding: const EdgeInsets.fromLTRB(14, 12, 6, 10),
+          clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
-            color: p.card,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: p.border),
+            color: panel,
+            borderRadius: BorderRadius.circular(22),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: dark ? 0.35 : 0.10),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: Text(
-                  post.text,
-                  style: TextStyle(fontSize: 15, color: p.text, height: 1.35),
+              // ── Header: just the colour and the mask ────────────────────
+              Container(
+                height: 34,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: headerColors,
+                    stops: const [0.0, 0.55, 1.0],
+                  ),
+                ),
+                child: const Icon(
+                  Icons.masks_rounded,
+                  size: 18,
+                  color: Colors.white,
                 ),
               ),
-              const SizedBox(height: 6),
-              Row(
-                children: [
-                  Icon(Icons.masks_rounded, size: 13, color: p.sub),
-                  const SizedBox(width: 5),
-                  Text(
-                    'Anonymous · ${_ago(post.createdAt)}',
-                    style: TextStyle(fontSize: 11.5, color: p.sub),
+
+              // ── Where it came from / what it answers ────────────────────
+              if (post.sharedFrom.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(18, 14, 18, 0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.shortcut_rounded, size: 15, color: p.sub),
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: Text(
+                          'Shared from ${post.sharedFrom}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            fontStyle: FontStyle.italic,
+                            fontWeight: FontWeight.w600,
+                            color: p.sub,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                  const Spacer(),
-                  if (_isAdmin)
-                    InkWell(
-                      customBorder: const CircleBorder(),
-                      onTap: () => _showPostActions(post),
-                      child: Padding(
-                        padding: const EdgeInsets.all(4),
-                        child: Icon(Icons.more_horiz_rounded, size: 20, color: p.sub),
+                ),
+              if (post.replyId != null)
+                Container(
+                  margin: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+                  decoration: BoxDecoration(
+                    color: p.field,
+                    borderRadius: BorderRadius.circular(12),
+                    border: const Border(
+                      left: BorderSide(color: _accent, width: 3),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Replying to',
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w800,
+                          color: _accent,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        post.replyText.isEmpty
+                            ? 'This post was removed'
+                            : post.replyText,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          fontStyle: post.replyText.isEmpty
+                              ? FontStyle.italic
+                              : FontStyle.normal,
+                          color: p.sub,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+              // ── Panel: the message ──────────────────────────────────────
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 18, 20, 6),
+                child: Text(
+                  post.text,
+                  textAlign: TextAlign.center,
+                  style: _noteFont(size: 16, color: p.text),
+                ),
+              ),
+
+              // ── Time, and the menu for admins ───────────────────────────
+              Padding(
+                padding: const EdgeInsets.fromLTRB(10, 0, 10, 4),
+                child: Row(
+                  children: [
+                    if (_isAdmin) const SizedBox(width: 32),
+                    Expanded(
+                      child: Text(
+                        _ago(post.createdAt),
+                        textAlign: TextAlign.center,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: p.sub,
+                        ),
                       ),
                     ),
-                ],
+                    if (_isAdmin)
+                      InkWell(
+                        customBorder: const CircleBorder(),
+                        onTap: () => _showPostActions(post),
+                        child: Padding(
+                          padding: const EdgeInsets.all(4),
+                          child: Icon(
+                            Icons.more_horiz_rounded,
+                            size: 22,
+                            color: p.sub,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+
+              // ── Buttons ─────────────────────────────────────────────────
+              Padding(
+                padding: const EdgeInsets.fromLTRB(14, 4, 14, 12),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    if (canReply) ...[
+                      _cardButton(
+                        icon: Icons.reply_rounded,
+                        label: 'Reply',
+                        bg: _blue,
+                        fg: Colors.white,
+                        onTap: () => _startReply(post),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                    _cardButton(
+                      icon: Icons.shortcut_rounded,
+                      label: 'Share',
+                      bg: dark ? Colors.white.withValues(alpha: 0.12) : Colors.black87,
+                      fg: Colors.white,
+                      onTap: () => _share(post),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _cardButton({
+    required IconData icon,
+    required String label,
+    required Color bg,
+    required Color fg,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: bg,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: SizedBox(
+            height: 32,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 16, color: fg),
+                const SizedBox(width: 5),
+                Text(
+                  label,
+                  maxLines: 1,
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w800,
+                    color: fg,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Shown above the message box while answering a post.
+  Widget _replyBar(_Pal p, AnonPost post) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
+      decoration: BoxDecoration(
+        color: p.field,
+        borderRadius: BorderRadius.circular(12),
+        border: const Border(left: BorderSide(color: _accent, width: 3)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Replying anonymously',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    color: _accent,
+                  ),
+                ),
+                Text(
+                  post.text.replaceAll(RegExp(r'\s+'), ' '),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 13, color: p.sub),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            tooltip: 'Cancel reply',
+            icon: Icon(Icons.close_rounded, size: 20, color: p.sub),
+            onPressed: () => setState(() => _replyingTo = null),
+          ),
+        ],
       ),
     );
   }
@@ -724,19 +1031,24 @@ class _AnonScreenState extends State<AnonScreen> {
         color: p.card,
         border: Border(top: BorderSide(color: p.border)),
       ),
-      child: Row(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (_replyingTo != null) _replyBar(p, _replyingTo!),
+          Row(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           Expanded(
             child: TextField(
               controller: _input,
+              focusNode: _focus,
               minLines: 1,
               maxLines: 5,
               maxLength: 1000,
               textCapitalization: TextCapitalization.sentences,
               style: TextStyle(color: p.text, fontSize: 15),
               decoration: InputDecoration(
-                hintText: 'Post anonymously',
+                hintText: _replyingTo != null ? 'Reply anonymously' : 'Post anonymously',
                 hintStyle: TextStyle(color: p.sub),
                 prefixIcon: Icon(Icons.masks_rounded, size: 20, color: p.sub),
                 counterText: '',
@@ -775,6 +1087,8 @@ class _AnonScreenState extends State<AnonScreen> {
               ),
             ),
           ),
+        ],
+      ),
         ],
       ),
     );

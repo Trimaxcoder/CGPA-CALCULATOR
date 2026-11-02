@@ -508,15 +508,33 @@ class ClassSocket with WidgetsBindingObserver {
     s.emit('typing', {'classId': classId, 'isTyping': isTyping});
   }
 
+  /// [replyTo] is the id of the post of this session that is being answered.
   Future<SocketAck> sendAnonPost({
     required String classId,
     required String sessionId,
     required String text,
+    String? replyTo,
   }) {
     return _emit('anon:send', {
       'classId': classId,
       'sessionId': sessionId,
       'text': text,
+      'replyTo': ?replyTo,
+    });
+  }
+
+  /// Copies an anonymous post into the open anonymous session of other
+  /// classes. Nobody sees who shared it. The answer has a `results` list with
+  /// one entry per class: { classId, ok, error }.
+  Future<SocketAck> shareAnonPost({
+    required String classId,
+    required String postId,
+    required List<String> classIds,
+  }) {
+    return _emit('anon:share', {
+      'classId': classId,
+      'postId': postId,
+      'classIds': classIds,
     });
   }
 }

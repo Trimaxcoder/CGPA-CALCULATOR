@@ -76,6 +76,10 @@ class ClassRoom {
   final LastMessage? lastMessage;
   final int unread;
 
+  /// true when this class has an anonymous session open right now.
+  /// Only filled in by the class list.
+  final bool anonOpen;
+
   const ClassRoom({
     required this.id,
     required this.name,
@@ -92,6 +96,7 @@ class ClassRoom {
     required this.createdAt,
     this.lastMessage,
     this.unread = 0,
+    this.anonOpen = false,
   });
 
   bool get isAdmin => myRole == 'admin' && myStatus == 'active';
@@ -116,6 +121,7 @@ class ClassRoom {
             ? LastMessage.fromMap(_asMap(m['lastMessage']))
             : null,
         unread: (m['unread'] as num?)?.toInt() ?? 0,
+        anonOpen: m['anonOpen'] == true,
       );
 
   ClassRoom copyWith({
@@ -147,6 +153,7 @@ class ClassRoom {
         createdAt: createdAt,
         lastMessage: lastMessage ?? this.lastMessage,
         unread: unread ?? this.unread,
+        anonOpen: anonOpen,
       );
 }
 
@@ -511,13 +518,37 @@ class AnonPost {
   final String text;
   final DateTime createdAt; // rounded to the minute by the server
 
+  /// Set when this post answers another post of the same session
+  final String? replyId;
+
+  /// The start of the post it answers ('' when that post was removed)
+  final String replyText;
+
+  /// The class this post was shared from ('' = written here)
+  final String sharedFrom;
+
   const AnonPost({
     required this.id,
     required this.sessionId,
     required this.classId,
     required this.text,
     required this.createdAt,
+    this.replyId,
+    this.replyText = '',
+    this.sharedFrom = '',
   });
+
+  /// Same post, with the quoted text taken away (the original was hidden).
+  AnonPost withoutReplyText() => AnonPost(
+        id: id,
+        sessionId: sessionId,
+        classId: classId,
+        text: text,
+        createdAt: createdAt,
+        replyId: replyId,
+        replyText: '',
+        sharedFrom: sharedFrom,
+      );
 
   factory AnonPost.fromMap(Map<String, dynamic> m) => AnonPost(
         id: m['id'] as String,
@@ -525,6 +556,11 @@ class AnonPost {
         classId: (m['classId'] ?? '') as String,
         text: (m['text'] ?? '') as String,
         createdAt: _parseDate(m['createdAt']),
+        replyId: m['replyTo'] is Map ? '${_asMap(m['replyTo'])['id']}' : null,
+        replyText: m['replyTo'] is Map
+            ? '${_asMap(m['replyTo'])['text'] ?? ''}'
+            : '',
+        sharedFrom: (m['sharedFrom'] ?? '') as String,
       );
 }
 

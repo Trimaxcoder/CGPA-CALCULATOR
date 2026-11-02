@@ -17,6 +17,8 @@ import '../widgets/ui_helpers.dart';
 import '../utils/responsive.dart';
 import '../widgets/notification_toggle.dart';
 import '../widgets/personal_reminders_toggle.dart';
+import '../widgets/legal_links.dart';
+import '../widgets/support_links.dart';
 import 'profile_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -30,6 +32,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   static const Color _blue = Color(0xFF1565C0);
   static const Color _teal = Color(0xFF0891B2);
   static const Color _purple = Color(0xFF7C3AED);
+  static const Color _whatsapp = Color(0xFF25D366);
+
+  /// Keep in sync with `version:` in pubspec.yaml
+  static const String _appVersion = '1.0.1';
 
   StudentProfile profile = StudentProfile();
   bool _hideCgpa = false;
@@ -166,9 +172,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
     if (!ok) return;
 
+    // Only clear local data and leave the screen if the server really
+    // deleted the account. Otherwise the user would think it is gone
+    // while the account still exists.
     try {
       await ProfileService().deleteAccount();
-    } catch (_) {}
+    } on ApiException catch (e) {
+      if (mounted) AppSnackBar.showError(context, e.message);
+      return;
+    } catch (_) {
+      if (mounted) {
+        AppSnackBar.showError(
+          context,
+          'Could not delete your account. Check your connection and try again.',
+        );
+      }
+      return;
+    }
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear();
@@ -465,6 +485,50 @@ class _SettingsScreenState extends State<SettingsScreen> {
     ),
   ];
 
+  Widget _openLinkIcon(bool isDark) => Icon(
+    Icons.open_in_new_rounded,
+    color: isDark ? Colors.white54 : Colors.black45,
+    size: 18,
+  );
+
+  List<Widget> _helpRows(bool isDark) => [
+    _row(
+      isDark: isDark,
+      icon: Icons.help_outline_rounded,
+      color: _blue,
+      title: 'Help Center',
+      subtitle: 'Answers to common questions',
+      trailing: _openLinkIcon(isDark),
+      onTap: () => openLegalUrl(context, SupportUrls.faq),
+    ),
+    _row(
+      isDark: isDark,
+      icon: Icons.support_agent_rounded,
+      color: _teal,
+      title: 'Contact support',
+      subtitle: SupportInfo.email,
+      onTap: () => SupportActions.emailSupport(context),
+    ),
+    _row(
+      isDark: isDark,
+      icon: Icons.chat_rounded,
+      color: _whatsapp,
+      title: 'Chat on WhatsApp',
+      subtitle: 'Message us for quick help',
+      trailing: _openLinkIcon(isDark),
+      onTap: () => SupportActions.openWhatsApp(context),
+    ),
+    _row(
+      isDark: isDark,
+      icon: Icons.bug_report_outlined,
+      color: Colors.orange,
+      title: 'Report a bug or send feedback',
+      subtitle: 'Tell us what is not working',
+      onTap: () =>
+          SupportActions.reportBug(context, appVersion: _appVersion),
+    ),
+  ];
+
   List<Widget> _aboutRows(bool isDark) => [
     _row(
       isDark: isDark,
@@ -476,12 +540,39 @@ class _SettingsScreenState extends State<SettingsScreen> {
     ),
     _row(
       isDark: isDark,
+      icon: Icons.info_outline_rounded,
+      color: _purple,
+      title: 'About SchoolLife',
+      subtitle: 'What SchoolLife is and who builds it',
+      trailing: _openLinkIcon(isDark),
+      onTap: () => openLegalUrl(context, SupportUrls.about),
+    ),
+    _row(
+      isDark: isDark,
       icon: Icons.verified_outlined,
       color: Colors.green,
       title: 'App version',
-      subtitle: 'SchoolLife v1.0.1',
+      subtitle: 'SchoolLife v$_appVersion',
     ),
     if (!kIsWeb) const UpdateCheckTile(),
+    _row(
+      isDark: isDark,
+      icon: Icons.privacy_tip_outlined,
+      color: _teal,
+      title: 'Privacy Policy',
+      subtitle: 'How we collect and use your data',
+      trailing: _openLinkIcon(isDark),
+      onTap: () => openLegalUrl(context, LegalUrls.privacy),
+    ),
+    _row(
+      isDark: isDark,
+      icon: Icons.description_outlined,
+      color: _purple,
+      title: 'Terms and Conditions',
+      subtitle: 'The rules for using SchoolLife',
+      trailing: _openLinkIcon(isDark),
+      onTap: () => openLegalUrl(context, LegalUrls.terms),
+    ),
   ];
 
   Widget _deleteRow(bool isDark) => _row(
@@ -651,6 +742,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   const SizedBox(height: 22),
                   _group('Privacy & security', _privacyRows(isDark), isDark),
                   const SizedBox(height: 22),
+                  _group('Help & support', _helpRows(isDark), isDark),
+                  const SizedBox(height: 22),
                   _group('About', _aboutRows(isDark), isDark),
                   const SizedBox(height: 22),
                   _group('Account', [_deleteRow(isDark)], isDark),
@@ -673,7 +766,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     (Icons.palette_outlined, 'Appearance', 'Choose how SchoolLife looks'),
     (Icons.notifications_outlined, 'Notifications', 'Class and study reminders'),
     (Icons.shield_outlined, 'Privacy & security', 'Control what is shown and secure your account'),
-    (Icons.info_outline_rounded, 'About', 'Version, updates and sharing'),
+    (Icons.support_agent_rounded, 'Help & support', 'Get help, contact us or report a problem'),
+    (Icons.info_outline_rounded, 'About', 'Version, updates, legal and sharing'),
     (Icons.manage_accounts_outlined, 'Account', 'Delete your account or log out'),
   ];
 
@@ -892,6 +986,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
         body = _group('Privacy & security', _privacyRows(isDark), isDark);
         break;
       case 4:
+        body = _group('Help & support', _helpRows(isDark), isDark);
+        break;
+      case 5:
         body = _group('About', _aboutRows(isDark), isDark);
         break;
       default:

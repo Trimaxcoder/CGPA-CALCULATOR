@@ -20,6 +20,7 @@ import 'signinscreen.dart';
 import '../widgets/google_button.dart';
 import '../widgets/snackBar.dart';
 import '../widgets/preloader.dart';
+import '../widgets/legal_links.dart';
 import 'landing_page.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -56,6 +57,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _step1Valid = false;
   bool _step2Valid = false;
   bool _step3Valid = false;
+
+  /// User ticked "I agree to the Terms and Privacy Policy" (step 3).
+  bool _agreed = false;
 
   List<String> get _schools => getAllSchools();
   List<String> get _faculties => getFaculties();
@@ -164,6 +168,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
         curve: Curves.easeOut,
       );
     } else {
+      if (!_agreed) {
+        AppSnackBar.showError(
+          context,
+          'Please agree to the Terms and Privacy Policy to continue.',
+        );
+        return;
+      }
       _submit();
     }
   }
@@ -250,8 +261,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
     try {
       final googleSignIn = GoogleSignIn(
         scopes: ['email', 'profile'],
-        clientId:
-            '36781799836-r0fa4p6ogpj2u45k670vvh5p5fqrc4vb.apps.googleusercontent.com',
+        clientId: kIsWeb
+            ? '36781799836-2vi1s0vj9r5sai75ujebr7q534uek74n.apps.googleusercontent.com'
+            : null,
+        serverClientId: kIsWeb
+            ? null
+            : '36781799836-2vi1s0vj9r5sai75ujebr7q534uek74n.apps.googleusercontent.com',
       );
 
       if (!kIsWeb) await googleSignIn.signOut();
@@ -260,16 +275,21 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
       final googleAuth = await googleUser.authentication;
       final idToken = googleAuth.idToken;
+      final accessToken = googleAuth.accessToken;
 
-      if (idToken == null) {
-        if (mounted)
+      if (idToken == null && accessToken == null) {
+        if (mounted) {
           AppSnackBar.showError(context, 'Google sign-in failed. Try again.');
+        }
         return;
       }
 
       setState(() => _loading = true);
 
-      final userData = await AuthService().loginWithGoogle(idToken: idToken);
+      final userData = await AuthService().loginWithGoogle(
+        idToken: idToken,
+        accessToken: accessToken,
+      );
 
       if (userData['profile'] != null) {
         final profile = StudentProfile.fromMap(
@@ -287,8 +307,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
       if (mounted) AppSnackBar.showError(context, e.message);
     } catch (e, stack) {
       debugPrint('Google sign-in error: $e\n$stack');
-      if (mounted)
+      if (mounted) {
         AppSnackBar.showError(context, 'Google sign-in failed. Try again.');
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -296,7 +317,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   bool get _currentButtonEnabled => _currentStep == 0
       ? _step1Valid
-      : (_currentStep == 1 ? _step2Valid : _step3Valid);
+      : (_currentStep == 1 ? _step2Valid : (_step3Valid && _agreed));
 
   // ══════════════════════════════════════════════════════════
   //  BUILD
@@ -369,11 +390,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     controller: _pageCtrl,
     physics: const NeverScrollableScrollPhysics(),
     onPageChanged: (i) => setState(() => _currentStep = i),
-    children: [
-      _buildStep1(light),
-      _buildStep2(light),
-      _buildStep3(light),
-    ],
+    children: [_buildStep1(light), _buildStep2(light), _buildStep3(light)],
   );
 
   Widget _nextButton({required bool light}) {
@@ -886,7 +903,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     )
                   : GoogleButton(onPressed: _handleGoogleSignIn),
             ),
-            const SizedBox(height: 28),
+            const SizedBox(height: 12),
+            // Google sign-up creates an account too, so show the consent line.
+            Center(child: LegalNotice(light: light)),
+            const SizedBox(height: 24),
             Center(
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -1102,12 +1122,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
               decoration: dec('Level', Icons.stairs_outlined),
               items: _levels
                   .map(
-                    (l) =>
-                        DropdownMenuItem(value: l, child: Text('$l Level')),
+                    (l) => DropdownMenuItem(value: l, child: Text('$l Level')),
                   )
                   .toList(),
               validator: (v) =>
                   (v == null || v.isEmpty) ? 'Select your level' : null,
+            ),
+            const SizedBox(height: 22),
+            TermsCheckbox(
+              value: _agreed,
+              light: light,
+              onChanged: (v) => setState(() => _agreed = v),
             ),
           ],
         ),

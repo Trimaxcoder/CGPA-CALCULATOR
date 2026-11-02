@@ -7,6 +7,7 @@ import '../widgets/app_dialog.dart';
 import '../widgets/desktop_page.dart';
 import '../widgets/snackBar.dart';
 import '../widgets/page_header.dart';
+import 'academic_calendar_screen.dart';
 
 class SuperAdminScreen extends StatefulWidget {
   const SuperAdminScreen({super.key});
@@ -170,7 +171,17 @@ class _SuperAdminScreenState extends State<SuperAdminScreen>
           MobileHeader(
             title: 'Super Admin',
             subtitle: 'Review admin requests and manage course reps',
-            actions: [
+                       actions: [
+              HeaderTile(
+                icon: Icons.event_note_rounded,
+                tooltip: 'Academic calendar',
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const AcademicCalendarScreen(),
+                  ),
+                ),
+              ),
               HeaderTile(
                 icon: Icons.refresh_rounded,
                 tooltip: 'Refresh',
@@ -209,7 +220,18 @@ class _SuperAdminScreenState extends State<SuperAdminScreen>
       title: 'Super Admin',
       subtitle: 'Review admin requests and manage course reps',
       maxWidth: 1200,
-      actions: [
+            actions: [
+        DeskButton(
+          icon: Icons.event_note_rounded,
+          label: 'Academic calendar',
+          isDark: isDark,
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const AcademicCalendarScreen(),
+            ),
+          ),
+        ),
         DeskButton(
           icon: Icons.refresh_rounded,
           label: 'Refresh',

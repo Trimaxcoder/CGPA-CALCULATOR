@@ -214,7 +214,7 @@ class AnonStore extends ChangeNotifier {
   /// Sends an anonymous post. The post appears in the list when the server's
   /// live event arrives (a moment later), so it shows up for everyone at the
   /// same time.
-  Future<SocketAck> sendPost(String text) async {
+  Future<SocketAck> sendPost(String text, {String? replyTo}) async {
     final s = _viewing;
     final clean = text.trim();
     if (s == null || !s.isOpen) {
@@ -230,10 +230,20 @@ class AnonStore extends ChangeNotifier {
       classId: classId,
       sessionId: s.id,
       text: clean,
+      replyTo: replyTo,
     );
     _sending = false;
     _notify();
     return ack;
+  }
+
+  /// Shares a post into other classes. Nobody sees who shared it.
+  Future<SocketAck> sharePost(String postId, List<String> classIds) {
+    return _socket.shareAnonPost(
+      classId: classId,
+      postId: postId,
+      classIds: classIds,
+    );
   }
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -290,7 +300,10 @@ class AnonStore extends ChangeNotifier {
 
     try {
       await _service.hideAnonPost(classId, s.id, postId, block: block);
-      _posts = _posts.where((p) => p.id != postId).toList();
+      _posts = [
+        for (final p in _posts)
+          if (p.id != postId) (p.replyId == postId ? p.withoutReplyText() : p),
+      ];
       _notify();
       return null;
     } on ApiException catch (e) {
@@ -357,7 +370,11 @@ class AnonStore extends ChangeNotifier {
     if (d['classId'] != classId) return;
     final id = d['id'] as String?;
     if (id == null) return;
-    _posts = _posts.where((p) => p.id != id).toList();
+    // Replies that quoted this post must stop showing its text
+    _posts = [
+      for (final p in _posts)
+        if (p.id != id) (p.replyId == id ? p.withoutReplyText() : p),
+    ];
     _notify();
   }
 }

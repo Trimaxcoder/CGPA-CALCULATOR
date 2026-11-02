@@ -9,6 +9,9 @@
 //     currentClassId: room.id,
 //     preview: message.previewText,
 //   );
+//
+// With anonymous: true it is used to share an anonymous post. Only classes
+// that have an anonymous session open right now are listed.
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -41,6 +44,7 @@ Future<List<ClassRoom>?> showForwardPicker(
   BuildContext context, {
   required String currentClassId,
   required String preview,
+  bool anonymous = false,
 }) {
   return showModalBottomSheet<List<ClassRoom>>(
     context: context,
@@ -50,15 +54,21 @@ Future<List<ClassRoom>?> showForwardPicker(
     builder: (_) => _ForwardPicker(
       currentClassId: currentClassId,
       preview: preview,
+      anonymous: anonymous,
     ),
   );
 }
 
 class _ForwardPicker extends StatefulWidget {
-  const _ForwardPicker({required this.currentClassId, required this.preview});
+  const _ForwardPicker({
+    required this.currentClassId,
+    required this.preview,
+    required this.anonymous,
+  });
 
   final String currentClassId;
   final String preview;
+  final bool anonymous;
 
   @override
   State<_ForwardPicker> createState() => _ForwardPickerState();
@@ -101,7 +111,9 @@ class _ForwardPickerState extends State<_ForwardPicker> {
                 c.isActive &&
                 !c.archived &&
                 c.id != widget.currentClassId &&
-                (!c.chatLocked || c.isAdmin))
+                (widget.anonymous
+                    ? c.anonOpen
+                    : (!c.chatLocked || c.isAdmin)))
             .toList();
         _loading = false;
       });
@@ -237,7 +249,9 @@ class _ForwardPickerState extends State<_ForwardPicker> {
         child: Padding(
           padding: const EdgeInsets.all(28),
           child: Text(
-            'You are not in any other class where you can post.',
+            widget.anonymous
+                ? 'None of your other classes has an anonymous session open right now.'
+                : 'You are not in any other class where you can post.',
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 14, color: p.sub, height: 1.4),
           ),
@@ -293,7 +307,7 @@ class _ForwardPickerState extends State<_ForwardPicker> {
                   children: [
                     Expanded(
                       child: Text(
-                        'Forward to...',
+                        widget.anonymous ? 'Share anonymously to...' : 'Forward to...',
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w900,
@@ -375,7 +389,7 @@ class _ForwardPickerState extends State<_ForwardPicker> {
                     label: Text(
                       _picked.isEmpty
                           ? 'Choose a class'
-                          : 'Send to ${_picked.length} ${_picked.length == 1 ? 'class' : 'classes'}',
+                          : '${widget.anonymous ? 'Share to' : 'Send to'} ${_picked.length} ${_picked.length == 1 ? 'class' : 'classes'}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(fontWeight: FontWeight.w800),

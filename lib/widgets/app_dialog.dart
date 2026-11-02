@@ -198,6 +198,11 @@ Future<bool> showConfirmDialog(
 }
 
 /// Outlined "cancel" button used inside [AppDialog] actions.
+///
+/// It closes the dialog with NO result (null). It used to close with `false`,
+/// which crashed any dialog that expects another type back (a theme, a text,
+/// a number...) and left the screen locked. A yes/no dialog still gets
+/// `false` because showConfirmDialog turns null into false.
 class DialogCancelButton extends StatelessWidget {
   const DialogCancelButton({super.key, this.label = 'Cancel', this.onPressed});
 
@@ -208,7 +213,7 @@ class DialogCancelButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final dark = Theme.of(context).brightness == Brightness.dark;
     return OutlinedButton(
-      onPressed: onPressed ?? () => Navigator.pop(context, false),
+      onPressed: onPressed ?? () => Navigator.pop(context),
       style: OutlinedButton.styleFrom(
         foregroundColor: dark ? Colors.white70 : Colors.black54,
         side: BorderSide(color: dark ? Colors.white24 : Colors.black12),
