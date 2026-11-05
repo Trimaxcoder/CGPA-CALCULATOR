@@ -14,7 +14,10 @@ class VoicePlayer extends ChangeNotifier {
   VoicePlayer._() {
     _player.onPlayerStateChanged.listen((state) {
       _playing = state == PlayerState.playing;
-      if (_playing) _loading = false;
+      if (_playing) {
+        _loading = false;
+        _loadTimer?.cancel();
+      }
       notifyListeners();
     });
     _player.onPositionChanged.listen((p) {
@@ -43,6 +46,20 @@ class VoicePlayer extends ChangeNotifier {
   bool _finished = false;
   Duration _position = Duration.zero;
   Duration _duration = Duration.zero;
+  Timer? _loadTimer;
+
+  /// A voice note recorded in a web browser is a .webm (Opus) file, and many
+  /// Android phones cannot play that. Cloudinary can hand the same recording
+  /// out as an .mp3 just by changing the ending of the link, which every
+  /// phone and browser can play. Links that are already fine are left alone.
+  static String playableUrl(String url) {
+    final m = RegExp(
+      r'^(.*/video/upload/.+)\.(webm|ogg|oga|opus)(\?.*)?$',
+      caseSensitive: false,
+    ).firstMatch(url);
+    if (m == null) return url;
+    return '${m.group(1)}.mp3${m.group(3) ?? ''}';
+  }
 
   bool isCurrent(String url) => _url == url;
   bool isPlaying(String url) => _url == url && _playing;
@@ -71,16 +88,32 @@ class VoicePlayer extends ChangeNotifier {
     _loading = true;
     notifyListeners();
 
+    final source = playableUrl(url);
+
     try {
       await _player.stop();
-      await _player.play(UrlSource(url));
-    } catch (_) {
+      await _player.play(UrlSource(source));
+    } catch (e) {
+      debugPrint('VoicePlayer: could not play $source: $e');
+      _loadTimer?.cancel();
       _loading = false;
       _playing = false;
       _url = null;
       notifyListeners();
       rethrow;
     }
+
+    // Some phones never report an error for a file they cannot play, they just
+    // stay "loading". After 20 seconds, give the button back.
+    _loadTimer?.cancel();
+    _loadTimer = Timer(const Duration(seconds: 20), () {
+      if (_loading && !_playing) {
+        debugPrint('VoicePlayer: still loading after 20 s: $source');
+        _loading = false;
+        _url = null;
+        notifyListeners();
+      }
+    });
   }
 
   /// Jump to a point in the current voice note (0 = start, 1 = end).
@@ -92,6 +125,7 @@ class VoicePlayer extends ChangeNotifier {
 
   Future<void> stop() async {
     if (_url == null) return;
+    _loadTimer?.cancel();
     _url = null;
     _playing = false;
     _loading = false;

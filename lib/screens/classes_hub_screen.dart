@@ -17,10 +17,12 @@ import '../providers/theme_notifier.dart';
 import '../services/api_service.dart';
 import '../services/class_service.dart';
 import '../services/class_socket.dart';
+import '../services/friend_service.dart';
 import '../widgets/animations.dart';
 import '../widgets/snackBar.dart';
 import '../widgets/class_layout.dart';
 import 'class_screen.dart';
+import 'people_screen.dart';
 
 const _blue = Color(0xFF1565C0);
 const _accent = Color(0xFF1E88E5);
@@ -80,12 +82,19 @@ class _ClassesHubScreenState extends State<ClassesHubScreen> {
   StreamSubscription<ClassEvent>? _sub;
   StreamSubscription<ClassActivity>? _activitySub;
 
+  /// Friend requests waiting for me (shown as a dot on the People button)
+  int _requests = 0;
+
   @override
   void initState() {
     super.initState();
     _socket.connect();
     // Approved, removed, class archived, member counts... refresh quietly
-    _sub = _socket.onClassEvent.listen((_) => _load(silent: true));
+    _sub = _socket.onClassEvent.listen((e) {
+      _load(silent: true);
+      if (e.name.startsWith('friend:')) _loadRequests();
+    });
+    _loadRequests();
     // A new message in any of my classes: update its row straight away
     _activitySub = _socket.onClassActivity.listen(_onActivity);
     classListRefresh.addListener(_onRefreshSignal);
@@ -106,6 +115,23 @@ class _ClassesHubScreenState extends State<ClassesHubScreen> {
     _sub?.cancel();
     _activitySub?.cancel();
     super.dispose();
+  }
+
+  Future<void> _loadRequests() async {
+    try {
+      final d = await FriendService().load();
+      if (mounted) setState(() => _requests = d.incoming.length);
+    } catch (_) {}
+  }
+
+  void _openPeople() {
+    Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => PeopleScreen(initialTab: _requests > 0 ? 1 : 0)))
+        .then((_) {
+      if (!mounted) return;
+      _load(silent: true);
+      _loadRequests();
+    });
   }
 
   /// Newest activity first. Classes still waiting for approval go last.
@@ -376,9 +402,33 @@ class _ClassesHubScreenState extends State<ClassesHubScreen> {
                   ),
                 ),
                 Text(
-                  'Join or create a class space',
+                  'Classes and private chats',
                   style: TextStyle(fontSize: 13, color: p.sub),
                 ),
+              ],
+            ),
+          ),
+          IconButton(
+            tooltip: 'People',
+            onPressed: _openPeople,
+            icon: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Icon(Icons.people_alt_rounded, color: p.text),
+                if (_requests > 0)
+                  Positioned(
+                    right: -3,
+                    top: -3,
+                    child: Container(
+                      width: 10,
+                      height: 10,
+                      decoration: BoxDecoration(
+                        color: Colors.red,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: p.bg, width: 1.5),
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
@@ -557,6 +607,8 @@ class _ClassesHubScreenState extends State<ClassesHubScreen> {
     if (last == null) return 'No messages yet';
     if (last.deleted) return last.text;
     final mine = last.senderId == _socket.myUserId;
+    // In a private chat only "You:" is shown, the other side is obvious
+    if (c.isDm) return mine ? 'You: ${last.text}' : last.text;
     return '${mine ? 'You' : last.senderName}: ${last.text}';
   }
 

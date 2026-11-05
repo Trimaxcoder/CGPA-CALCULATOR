@@ -11,6 +11,7 @@ import '../models/app_notification.dart';
 import '../models/announcement.dart';
 import '../stores/announcement_store.dart';
 import '../screens/class_workspace_screen.dart';
+import '../screens/people_screen.dart';
 
 /// Watches the navigator so the router knows when the splash screen is gone.
 /// The splash screen is the app's first page (route name "/"). It replaces
@@ -83,6 +84,13 @@ class NotificationRouter {
       return;
     }
 
+    if (n.type == 'friend_request') {
+      NavigationService.navigatorKey.currentState?.push(
+        MaterialPageRoute(builder: (_) => const PeopleScreen(initialTab: 1)),
+      );
+      return;
+    }
+
     if (n.type == 'announcement') {
       _routeToAnnouncement(n.data['announcementId'] as String?);
       return;
@@ -121,6 +129,12 @@ class NotificationRouter {
         // No classId available here — open the class list instead.
         navigator.push(
           MaterialPageRoute(builder: (_) => const ClassWorkspaceScreen()),
+        );
+        break;
+
+      case 'friend_request':
+        navigator.push(
+          MaterialPageRoute(builder: (_) => const PeopleScreen(initialTab: 1)),
         );
         break;
 

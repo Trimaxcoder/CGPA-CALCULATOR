@@ -28,7 +28,8 @@ class ApiConfig {
 class ApiException implements Exception {
   final String message;
   final int? statusCode;
-  const ApiException(this.message, {this.statusCode});
+  final String? code;
+  const ApiException(this.message, {this.statusCode, this.code});
   @override
   String toString() => message;
 }
@@ -192,8 +193,9 @@ class ApiClient {
   ApiException _errorFrom(http.Response response) {
     final body = _tryDecode(response.body);
     final message = body?['message'] as String?;
+    final code = body?['code'] as String?;
     if (message != null && message.isNotEmpty) {
-      return ApiException(message, statusCode: response.statusCode);
+      return ApiException(message, statusCode: response.statusCode, code: code);
     }
     if (response.statusCode >= 500) {
       return ApiException(

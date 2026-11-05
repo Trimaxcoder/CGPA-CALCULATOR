@@ -15,6 +15,7 @@ import 'compose_announcement_screen.dart';
 import '../widgets/animations.dart';
 import '../widgets/app_dialog.dart';
 import '../widgets/class_card.dart';
+import 'rep_request_screen.dart';
 import '../models/term_info.dart';
 import '../widgets/term_banner.dart';
 
@@ -37,7 +38,7 @@ class _TimetableScreenState extends State<TimetableScreen>
   List<PersonalEntry> _personal = [];
 
   bool _loading = true;
-    bool _isAdmin = false;
+  bool _isAdmin = false;
   bool _isSuperAdmin = false;
 
   TermInfo? _term;
@@ -49,9 +50,7 @@ class _TimetableScreenState extends State<TimetableScreen>
   static const double _contentMaxWidth = 1100;
 
   /// Bottom sheets stay phone-sized (centered) on wide screens.
-  static const BoxConstraints _sheetConstraints = BoxConstraints(
-    maxWidth: 560,
-  );
+  static const BoxConstraints _sheetConstraints = BoxConstraints(maxWidth: 560);
 
   Map<String, Map<String, dynamic>> _reminders = {};
 
@@ -71,8 +70,18 @@ class _TimetableScreenState extends State<TimetableScreen>
 
   static const _dayShort = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
   static const _monthNames = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
   ];
 
   int get _todayIndex {
@@ -134,7 +143,7 @@ class _TimetableScreenState extends State<TimetableScreen>
     } catch (_) {}
   }
 
-    Future<void> _loadLectures() async {
+  Future<void> _loadLectures() async {
     try {
       final r = await _svc.getLectureTimetable();
       _lectures = r.entries.map(LectureEntry.fromMap).toList();
@@ -206,8 +215,7 @@ class _TimetableScreenState extends State<TimetableScreen>
       if (!mounted) return;
       setState(() {});
     } catch (e) {
-      if (mounted)
-        AppSnackBar.auto(context, 'Error: $e');
+      if (mounted) AppSnackBar.auto(context, 'Error: $e');
     }
   }
 
@@ -328,7 +336,11 @@ class _TimetableScreenState extends State<TimetableScreen>
                     child: MouseRegion(
                       cursor: SystemMouseCursors.click,
                       child: tile(
-                        Icon(Icons.refresh_rounded, size: 20, color: textPrimary),
+                        Icon(
+                          Icons.refresh_rounded,
+                          size: 20,
+                          color: textPrimary,
+                        ),
                       ),
                     ),
                   ),
@@ -354,7 +366,12 @@ class _TimetableScreenState extends State<TimetableScreen>
                           _confirmResign(isDark);
                           break;
                         case 'request':
-                          _showAdminRequestSheet(isDark);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const RepRequestScreen(),
+                            ),
+                          );
                           break;
                         case 'superadmin':
                           Navigator.push(
@@ -383,7 +400,10 @@ class _TimetableScreenState extends State<TimetableScreen>
                           child: ListTile(
                             dense: true,
                             contentPadding: EdgeInsets.zero,
-                            leading: Icon(Icons.logout_rounded, color: Colors.red),
+                            leading: Icon(
+                              Icons.logout_rounded,
+                              color: Colors.red,
+                            ),
                             title: Text(
                               'Resign as admin',
                               style: TextStyle(color: Colors.red),
@@ -412,7 +432,11 @@ class _TimetableScreenState extends State<TimetableScreen>
                         ),
                     ],
                     child: tile(
-                      Icon(Icons.more_horiz_rounded, size: 22, color: textPrimary),
+                      Icon(
+                        Icons.more_horiz_rounded,
+                        size: 22,
+                        color: textPrimary,
+                      ),
                     ),
                   ),
                 ],
@@ -423,7 +447,7 @@ class _TimetableScreenState extends State<TimetableScreen>
             // ── Lecture / Personal / Exam switch ──
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
-                            child: _mobileSegmented(isDark),
+              child: _mobileSegmented(isDark),
             ),
             const SizedBox(height: 14),
 
@@ -567,7 +591,7 @@ class _TimetableScreenState extends State<TimetableScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                                   _desktopHeader(isDark, tab),
+                  _desktopHeader(isDark, tab),
                   const SizedBox(height: 22),
                   if (tab != 1)
                     TermBanner(
@@ -693,7 +717,12 @@ class _TimetableScreenState extends State<TimetableScreen>
                     icon: Icons.verified_user_outlined,
                     label: 'Be Admin',
                     isDark: isDark,
-                    onTap: () => _showAdminRequestSheet(isDark),
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const RepRequestScreen(),
+                      ),
+                    ),
                   ),
                 if (_isSuperAdmin)
                   _deskButton(
@@ -727,7 +756,9 @@ class _TimetableScreenState extends State<TimetableScreen>
     Color? color,
   }) {
     final c = color ?? _primary;
-    final fg = filled ? Colors.white : (color ?? (isDark ? Colors.white70 : Colors.black87));
+    final fg = filled
+        ? Colors.white
+        : (color ?? (isDark ? Colors.white70 : Colors.black87));
     return Material(
       color: filled
           ? c
@@ -858,12 +889,12 @@ class _TimetableScreenState extends State<TimetableScreen>
     final cards = isPersonal
         ? (_personal.where((e) => e.day == day).toList()
                 ..sort((a, b) => a.startTime.compareTo(b.startTime)))
-            .map((e) => _personalCard(e, isDark))
-            .toList()
+              .map((e) => _personalCard(e, isDark))
+              .toList()
         : (_lectures.where((e) => e.day == day).toList()
                 ..sort((a, b) => a.startTime.compareTo(b.startTime)))
-            .map((e) => _lectureCard(e, isDark))
-            .toList();
+              .map((e) => _lectureCard(e, isDark))
+              .toList();
 
     // ── Left: day list ──
     final dayRail = Container(
@@ -1278,8 +1309,11 @@ class _TimetableScreenState extends State<TimetableScreen>
   /// Seven equal day cards: weekday, date, and dots for how many entries.
   Widget _weekStrip(bool isDark, bool isPersonal, PageController pageCtrl) {
     final now = DateTime.now();
-    final monday = DateTime(now.year, now.month, now.day)
-        .subtract(Duration(days: now.weekday - 1));
+    final monday = DateTime(
+      now.year,
+      now.month,
+      now.day,
+    ).subtract(Duration(days: now.weekday - 1));
     final sub = isDark ? Colors.white54 : Colors.black45;
     final text = isDark ? Colors.white : Colors.black87;
 
@@ -1379,7 +1413,11 @@ class _TimetableScreenState extends State<TimetableScreen>
                               child: Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  for (var k = 0; k < (count > 3 ? 3 : count); k++)
+                                  for (
+                                    var k = 0;
+                                    k < (count > 3 ? 3 : count);
+                                    k++
+                                  )
                                     Container(
                                       width: 5,
                                       height: 5,
@@ -1897,7 +1935,10 @@ class _TimetableScreenState extends State<TimetableScreen>
                             startTime: updated.startTime,
                           );
                       if (!success && context.mounted) {
-                        AppSnackBar.auto(context, 'Reminder permission missing — enable it in Settings.');
+                        AppSnackBar.auto(
+                          context,
+                          'Reminder permission missing — enable it in Settings.',
+                        );
                       }
                     } else {
                       await NotificationService.cancelStudyReminder(updated.id);
@@ -1914,7 +1955,10 @@ class _TimetableScreenState extends State<TimetableScreen>
                     const PopupMenuItem(value: 'edit', child: Text('Edit')),
                     const PopupMenuItem(
                       value: 'delete',
-                      child: Text('Delete', style: TextStyle(color: Colors.red)),
+                      child: Text(
+                        'Delete',
+                        style: TextStyle(color: Colors.red),
+                      ),
                     ),
                   ],
                   onSelected: (val) async {
@@ -1941,9 +1985,11 @@ class _TimetableScreenState extends State<TimetableScreen>
     int? daysLeft;
     if (d != null) {
       final n = DateTime.now();
-      daysLeft = DateTime(d.year, d.month, d.day)
-          .difference(DateTime(n.year, n.month, n.day))
-          .inDays;
+      daysLeft = DateTime(
+        d.year,
+        d.month,
+        d.day,
+      ).difference(DateTime(n.year, n.month, n.day)).inDays;
     }
     final past = daysLeft != null && daysLeft < 0;
     final urgent = daysLeft != null && daysLeft >= 0 && daysLeft <= 7;
@@ -2361,12 +2407,14 @@ class _TimetableScreenState extends State<TimetableScreen>
                       setState(() {});
                       if (ctx.mounted) Navigator.pop(ctx);
                       if (mounted)
-                        AppSnackBar.auto(context, enabled
-                                  ? '🔔 Reminder set for $minutesBefore min before class'
-                                  : 'Reminder turned off');
+                        AppSnackBar.auto(
+                          context,
+                          enabled
+                              ? '🔔 Reminder set for $minutesBefore min before class'
+                              : 'Reminder turned off',
+                        );
                     } catch (err) {
-                      if (ctx.mounted)
-                        AppSnackBar.auto(context, 'Error: $err');
+                      if (ctx.mounted) AppSnackBar.auto(context, 'Error: $err');
                     }
                   },
                   child: const Text('Save'),
@@ -2579,8 +2627,7 @@ class _TimetableScreenState extends State<TimetableScreen>
                         setState(() {});
                         if (ctx.mounted) Navigator.pop(ctx);
                       } catch (e) {
-                        if (ctx.mounted)
-                          AppSnackBar.auto(context, 'Error: $e');
+                        if (ctx.mounted) AppSnackBar.auto(context, 'Error: $e');
                       }
                     },
                     child: Text(
@@ -2754,8 +2801,7 @@ class _TimetableScreenState extends State<TimetableScreen>
                         setState(() {});
                         if (ctx.mounted) Navigator.pop(ctx);
                       } catch (e) {
-                        if (ctx.mounted)
-                          AppSnackBar.auto(context, 'Error: $e');
+                        if (ctx.mounted) AppSnackBar.auto(context, 'Error: $e');
                       }
                     },
                     child: Text(
@@ -2927,8 +2973,7 @@ class _TimetableScreenState extends State<TimetableScreen>
                         setState(() {});
                         if (ctx.mounted) Navigator.pop(ctx);
                       } catch (e) {
-                        if (ctx.mounted)
-                          AppSnackBar.auto(context, 'Error: $e');
+                        if (ctx.mounted) AppSnackBar.auto(context, 'Error: $e');
                       }
                     },
                     child: Text(editing == null ? 'Add Exam' : 'Save Changes'),
@@ -3022,11 +3067,13 @@ class _TimetableScreenState extends State<TimetableScreen>
                       });
                       if (ctx.mounted) {
                         Navigator.pop(ctx);
-                        AppSnackBar.auto(context, '✅ Request submitted! You\'ll be notified when reviewed.');
+                        AppSnackBar.auto(
+                          context,
+                          '✅ Request submitted! You\'ll be notified when reviewed.',
+                        );
                       }
                     } catch (e) {
-                      if (ctx.mounted)
-                        AppSnackBar.auto(context, 'Error: $e');
+                      if (ctx.mounted) AppSnackBar.auto(context, 'Error: $e');
                     }
                   },
                   child: const Text('Submit Request'),

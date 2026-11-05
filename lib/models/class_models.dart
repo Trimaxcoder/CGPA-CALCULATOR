@@ -80,6 +80,12 @@ class ClassRoom {
   /// Only filled in by the class list.
   final bool anonOpen;
 
+  /// 'group' (a class) or 'dm' (a private chat with a friend).
+  /// For a private chat, [name] is the friend's name.
+  final String kind;
+  final String? peerId;
+  final String peerUsername;
+
   const ClassRoom({
     required this.id,
     required this.name,
@@ -97,8 +103,12 @@ class ClassRoom {
     this.lastMessage,
     this.unread = 0,
     this.anonOpen = false,
+    this.kind = 'group',
+    this.peerId,
+    this.peerUsername = '',
   });
 
+  bool get isDm => kind == 'dm';
   bool get isAdmin => myRole == 'admin' && myStatus == 'active';
   bool get isPending => myStatus == 'pending';
   bool get isActive => myStatus == 'active';
@@ -122,6 +132,9 @@ class ClassRoom {
             : null,
         unread: (m['unread'] as num?)?.toInt() ?? 0,
         anonOpen: m['anonOpen'] == true,
+        kind: (m['kind'] ?? 'group') as String,
+        peerId: m['peerId'] as String?,
+        peerUsername: (m['peerUsername'] ?? '') as String,
       );
 
   ClassRoom copyWith({
@@ -154,6 +167,9 @@ class ClassRoom {
         lastMessage: lastMessage ?? this.lastMessage,
         unread: unread ?? this.unread,
         anonOpen: anonOpen,
+        kind: kind,
+        peerId: peerId,
+        peerUsername: peerUsername,
       );
 }
 

@@ -12,6 +12,8 @@ import '../models/studentProfile_model.dart';
 import '../providers/theme_notifier.dart';
 import '../services/api_service.dart';
 import '../services/class_service.dart';
+import '../services/profile_sync.dart';
+import '../services/timetable_service.dart';
 import '../uniport_courses.dart';
 import '../utils/responsive.dart';
 import '../widgets/animations.dart';
@@ -49,6 +51,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String _origUsername = '';
   bool _usernameLoaded = false;
 
+  // Last level before graduation. Also lives on the server. The field only
+  // appears once it has loaded, so an offline save can never wipe it.
+  String _finalLevel = '';
+  String _origFinalLevel = '';
+  bool _finalLoaded = false;
+
   static const _levels = ['100', '200', '300', '400', '500', '600', '700'];
 
   @override
@@ -64,6 +72,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _deptC = TextEditingController(text: p.department);
     _level = p.level.isNotEmpty ? p.level : '100';
     _loadUsername();
+    _loadFinalLevel();
     for (final c in [_nameC, _usernameC, _emailC, _matricC, _schoolC, _facC, _deptC]) {
       c.addListener(_refresh);
     }
@@ -87,11 +96,33 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  Future<void> _loadFinalLevel() async {
+    try {
+      final map = await ProfileService().getProfile();
+      final fl = (map['finalLevel'] ?? '').toString();
+      if (!mounted) return;
+      setState(() {
+        _finalLevel = fl;
+        _origFinalLevel = fl;
+        _finalLoaded = true;
+      });
+    } catch (_) {
+      // Offline: the field stays hidden.
+    }
+  }
+
   String get _typedUsername => _usernameC.text.trim().toLowerCase();
 
   bool get _usernameChanged => _usernameLoaded
       ? _typedUsername != _origUsername
       : _typedUsername.isNotEmpty;
+
+  /// Last-level choices: your current level up to 700.
+  List<String> get _finalOptions =>
+      _levels.where((l) => int.parse(l) >= int.parse(_level)).toList();
+
+  /// The chosen last level, or '' if it is empty or no longer valid.
+  String get _finalValue => _finalOptions.contains(_finalLevel) ? _finalLevel : '';
 
   String _cleanError(Object e) =>
       e.toString().replaceFirst('Exception: ', '');
@@ -113,7 +144,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _schoolC.text.trim() != p.school ||
         _facC.text.trim() != p.faculty ||
         _deptC.text.trim() != p.department ||
-        _level != (p.level.isNotEmpty ? p.level : '100');
+        _level != (p.level.isNotEmpty ? p.level : '100') ||
+        (_finalLoaded && _finalValue != _origFinalLevel);
   }
 
   String? _findBestMatch(String input, List<String> options) {
@@ -153,6 +185,51 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (mounted) Navigator.pop(context);
   }
 
+  /// Sends the profile to the server.
+  /// kind: 'ok' | 'rejected' (the server said no) | 'offline' | 'cancelled'
+  ///
+  /// A class rep who changes school, faculty, department or level is first
+  /// asked to resign as rep (the server requires it), then the save is retried.
+  Future<({String kind, String message})> _sendToServer(
+    Map<String, dynamic> body, {
+    bool retried = false,
+  }) async {
+    try {
+      await ProfileService().updateProfile(body);
+      return (kind: 'ok', message: '');
+    } on ApiException catch (e) {
+      if (e.code == 'ADMIN_MUST_RESIGN' && !retried) {
+        if (!mounted) return (kind: 'cancelled', message: '');
+        final resign = await showConfirmDialog(
+          context,
+          title: 'Resign as class rep?',
+          message:
+              '${e.message}\n\nYou can apply again later for your new class.',
+          confirmLabel: 'Resign and save',
+          icon: Icons.logout_rounded,
+          color: Colors.red,
+        );
+        if (!resign) return (kind: 'cancelled', message: '');
+        try {
+          await TimetableService().resignAdmin();
+        } on ApiException catch (r) {
+          return (kind: 'rejected', message: r.message);
+        } catch (r) {
+          return (kind: 'offline', message: _cleanError(r));
+        }
+        return _sendToServer(body, retried: true);
+      }
+
+      final code = e.statusCode;
+      if (code != null && code >= 400 && code < 500) {
+        return (kind: 'rejected', message: e.message);
+      }
+      return (kind: 'offline', message: e.message);
+    } catch (e) {
+      return (kind: 'offline', message: _cleanError(e));
+    }
+  }
+
   Future<void> _save() async {
     if (!_fk.currentState!.validate()) return;
     setState(() => _saving = true);
@@ -187,22 +264,42 @@ class _ProfileScreenState extends State<ProfileScreen> {
       level: _level,
     );
 
+    // The server goes first. If it refuses (for example a rep who chose not
+    // to resign), nothing is saved on the phone either.
+    final body = <String, dynamic>{
+      ...updated.toMap(),
+      if (_finalLoaded) 'finalLevel': _finalValue,
+    };
+    final result = await _sendToServer(body);
+    if (!mounted) return;
+
+    if (result.kind == 'cancelled') {
+      setState(() => _saving = false);
+      return;
+    }
+    if (result.kind == 'rejected') {
+      setState(() => _saving = false);
+      AppSnackBar.showError(
+        context,
+        result.message.isEmpty ? 'The server could not save your profile.' : result.message,
+      );
+      return;
+    }
+
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('profile', jsonEncode(updated.toMap()));
-
-    String? serverError;
-    try {
-      await ProfileService().updateProfile(updated.toMap());
-    } catch (e) {
-      serverError = '$e';
-    }
+    // An offline save is marked, so it is sent to the server later
+    await prefs.setBool(ProfileSync.unsyncedKey, result.kind == 'offline');
 
     if (!mounted) return;
     setState(() => _saving = false);
-    if (serverError == null) {
+    if (result.kind == 'ok') {
       AppSnackBar.showSuccess(context, 'Profile updated ✓');
     } else {
-      AppSnackBar.showError(context, 'Saved on this device. Server: $serverError');
+      AppSnackBar.showError(
+        context,
+        'Saved on this device. It will sync when you are back online.',
+      );
     }
     Navigator.pop(context, updated);
   }
@@ -478,6 +575,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
               DropdownMenuItem(value: l, child: Text('$l Level')),
           ],
         ),
+        if (_finalLoaded)
+          DropdownButtonFormField<String>(
+            value: _finalValue,
+            onChanged: (v) => setState(() => _finalLevel = v ?? ''),
+            style: TextStyle(color: text),
+            dropdownColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+            decoration: _dec(
+              'Last level before graduation (optional)',
+              Icons.flag_outlined,
+              isDark,
+              helper: 'Your programme may be longer or shorter than 4 years. '
+                  'This helps move you up, and graduate you, at the right time.',
+            ),
+            items: [
+              const DropdownMenuItem(value: '', child: Text('Not sure yet')),
+              for (final l in _finalOptions)
+                DropdownMenuItem(value: l, child: Text('$l Level')),
+            ],
+          ),
       ], isDark),
     ];
   }

@@ -18,6 +18,7 @@ import 'services/notification_router.dart';
 import 'services/navigation_service.dart';
 import 'services/muted_courses_store.dart';
 import 'stores/announcement_store.dart';
+import 'services/profile_sync.dart';
 
 // REMOVED: local `final navigatorKey = GlobalKey<NavigatorState>();`
 // Now using NavigationService.navigatorKey everywhere instead, so
@@ -73,6 +74,7 @@ Future<void> _initNotificationsSafely() async {
 Future<void> _initServicesInBackground() async {
   await Future.wait([
     _initNotificationsSafely(),
+    ProfileSync.refresh(),
     () async {
       try {
         // Loads the cache first, then refreshes from the server.
@@ -159,6 +161,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       unawaited(NotificationService.onAppResumed());
+      unawaited(ProfileSync.refresh());
     }
   }
 

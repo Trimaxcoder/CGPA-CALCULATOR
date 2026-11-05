@@ -7,6 +7,7 @@ import '../widgets/app_dialog.dart';
 import '../widgets/desktop_page.dart';
 import '../widgets/snackBar.dart';
 import '../widgets/page_header.dart';
+import '../widgets/rep_request_checks.dart';
 import 'academic_calendar_screen.dart';
 
 class SuperAdminScreen extends StatefulWidget {
@@ -581,6 +582,8 @@ class _SuperAdminScreenState extends State<SuperAdminScreen>
               const SizedBox(height: 6),
               _infoRow(Icons.account_balance_rounded, 'School',
                   r['school'] ?? '—', isDark),
+              const SizedBox(height: 12),
+              RepRequestChecks(request: r, isDark: isDark),
               const SizedBox(height: 12),
               Container(
                 width: double.infinity,

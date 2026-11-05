@@ -13,12 +13,23 @@ import '../widgets/app_dialog.dart';
 import '../widgets/desktop_page.dart';
 import '../widgets/page_header.dart';
 import '../widgets/snackBar.dart';
+import 'promotion_screen.dart';
 
 const Color _primary = Color(0xFF1565C0);
 
 const _months = [
-  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
 ];
 
 String _clean(Object e) => e.toString().replaceFirst('Exception: ', '');
@@ -136,8 +147,9 @@ class _AcademicCalendarScreenState extends State<AcademicCalendarScreen> {
     }
 
     return Scaffold(
-      backgroundColor:
-          isDark ? const Color(0xFF0A0A0A) : const Color(0xFFF7F8FA),
+      backgroundColor: isDark
+          ? const Color(0xFF0A0A0A)
+          : const Color(0xFFF7F8FA),
       body: Column(
         children: [
           MobileHeader(
@@ -264,8 +276,11 @@ class _SchoolCard extends StatelessWidget {
                     color: _primary.withOpacity(0.12),
                     borderRadius: BorderRadius.circular(14),
                   ),
-                  child: const Icon(Icons.account_balance_rounded,
-                      color: _primary, size: 22),
+                  child: const Icon(
+                    Icons.account_balance_rounded,
+                    color: _primary,
+                    size: 22,
+                  ),
                 ),
                 const SizedBox(width: 14),
                 Expanded(
@@ -293,7 +308,9 @@ class _SchoolCard extends StatelessWidget {
                       const SizedBox(height: 8),
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 9, vertical: 4),
+                          horizontal: 9,
+                          vertical: 4,
+                        ),
                         decoration: BoxDecoration(
                           color: st.color.withOpacity(0.13),
                           borderRadius: BorderRadius.circular(10),
@@ -385,6 +402,14 @@ class _SchoolCalendarScreenState extends State<SchoolCalendarScreen> {
     }
   }
 
+  Future<void> _openPromotion(AcademicCalendar c) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => PromotionScreen(calendar: c)),
+    );
+    if (mounted) _load(silent: true);
+  }
+
   Future<void> _showEditor(bool isDark, {AcademicCalendar? editing}) async {
     final sessionCtrl = TextEditingController(
       text: editing?.session ?? _suggestSession(),
@@ -392,6 +417,9 @@ class _SchoolCalendarScreenState extends State<SchoolCalendarScreen> {
     String? s1Start, s1End, s2Start, s2End;
     bool hasSecond = false;
     bool saving = false;
+    // New sessions start with auto-promote on; an existing one keeps its setting.
+    bool autoPromote = editing?.autoPromote ?? true;
+    String finalLevel = editing?.finalLevel ?? '400';
 
     if (editing != null) {
       for (final s in editing.semesters) {
@@ -476,8 +504,13 @@ class _SchoolCalendarScreenState extends State<SchoolCalendarScreen> {
                   SemesterDates(number: 1, startDay: s1Start!, endDay: s1End!),
                   if (hasSecond)
                     SemesterDates(
-                        number: 2, startDay: s2Start!, endDay: s2End!),
+                      number: 2,
+                      startDay: s2Start!,
+                      endDay: s2End!,
+                    ),
                 ],
+                autoPromote: autoPromote,
+                finalLevel: finalLevel,
               );
               if (ctx.mounted) Navigator.pop(ctx, true);
             } catch (e) {
@@ -494,45 +527,44 @@ class _SchoolCalendarScreenState extends State<SchoolCalendarScreen> {
             String? end,
             void Function(String) setStart,
             void Function(String) setEnd,
-          ) =>
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+          ) => Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                  color: isDark ? Colors.white70 : Colors.black87,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
                 children: [
-                  Text(
-                    title,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w800,
-                      color: isDark ? Colors.white70 : Colors.black87,
+                  SizedBox(
+                    width: 240,
+                    child: _DateTile(
+                      label: 'First day',
+                      day: start,
+                      isDark: isDark,
+                      onTap: () => pick(start, setStart),
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 10,
-                    runSpacing: 10,
-                    children: [
-                      SizedBox(
-                        width: 240,
-                        child: _DateTile(
-                          label: 'First day',
-                          day: start,
-                          isDark: isDark,
-                          onTap: () => pick(start, setStart),
-                        ),
-                      ),
-                      SizedBox(
-                        width: 240,
-                        child: _DateTile(
-                          label: 'Last day (last exam)',
-                          day: end,
-                          isDark: isDark,
-                          onTap: () => pick(end, setEnd),
-                        ),
-                      ),
-                    ],
+                  SizedBox(
+                    width: 240,
+                    child: _DateTile(
+                      label: 'Last day (last exam)',
+                      day: end,
+                      isDark: isDark,
+                      onTap: () => pick(end, setEnd),
+                    ),
                   ),
                 ],
-              );
+              ),
+            ],
+          );
 
           return Padding(
             padding: EdgeInsets.only(
@@ -580,12 +612,16 @@ class _SchoolCalendarScreenState extends State<SchoolCalendarScreen> {
                     controller: sessionCtrl,
                     enabled: editing == null, // a session can't be renamed
                     style: TextStyle(
-                        color: isDark ? Colors.white : Colors.black87),
+                      color: isDark ? Colors.white : Colors.black87,
+                    ),
                     decoration: InputDecoration(
                       labelText: 'Session',
                       hintText: '2025/2026',
-                      prefixIcon: const Icon(Icons.event_note_rounded,
-                          color: _primary, size: 20),
+                      prefixIcon: const Icon(
+                        Icons.event_note_rounded,
+                        color: _primary,
+                        size: 20,
+                      ),
                       filled: true,
                       fillColor: isDark
                           ? Colors.white.withOpacity(0.05)
@@ -632,11 +668,18 @@ class _SchoolCalendarScreenState extends State<SchoolCalendarScreen> {
                       (v) => s2End = v,
                     ),
                   ],
+                  const SizedBox(height: 16),
+                  _PromotionSettings(
+                    isDark: isDark,
+                    autoPromote: autoPromote,
+                    finalLevel: finalLevel,
+                    onAuto: (v) => setS(() => autoPromote = v),
+                    onLevel: (v) => setS(() => finalLevel = v),
+                  ),
                   const SizedBox(height: 10),
                   Text(
                     'When the last day passes, class notifications for this '
-                    'school stop until the next semester starts. When the '
-                    'session ends, students move up a level.',
+                    'school stop until the next semester starts.',
                     style: TextStyle(
                       fontSize: 11.5,
                       height: 1.4,
@@ -701,8 +744,9 @@ class _SchoolCalendarScreenState extends State<SchoolCalendarScreen> {
     }
 
     return Scaffold(
-      backgroundColor:
-          isDark ? const Color(0xFF0A0A0A) : const Color(0xFFF7F8FA),
+      backgroundColor: isDark
+          ? const Color(0xFF0A0A0A)
+          : const Color(0xFFF7F8FA),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _showEditor(isDark),
         icon: const Icon(Icons.add),
@@ -761,13 +805,16 @@ class _SchoolCalendarScreenState extends State<SchoolCalendarScreen> {
           isDark: isDark,
           onEdit: () => _showEditor(isDark, editing: c),
           onDelete: () => _delete(c),
+          onPromotion: () => _openPromotion(c),
         ),
     ];
 
     final side = desktop
         ? 0.0
-        : responsiveSidePadding(MediaQuery.sizeOf(context).width,
-            maxWidth: 720);
+        : responsiveSidePadding(
+            MediaQuery.sizeOf(context).width,
+            maxWidth: 720,
+          );
 
     return RefreshIndicator(
       color: _primary,
@@ -786,12 +833,14 @@ class _SessionCard extends StatelessWidget {
   final bool isDark;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
+  final VoidCallback onPromotion;
 
   const _SessionCard({
     required this.cal,
     required this.isDark,
     required this.onEdit,
     required this.onDelete,
+    required this.onPromotion,
   });
 
   @override
@@ -835,7 +884,9 @@ class _SessionCard extends StatelessWidget {
                     if (cal.isLocked)
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 3),
+                          horizontal: 8,
+                          vertical: 3,
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.grey.withOpacity(0.18),
                           borderRadius: BorderRadius.circular(8),
@@ -863,21 +914,61 @@ class _SessionCard extends StatelessWidget {
                 IconButton(
                   tooltip: 'Edit',
                   visualDensity: VisualDensity.compact,
-                  icon: const Icon(Icons.edit_outlined,
-                      size: 20, color: _primary),
+                  icon: const Icon(
+                    Icons.edit_outlined,
+                    size: 20,
+                    color: _primary,
+                  ),
                   onPressed: onEdit,
                 ),
                 IconButton(
                   tooltip: 'Delete',
                   visualDensity: VisualDensity.compact,
-                  icon: Icon(Icons.delete_outline,
-                      size: 20, color: Colors.red.shade300),
+                  icon: Icon(
+                    Icons.delete_outline,
+                    size: 20,
+                    color: Colors.red.shade300,
+                  ),
                   onPressed: onDelete,
                 ),
               ],
             ],
           ),
           const SizedBox(height: 10),
+          Container(
+            width: double.infinity,
+            margin: const EdgeInsets.only(bottom: 8),
+            padding: const EdgeInsets.fromLTRB(12, 6, 6, 6),
+            decoration: BoxDecoration(
+              color: isDark
+                  ? Colors.white.withOpacity(0.05)
+                  : Colors.black.withOpacity(0.03),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.school_rounded, size: 18, color: sub),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    cal.isLocked
+                        ? 'Promotion done'
+                        : cal.autoPromote
+                        ? 'Promotion: automatic · final year ${cal.finalLevel}'
+                        : 'Promotion: manual · final year ${cal.finalLevel}',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
+                      color: text,
+                    ),
+                  ),
+                ),
+                TextButton(onPressed: onPromotion, child: const Text('Review')),
+              ],
+            ),
+          ),
           for (final s in cal.semesters)
             Container(
               width: double.infinity,
@@ -920,6 +1011,113 @@ class _SessionCard extends StatelessWidget {
 //  Small shared widgets
 // ══════════════════════════════════════════════════════════════════════════
 
+/// "Promotion" block in the session editor.
+class _PromotionSettings extends StatelessWidget {
+  final bool isDark;
+  final bool autoPromote;
+  final String finalLevel;
+  final ValueChanged<bool> onAuto;
+  final ValueChanged<String> onLevel;
+
+  const _PromotionSettings({
+    required this.isDark,
+    required this.autoPromote,
+    required this.finalLevel,
+    required this.onAuto,
+    required this.onLevel,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final text = isDark ? Colors.white : Colors.black87;
+    final sub = isDark ? Colors.white54 : Colors.black54;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: _primary.withOpacity(isDark ? 0.12 : 0.06),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Promotion',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+              color: text,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Move students up a level automatically after this session ends',
+                  style: TextStyle(fontSize: 12.5, height: 1.35, color: sub),
+                ),
+              ),
+              Switch(
+                value: autoPromote,
+                onChanged: onAuto,
+                activeColor: Colors.blue,
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Final-year level (most programs)',
+            style: TextStyle(fontSize: 12.5, color: sub),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final l in const ['300', '400', '500', '600', '700'])
+                GestureDetector(
+                  onTap: () => onLevel(l),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: l == finalLevel
+                          ? _primary
+                          : _primary.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(20),
+                      border: l == finalLevel
+                          ? null
+                          : Border.all(color: _primary.withOpacity(0.3)),
+                    ),
+                    child: Text(
+                      l,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: l == finalLevel ? Colors.white : _primary,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Students at this level graduate; departments with students above it '
+            'are never cut short. You can set exceptions per department, and check '
+            'everything before it runs, under "Review".',
+            style: TextStyle(fontSize: 11.5, height: 1.4, color: sub),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _DateTile extends StatelessWidget {
   final String label;
   final String? day;
@@ -935,54 +1133,50 @@ class _DateTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => GestureDetector(
-        onTap: onTap,
-        child: MouseRegion(
-          cursor: SystemMouseCursors.click,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            decoration: BoxDecoration(
-              color: isDark
-                  ? Colors.white.withOpacity(0.05)
-                  : Colors.grey.shade50,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: isDark ? Colors.white24 : Colors.black12,
+    onTap: onTap,
+    child: MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: isDark ? Colors.white.withOpacity(0.05) : Colors.grey.shade50,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: isDark ? Colors.white24 : Colors.black12),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.event_rounded, size: 18, color: _primary),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: isDark ? Colors.white38 : Colors.black38,
+                    ),
+                  ),
+                  Text(
+                    day == null ? 'Pick a date' : _prettyDay(day!),
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: day == null
+                          ? (isDark ? Colors.white38 : Colors.black38)
+                          : (isDark ? Colors.white : Colors.black87),
+                    ),
+                  ),
+                ],
               ),
             ),
-            child: Row(
-              children: [
-                const Icon(Icons.event_rounded, size: 18, color: _primary),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 10,
-                          color: isDark ? Colors.white38 : Colors.black38,
-                        ),
-                      ),
-                      Text(
-                        day == null ? 'Pick a date' : _prettyDay(day!),
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          color: day == null
-                              ? (isDark ? Colors.white38 : Colors.black38)
-                              : (isDark ? Colors.white : Colors.black87),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
+          ],
         ),
-      );
+      ),
+    ),
+  );
 }
 
 class _StateMessage extends StatelessWidget {
@@ -1004,42 +1198,45 @@ class _StateMessage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(32),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 420),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(icon,
-                    size: 56, color: isDark ? Colors.white24 : Colors.black26),
-                const SizedBox(height: 16),
-                Text(
-                  title,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w700,
-                    color: isDark ? Colors.white70 : Colors.black87,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  subtitle,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 13,
-                    height: 1.4,
-                    color: isDark ? Colors.white38 : Colors.black45,
-                  ),
-                ),
-                if (actionLabel != null && onAction != null) ...[
-                  const SizedBox(height: 12),
-                  TextButton(onPressed: onAction, child: Text(actionLabel!)),
-                ],
-              ],
+    child: SingleChildScrollView(
+      padding: const EdgeInsets.all(32),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 420),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 56,
+              color: isDark ? Colors.white24 : Colors.black26,
             ),
-          ),
+            const SizedBox(height: 16),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.w700,
+                color: isDark ? Colors.white70 : Colors.black87,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              subtitle,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 13,
+                height: 1.4,
+                color: isDark ? Colors.white38 : Colors.black45,
+              ),
+            ),
+            if (actionLabel != null && onAction != null) ...[
+              const SizedBox(height: 12),
+              TextButton(onPressed: onAction, child: Text(actionLabel!)),
+            ],
+          ],
         ),
-      );
+      ),
+    ),
+  );
 }

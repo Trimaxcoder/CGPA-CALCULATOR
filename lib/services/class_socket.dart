@@ -361,6 +361,11 @@ class ClassSocket with WidgetsBindingObserver {
       'class:archived',
       'class:cleared',
       'class:preferences',
+      // Friends: a request arrived, was accepted, or someone was removed.
+      // These carry no classId, so the class list just reloads.
+      'friend:request',
+      'friend:accepted',
+      'friend:removed',
     ]) {
       _listen(s, name, (d) {
         final m = _asMap(d);

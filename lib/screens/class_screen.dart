@@ -15,6 +15,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart'
     show TargetPlatform, defaultTargetPlatform, kIsWeb;
+import 'package:flutter/gestures.dart' show TapGestureRecognizer;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -29,6 +30,7 @@ import '../services/voice_player.dart';
 import '../services/voice_recorder.dart';
 import '../stores/class_chat_store.dart';
 import '../widgets/chat_doodle_background.dart';
+import '../widgets/person_sheet.dart';
 import '../widgets/snackBar.dart';
 import 'anon_screen.dart';
 import 'class_info_screen.dart';
@@ -194,6 +196,10 @@ class _ClassScreenState extends State<ClassScreen> {
     _input.dispose();
     _focus.dispose();
     _scroll.dispose();
+    for (final t in _linkTaps.values) {
+      t.dispose();
+    }
+    _linkTaps.clear();
     super.dispose();
   }
 
@@ -383,48 +389,109 @@ class _ClassScreenState extends State<ClassScreen> {
     );
   }
 
-  /// The message text as spans, with every tagged @name in bold colour.
-  /// Only names the server confirmed as class members are highlighted.
+  // ── Links and @names inside message text ───────────────────────────────────
+
+  /// One tap handler per address, kept so they can be disposed with the screen.
+  final Map<String, TapGestureRecognizer> _linkTaps = {};
+
+  static final _urlRe = RegExp(
+    r'(?:https?:\/\/|www\.)[^\s<>"]+',
+    caseSensitive: false,
+  );
+
+  TapGestureRecognizer _tapFor(String url) => _linkTaps.putIfAbsent(
+        url,
+        () => TapGestureRecognizer()..onTap = () => _openUrl(url),
+      );
+
+  /// The message text as spans: web addresses are underlined and open when
+  /// tapped, and every tagged @name is in bold colour. Only names the server
+  /// confirmed as class members are highlighted.
   List<InlineSpan> _textSpans(
     ChatMessage m,
     TextStyle base, {
     required bool mine,
   }) {
-    if (m.mentions.isEmpty) return [TextSpan(text: m.text, style: base)];
-
-    final names = m.mentions.map((x) => x.username).toList()
-      ..sort((a, b) => b.length.compareTo(a.length));
-    final re = RegExp(
-      '@(${names.map(RegExp.escape).join('|')})(?![A-Za-z0-9_])',
-      caseSensitive: false,
-    );
-    final me = _store.myId;
     final text = m.text;
+
+    // (start, end, url, isMe). url == null means an @name.
+    final marks = <(int, int, String?, bool)>[];
+
+    for (final hit in _urlRe.allMatches(text)) {
+      var end = hit.end;
+      // A full stop or bracket at the end belongs to the sentence, not the link
+      while (end > hit.start && '.,;:!?)]}\'"'.contains(text[end - 1])) {
+        end--;
+      }
+      if (end - hit.start < 5) continue;
+      final raw = text.substring(hit.start, end);
+      final url = raw.toLowerCase().startsWith('www.') ? 'https://$raw' : raw;
+      marks.add((hit.start, end, url, false));
+    }
+
+    if (m.mentions.isNotEmpty) {
+      final names = m.mentions.map((x) => x.username).toList()
+        ..sort((a, b) => b.length.compareTo(a.length));
+      final re = RegExp(
+        '@(${names.map(RegExp.escape).join('|')})(?![A-Za-z0-9_])',
+        caseSensitive: false,
+      );
+      final me = _store.myId;
+
+      for (final hit in re.allMatches(text)) {
+        // "a@name" is an email, not a tag
+        if (hit.start > 0 &&
+            RegExp(r'[A-Za-z0-9_.@]').hasMatch(text[hit.start - 1])) {
+          continue;
+        }
+        // an "@" inside a web address is part of the address
+        final insideLink = marks.any(
+          (k) => k.$3 != null && hit.start >= k.$1 && hit.start < k.$2,
+        );
+        if (insideLink) continue;
+
+        final name = hit.group(1)!.toLowerCase();
+        final isMe = m.mentions.any(
+          (x) => x.username.toLowerCase() == name && x.userId == me,
+        );
+        marks.add((hit.start, hit.end, null, isMe));
+      }
+    }
+
+    if (marks.isEmpty) return [TextSpan(text: text, style: base)];
+    marks.sort((a, b) => a.$1.compareTo(b.$1));
+
     final spans = <InlineSpan>[];
     var at = 0;
+    for (final k in marks) {
+      if (k.$1 < at) continue;
+      if (k.$1 > at) {
+        spans.add(TextSpan(text: text.substring(at, k.$1), style: base));
+      }
+      final piece = text.substring(k.$1, k.$2);
 
-    for (final hit in re.allMatches(text)) {
-      // "a@name" is an email, not a tag
-      if (hit.start > 0 && RegExp(r'[A-Za-z0-9_.@]').hasMatch(text[hit.start - 1])) {
-        continue;
+      if (k.$3 != null) {
+        spans.add(TextSpan(
+          text: piece,
+          recognizer: _tapFor(k.$3!),
+          style: base.copyWith(
+            color: mine ? Colors.white : _accent,
+            decoration: TextDecoration.underline,
+            decorationColor: mine ? Colors.white : _accent,
+            fontWeight: FontWeight.w600,
+          ),
+        ));
+      } else {
+        spans.add(TextSpan(
+          text: piece,
+          style: base.copyWith(
+            fontWeight: FontWeight.w800,
+            color: mine ? const Color(0xFFBBDEFB) : _accent,
+            backgroundColor: k.$4 ? _accent.withValues(alpha: 0.2) : null,
+          ),
+        ));
       }
-      if (hit.start > at) {
-        spans.add(TextSpan(text: text.substring(at, hit.start), style: base));
-      }
-      final name = hit.group(1)!.toLowerCase();
-      final isMe = m.mentions.any(
-        (x) => x.username.toLowerCase() == name && x.userId == me,
-      );
-      spans.add(TextSpan(
-        text: hit.group(0),
-        style: base.copyWith(
-          fontWeight: FontWeight.w800,
-          color: mine ? const Color(0xFFBBDEFB) : _accent,
-          backgroundColor:
-              isMe ? _accent.withValues(alpha: 0.2) : null,
-        ),
-      ));
-      at = hit.end;
+      at = k.$2;
     }
     if (at < text.length) {
       spans.add(TextSpan(text: text.substring(at), style: base));
@@ -1272,6 +1339,14 @@ class _ClassScreenState extends State<ClassScreen> {
   /// Tapping the class name opens the class info screen: created date,
   /// creator, admins, invite code, shared media, members and settings.
   void _showInfo(ClassRoom room) {
+    // A private chat has no class info: show the other person instead
+    if (room.isDm) {
+      final peer = room.peerId;
+      if (peer != null) {
+        showPersonSheet(context, userId: peer, name: room.name, inChat: true);
+      }
+      return;
+    }
     Navigator.of(context)
         .push(MaterialPageRoute(builder: (_) => ClassInfoScreen(room: room)))
         .then((_) => _store.refresh());
@@ -1463,7 +1538,11 @@ class _ClassScreenState extends State<ClassScreen> {
                             ),
                           ),
                           Text(
-                            '${room.memberCount} ${room.memberCount == 1 ? 'member' : 'members'}  ·  tap for class info',
+                            room.isDm
+                                ? (room.peerUsername.isNotEmpty && room.peerUsername != room.name
+                                    ? '@${room.peerUsername}  ·  tap for profile'
+                                    : 'Private chat  ·  tap for profile')
+                                : '${room.memberCount} ${room.memberCount == 1 ? 'member' : 'members'}  ·  tap for class info',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(fontSize: 12, color: p.sub),
@@ -1476,6 +1555,7 @@ class _ClassScreenState extends State<ClassScreen> {
               ),
             ),
           ),
+          if (!room.isDm)
           IconButton(
             tooltip: 'Anonymous space',
             icon: Stack(
@@ -1506,8 +1586,11 @@ class _ClassScreenState extends State<ClassScreen> {
             onPressed: () => _openSearch(room),
           ),
           IconButton(
-            tooltip: 'Class info',
-            icon: Icon(Icons.info_outline_rounded, color: p.text),
+            tooltip: room.isDm ? 'Profile' : 'Class info',
+            icon: Icon(
+              room.isDm ? Icons.person_outline_rounded : Icons.info_outline_rounded,
+              color: p.text,
+            ),
             onPressed: () => _showInfo(room),
           ),
         ],
@@ -1913,17 +1996,26 @@ class _ClassScreenState extends State<ClassScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (showName)
+                  if (showName && !(_store.room ?? widget.room).isDm)
                     Padding(
                       padding: const EdgeInsets.only(bottom: 2),
-                      child: Text(
-                        m.senderName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w800,
-                          color: _senderColor(m.senderId),
+                      // Tap a name to see who it is and add them as a friend
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () => showPersonSheet(
+                          context,
+                          userId: m.senderId,
+                          name: m.senderName,
+                        ),
+                        child: Text(
+                          m.senderName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                            color: _senderColor(m.senderId),
+                          ),
                         ),
                       ),
                     ),
@@ -2193,7 +2285,14 @@ class _ClassScreenState extends State<ClassScreen> {
   }
 
   Widget _composer(_Pal p, ClassRoom room) {
-    if (room.archived) return _notice(p, 'This class has been archived.');
+    if (room.archived) {
+      return _notice(
+        p,
+        room.isDm
+            ? 'You can no longer message this person.'
+            : 'This class has been archived.',
+      );
+    }
     if (room.chatLocked && !room.isAdmin) {
       return _notice(p, 'Only admins can send messages right now.');
     }
