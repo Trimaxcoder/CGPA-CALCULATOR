@@ -20,6 +20,7 @@ import '../widgets/google_button.dart';
 import '../widgets/snackBar.dart';
 import '../widgets/legal_links.dart';
 import 'landing_page.dart';
+import 'profile_screen.dart';
 
 class SignInScreen extends StatefulWidget {
   const SignInScreen({super.key});
@@ -245,18 +246,25 @@ class _SignInScreenState extends State<SignInScreen> {
         accessToken: accessToken,
       );
 
-      if (userData['profile'] != null) {
-        final profile = StudentProfile.fromMap(
-          Map<String, dynamic>.from(userData['profile'] as Map),
-        );
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('profile', jsonEncode(profile.toMap()));
-      }
+      final profile = StudentProfile.fromMap(
+        Map<String, dynamic>.from((userData['profile'] ?? {}) as Map),
+      );
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('profile', jsonEncode(profile.toMap()));
 
       if (!mounted) return;
-      Navigator.of(
-        context,
-      ).pushAndRemoveUntil(fadeRoute(const MainShell()), (_) => false);
+
+      if (userData['needsProfile'] == true) {
+        // New Google user (or incomplete profile): fill in details first
+        Navigator.of(context).pushAndRemoveUntil(
+          fadeRoute(ProfileScreen(profile: profile, isFirstTime: true)),
+          (_) => false,
+        );
+      } else {
+        Navigator.of(
+          context,
+        ).pushAndRemoveUntil(fadeRoute(const MainShell()), (_) => false);
+      }
     } on ApiException catch (e) {
       debugPrint('GOOGLE API ERROR: ${e.message} (status ${e.statusCode})');
       if (mounted) AppSnackBar.showError(context, e.message);

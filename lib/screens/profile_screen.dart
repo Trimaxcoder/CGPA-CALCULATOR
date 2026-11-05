@@ -1,6 +1,10 @@
 // ══════════════════════════════════════════════════════════
 //  PROFILE SCREEN — edit your details
 //  Opened from Settings. Pops with the updated StudentProfile.
+//
+//  isFirstTime = true is used right after a NEW Google sign-up:
+//  the user cannot leave until the details are saved, and after
+//  saving they go straight to MainShell.
 // ══════════════════════════════════════════════════════════
 import 'dart:convert';
 import 'package:flutter/material.dart';
@@ -8,6 +12,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'main_shell.dart';
 import '../models/studentProfile_model.dart';
 import '../providers/theme_notifier.dart';
 import '../services/api_service.dart';
@@ -24,9 +29,17 @@ import '../widgets/snackBar.dart';
 import '../widgets/ui_helpers.dart';
 
 class ProfileScreen extends StatefulWidget {
-  const ProfileScreen({super.key, required this.profile});
+  const ProfileScreen({
+    super.key,
+    required this.profile,
+    this.isFirstTime = false,
+  });
 
   final StudentProfile profile;
+
+  /// True right after a new Google sign-up. Blocks leaving the screen
+  /// until the profile is saved.
+  final bool isFirstTime;
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
@@ -73,7 +86,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _level = p.level.isNotEmpty ? p.level : '100';
     _loadUsername();
     _loadFinalLevel();
-    for (final c in [_nameC, _usernameC, _emailC, _matricC, _schoolC, _facC, _deptC]) {
+    for (final c in [
+      _nameC,
+      _usernameC,
+      _emailC,
+      _matricC,
+      _schoolC,
+      _facC,
+      _deptC,
+    ]) {
       c.addListener(_refresh);
     }
   }
@@ -122,14 +143,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
       _levels.where((l) => int.parse(l) >= int.parse(_level)).toList();
 
   /// The chosen last level, or '' if it is empty or no longer valid.
-  String get _finalValue => _finalOptions.contains(_finalLevel) ? _finalLevel : '';
+  String get _finalValue =>
+      _finalOptions.contains(_finalLevel) ? _finalLevel : '';
 
-  String _cleanError(Object e) =>
-      e.toString().replaceFirst('Exception: ', '');
+  String _cleanError(Object e) => e.toString().replaceFirst('Exception: ', '');
 
   @override
   void dispose() {
-    for (final c in [_nameC, _usernameC, _emailC, _matricC, _schoolC, _facC, _deptC]) {
+    for (final c in [
+      _nameC,
+      _usernameC,
+      _emailC,
+      _matricC,
+      _schoolC,
+      _facC,
+      _deptC,
+    ]) {
       c.dispose();
     }
     super.dispose();
@@ -159,7 +188,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (sub.length == 1) return sub.first;
 
     if (sub.isEmpty) {
-      final rev = options.where((o) => query.contains(o.toLowerCase())).toList();
+      final rev = options
+          .where((o) => query.contains(o.toLowerCase()))
+          .toList();
       if (rev.length == 1) return rev.first;
     }
     final words = options.where((o) {
@@ -171,6 +202,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _back() async {
+    // First-time users must finish their profile, so there is no way back.
+    if (widget.isFirstTime) return;
+
     if (_dirty && !_saving) {
       final discard = await showConfirmDialog(
         context,
@@ -249,9 +283,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
       }
     }
 
-    final school = _findBestMatch(_schoolC.text, getAllSchools()) ?? _schoolC.text.trim();
-    final faculty = _findBestMatch(_facC.text, getFaculties()) ?? _facC.text.trim();
-    final dept = _findBestMatch(_deptC.text, getDepartments(faculty)) ??
+    final school =
+        _findBestMatch(_schoolC.text, getAllSchools()) ?? _schoolC.text.trim();
+    final faculty =
+        _findBestMatch(_facC.text, getFaculties()) ?? _facC.text.trim();
+    final dept =
+        _findBestMatch(_deptC.text, getDepartments(faculty)) ??
         _deptC.text.trim();
 
     final updated = StudentProfile(
@@ -281,7 +318,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
       setState(() => _saving = false);
       AppSnackBar.showError(
         context,
-        result.message.isEmpty ? 'The server could not save your profile.' : result.message,
+        result.message.isEmpty
+            ? 'The server could not save your profile.'
+            : result.message,
       );
       return;
     }
@@ -301,7 +340,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
         'Saved on this device. It will sync when you are back online.',
       );
     }
-    Navigator.pop(context, updated);
+
+    if (widget.isFirstTime) {
+      // New Google user: profile done, go into the app.
+      Navigator.of(
+        context,
+      ).pushAndRemoveUntil(fadeRoute(const MainShell()), (_) => false);
+    } else {
+      Navigator.pop(context, updated);
+    }
   }
 
   // ── styling helpers ───────────────────────────────────────
@@ -310,48 +357,45 @@ class _ProfileScreenState extends State<ProfileScreen> {
     IconData icon,
     bool isDark, {
     String? helper,
-  }) =>
-      InputDecoration(
-        labelText: label,
-        helperText: helper,
-        helperMaxLines: 3,
-        helperStyle: TextStyle(
-          color: isDark ? Colors.white38 : Colors.black45,
-          fontSize: 12,
-        ),
-        labelStyle: TextStyle(
-          color: isDark ? Colors.white54 : Colors.black45,
-          fontSize: 14,
-        ),
-        prefixIcon: Container(
-          margin: const EdgeInsets.all(10),
-          padding: const EdgeInsets.all(6),
-          decoration: BoxDecoration(
-            color: _blue.withOpacity(0.12),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Icon(icon, color: _blue, size: 18),
-        ),
-        filled: true,
-        fillColor: isDark ? Colors.white.withOpacity(0.05) : const Color(0xFFF5F7FA),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(
-            color: isDark ? Colors.white12 : Colors.black12,
-          ),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(
-            color: isDark ? Colors.white12 : Colors.black12,
-          ),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: _blue, width: 1.5),
-        ),
-        errorStyle: const TextStyle(color: Colors.redAccent),
-      );
+  }) => InputDecoration(
+    labelText: label,
+    helperText: helper,
+    helperMaxLines: 3,
+    helperStyle: TextStyle(
+      color: isDark ? Colors.white38 : Colors.black45,
+      fontSize: 12,
+    ),
+    labelStyle: TextStyle(
+      color: isDark ? Colors.white54 : Colors.black45,
+      fontSize: 14,
+    ),
+    prefixIcon: Container(
+      margin: const EdgeInsets.all(10),
+      padding: const EdgeInsets.all(6),
+      decoration: BoxDecoration(
+        color: _blue.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Icon(icon, color: _blue, size: 18),
+    ),
+    filled: true,
+    fillColor: isDark
+        ? Colors.white.withOpacity(0.05)
+        : const Color(0xFFF5F7FA),
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(14),
+      borderSide: BorderSide(color: isDark ? Colors.white12 : Colors.black12),
+    ),
+    enabledBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(14),
+      borderSide: BorderSide(color: isDark ? Colors.white12 : Colors.black12),
+    ),
+    focusedBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(14),
+      borderSide: const BorderSide(color: _blue, width: 1.5),
+    ),
+    errorStyle: const TextStyle(color: Colors.redAccent),
+  );
 
   Widget _section(String label, List<Widget> fields, bool isDark) => Container(
     padding: const EdgeInsets.all(16),
@@ -484,7 +528,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             }
             return null;
           },
-          helper: 'Shown in your classes instead of your full name. '
+          helper:
+              'Shown in your classes instead of your full name. '
               'Leave it empty to use your full name.',
           formatters: [
             FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z0-9_.]')),
@@ -585,7 +630,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
               'Last level before graduation (optional)',
               Icons.flag_outlined,
               isDark,
-              helper: 'Your programme may be longer or shorter than 4 years. '
+              helper:
+                  'Your programme may be longer or shorter than 4 years. '
                   'This helps move you up, and graduate you, at the right time.',
             ),
             items: [
@@ -602,7 +648,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     width: double.infinity,
     height: 54,
     child: ElevatedButton.icon(
-      onPressed: (_saving || !_dirty) ? null : _save,
+      // A first-time user can always save (the form validation decides),
+      // everyone else only after changing something.
+      onPressed: (_saving || (!_dirty && !widget.isFirstTime)) ? null : _save,
       icon: _saving
           ? const SizedBox(
               width: 18,
@@ -614,7 +662,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
             )
           : const Icon(Icons.check_rounded),
       label: Text(
-        _saving ? 'Saving…' : 'Save changes',
+        _saving
+            ? 'Saving…'
+            : (widget.isFirstTime ? 'Save and continue' : 'Save changes'),
         style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
       ),
       style: ElevatedButton.styleFrom(
@@ -628,8 +678,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
     ),
   );
 
+  // Blocks the phone's back button / swipe for first-time users.
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) =>
+      PopScope(canPop: !widget.isFirstTime, child: _buildScreen(context));
+
+  Widget _buildScreen(BuildContext context) {
     final isDark = context.watch<ThemeNotifier>().isDarkMode;
     final bg = isDark ? const Color(0xFF0A0A0A) : const Color(0xFFF7F8FA);
     final text = isDark ? Colors.white : Colors.black87;
@@ -643,9 +697,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
     // ── Desktop ──
     if (context.isExpanded) {
       return DesktopPage(
-        title: 'Profile',
-        subtitle: 'Update your personal and academic details',
+        title: widget.isFirstTime ? 'Complete your profile' : 'Profile',
+        subtitle: widget.isFirstTime
+            ? 'Fill in your details to continue'
+            : 'Update your personal and academic details',
         maxWidth: 820,
+        showBack: !widget.isFirstTime,
         onBack: _back,
         child: SingleChildScrollView(
           padding: const EdgeInsets.only(bottom: 40),
@@ -673,28 +730,34 @@ class _ProfileScreenState extends State<ProfileScreen> {
               padding: const EdgeInsets.fromLTRB(20, 14, 20, 8),
               child: Row(
                 children: [
-                  GestureDetector(
-                    onTap: _back,
-                    child: Container(
-                      width: 42,
-                      height: 42,
-                      decoration: BoxDecoration(
-                        color: isDark
-                            ? Colors.white.withOpacity(0.06)
-                            : Colors.white,
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(
+                  if (!widget.isFirstTime) ...[
+                    GestureDetector(
+                      onTap: _back,
+                      child: Container(
+                        width: 42,
+                        height: 42,
+                        decoration: BoxDecoration(
                           color: isDark
-                              ? Colors.white.withOpacity(0.08)
-                              : Colors.black.withOpacity(0.06),
+                              ? Colors.white.withOpacity(0.06)
+                              : Colors.white,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: isDark
+                                ? Colors.white.withOpacity(0.08)
+                                : Colors.black.withOpacity(0.06),
+                          ),
+                        ),
+                        child: Icon(
+                          Icons.arrow_back_rounded,
+                          color: text,
+                          size: 20,
                         ),
                       ),
-                      child: Icon(Icons.arrow_back_rounded, color: text, size: 20),
                     ),
-                  ),
-                  const SizedBox(width: 14),
+                    const SizedBox(width: 14),
+                  ],
                   Text(
-                    'Profile',
+                    widget.isFirstTime ? 'Complete your profile' : 'Profile',
                     style: TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.w900,

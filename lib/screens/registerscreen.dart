@@ -9,6 +9,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'dart:convert';
 
 import 'main_shell.dart';
+import 'profile_screen.dart';
 import '../widgets/ui_helpers.dart';
 import '../models/studentProfile_model.dart';
 import '../uniport_courses.dart';
@@ -291,18 +292,25 @@ class _RegisterScreenState extends State<RegisterScreen> {
         accessToken: accessToken,
       );
 
-      if (userData['profile'] != null) {
-        final profile = StudentProfile.fromMap(
-          Map<String, dynamic>.from(userData['profile'] as Map),
-        );
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('profile', jsonEncode(profile.toMap()));
-      }
+      final profile = StudentProfile.fromMap(
+        Map<String, dynamic>.from((userData['profile'] ?? {}) as Map),
+      );
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('profile', jsonEncode(profile.toMap()));
 
       if (!mounted) return;
-      Navigator.of(
-        context,
-      ).pushAndRemoveUntil(fadeRoute(const MainShell()), (_) => false);
+
+      if (userData['needsProfile'] == true) {
+        // New Google user: go fill in the profile first
+        Navigator.of(context).pushAndRemoveUntil(
+          fadeRoute(ProfileScreen(profile: profile, isFirstTime: true)),
+          (_) => false,
+        );
+      } else {
+        Navigator.of(
+          context,
+        ).pushAndRemoveUntil(fadeRoute(const MainShell()), (_) => false);
+      }
     } on ApiException catch (e) {
       if (mounted) AppSnackBar.showError(context, e.message);
     } catch (e, stack) {

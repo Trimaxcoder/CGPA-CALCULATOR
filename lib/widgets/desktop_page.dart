@@ -17,6 +17,7 @@ class DesktopPage extends StatelessWidget {
     this.actions = const [],
     this.maxWidth = 1000,
     this.onBack,
+    this.showBack = true,
   });
 
   final String title;
@@ -25,6 +26,7 @@ class DesktopPage extends StatelessWidget {
   final Widget child;
   final double maxWidth;
   final VoidCallback? onBack;
+  final bool showBack;
 
   @override
   Widget build(BuildContext context) {
@@ -52,34 +54,36 @@ class DesktopPage extends StatelessWidget {
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Material(
-                            color: isDark
-                                ? Colors.white.withOpacity(0.06)
-                                : Colors.white,
-                            borderRadius: BorderRadius.circular(14),
-                            child: InkWell(
+                          if (showBack) ...[
+                            Material(
+                              color: isDark
+                                  ? Colors.white.withOpacity(0.06)
+                                  : Colors.white,
                               borderRadius: BorderRadius.circular(14),
-                              onTap: onBack ?? () => Navigator.pop(context),
-                              child: Container(
-                                width: 44,
-                                height: 44,
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(14),
-                                  border: Border.all(
-                                    color: isDark
-                                        ? Colors.white.withOpacity(0.1)
-                                        : Colors.black.withOpacity(0.08),
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(14),
+                                onTap: onBack ?? () => Navigator.pop(context),
+                                child: Container(
+                                  width: 44,
+                                  height: 44,
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(14),
+                                    border: Border.all(
+                                      color: isDark
+                                          ? Colors.white.withOpacity(0.1)
+                                          : Colors.black.withOpacity(0.08),
+                                    ),
                                   ),
-                                ),
-                                child: Icon(
-                                  Icons.arrow_back_rounded,
-                                  size: 20,
-                                  color: textPrimary,
+                                  child: Icon(
+                                    Icons.arrow_back_rounded,
+                                    size: 20,
+                                    color: textPrimary,
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
-                          const SizedBox(width: 16),
+                            const SizedBox(width: 16),
+                          ],
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             mainAxisSize: MainAxisSize.min,

@@ -15,6 +15,7 @@ import '../widgets/google_button.dart';
 import '../models/studentProfile_model.dart';
 import '../widgets/ui_helpers.dart';
 import '../widgets/snackBar.dart';
+import 'profile_screen.dart';
 import 'dart:convert';
 
 class LandingPage extends StatefulWidget {
@@ -667,18 +668,25 @@ class _LandingPageState extends State<LandingPage>
         accessToken: accessToken,
       );
 
-      if (userData['profile'] != null) {
-        final profile = StudentProfile.fromMap(
-          Map<String, dynamic>.from(userData['profile'] as Map),
-        );
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('profile', jsonEncode(profile.toMap()));
-      }
+      final profile = StudentProfile.fromMap(
+        Map<String, dynamic>.from((userData['profile'] ?? {}) as Map),
+      );
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('profile', jsonEncode(profile.toMap()));
 
       if (!mounted) return;
-      Navigator.of(
-        context,
-      ).pushAndRemoveUntil(fadeRoute(const MainShell()), (_) => false);
+
+      if (userData['needsProfile'] == true) {
+        // New Google user: go fill in the profile first
+        Navigator.of(context).pushAndRemoveUntil(
+          fadeRoute(ProfileScreen(profile: profile, isFirstTime: true)),
+          (_) => false,
+        );
+      } else {
+        Navigator.of(
+          context,
+        ).pushAndRemoveUntil(fadeRoute(const MainShell()), (_) => false);
+      }
     } on ApiException catch (e) {
       debugPrint('API ERROR: ${e.message}');
       if (mounted) AppSnackBar.showError(context, e.message);
