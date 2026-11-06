@@ -30,8 +30,9 @@ import 'services/profile_sync.dart';
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
-  // Chat messages are not saved to the bell history
-  if (message.data['type'] == 'class_message') return;
+  // Chat messages, calls and friend requests are not saved to the bell history
+  final type = message.data['type'];
+  if (type == 'class_message' || type == 'call_incoming' || type == 'friend_request') return;
 
   final courseCode = message.data['courseCode'] ?? '';
   await MutedCoursesStore().load(); // background isolate needs to load fresh

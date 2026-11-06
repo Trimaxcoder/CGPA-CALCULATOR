@@ -12,6 +12,7 @@ import 'timetable_service.dart';
 import 'muted_courses_store.dart';
 import 'notification_store.dart';
 import 'notification_router.dart';
+import 'call_service.dart';
 import '../models/app_notification.dart';
 import 'notification_service_web.dart'
     if (dart.library.io) 'notification_service_stub.dart'
@@ -37,6 +38,7 @@ class NotificationService {
   // that arrives while the app is closed uses it too.
   static const _mainChannelId = 'gradex_channel';
   static const _studyChannelId = 'study_reminders';
+  static const _callsChannelId = 'gradex_calls';
 
   static Future<void> init() async {
     if (_initialized) {
@@ -60,6 +62,9 @@ class NotificationService {
 
     _registerListeners();
     _initialized = true;
+
+    // Listen for incoming calls (does nothing until someone is logged in)
+    unawaited(CallService.instance.start());
 
     await syncToken();
   }
@@ -136,6 +141,7 @@ class NotificationService {
   /// new account gets notifications on this phone straight away.
   static Future<void> onLogin() {
     _retries = 0;
+    unawaited(CallService.instance.start());
     return syncToken();
   }
 
@@ -304,6 +310,14 @@ class NotificationService {
         );
         await androidImpl.createNotificationChannel(
           const AndroidNotificationChannel(
+            _callsChannelId,
+            'Calls',
+            description: 'Incoming voice and video calls',
+            importance: Importance.max,
+          ),
+        );
+        await androidImpl.createNotificationChannel(
+          const AndroidNotificationChannel(
             _studyChannelId,
             'Study reminders',
             description: 'Reminders for bookmarked personal study sessions',
@@ -373,7 +387,8 @@ class NotificationService {
 
   static Future<void> _storeNotification(RemoteMessage message) async {
     // Chat messages would flood the bell history, so they are not saved
-    if (message.data['type'] == 'class_message') return;
+    final type = message.data['type'];
+    if (type == 'class_message' || type == 'call_incoming' || type == 'friend_request') return;
 
     final courseCode = message.data['courseCode'] ?? '';
     if (courseCode.isNotEmpty && MutedCoursesStore().isMuted(courseCode)) {

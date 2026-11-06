@@ -12,6 +12,7 @@ import '../models/announcement.dart';
 import '../stores/announcement_store.dart';
 import '../screens/class_workspace_screen.dart';
 import '../screens/people_screen.dart';
+import 'call_service.dart';
 
 /// Watches the navigator so the router knows when the splash screen is gone.
 /// The splash screen is the app's first page (route name "/"). It replaces
@@ -81,6 +82,11 @@ class NotificationRouter {
   static void route(AppNotification n) {
     if (_classTypes.contains(n.type)) {
       _routeToClass(n.data['classId']?.toString());
+      return;
+    }
+
+    if (n.type == 'call_incoming') {
+      CallService.instance.openFromPush(n.data['callId']?.toString() ?? '');
       return;
     }
 

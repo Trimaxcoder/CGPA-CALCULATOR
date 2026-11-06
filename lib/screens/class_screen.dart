@@ -25,6 +25,7 @@ import '../providers/theme_notifier.dart';
 import '../services/api_service.dart';
 import '../services/attachment_service.dart';
 import '../services/class_service.dart';
+import '../services/call_service.dart';
 import '../services/class_socket.dart';
 import '../services/voice_player.dart';
 import '../services/voice_recorder.dart';
@@ -1338,6 +1339,11 @@ class _ClassScreenState extends State<ClassScreen> {
 
   /// Tapping the class name opens the class info screen: created date,
   /// creator, admins, invite code, shared media, members and settings.
+  Future<void> _startCall(ClassRoom room, CallKind kind) async {
+    final problem = await CallService.instance.startCall(context, room, kind);
+    if (problem != null && mounted) AppSnackBar.auto(context, problem);
+  }
+
   void _showInfo(ClassRoom room) {
     // A private chat has no class info: show the other person instead
     if (room.isDm) {
@@ -1555,6 +1561,19 @@ class _ClassScreenState extends State<ClassScreen> {
               ),
             ),
           ),
+          // Voice and video calls: private chats, phone app only
+          if (room.isDm && CallService.supported && !room.archived) ...[
+            IconButton(
+              tooltip: 'Voice call',
+              icon: Icon(Icons.call_rounded, color: p.text),
+              onPressed: () => _startCall(room, CallKind.voice),
+            ),
+            IconButton(
+              tooltip: 'Video call',
+              icon: Icon(Icons.videocam_rounded, color: p.text),
+              onPressed: () => _startCall(room, CallKind.video),
+            ),
+          ],
           if (!room.isDm)
           IconButton(
             tooltip: 'Anonymous space',

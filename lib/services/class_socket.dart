@@ -66,6 +66,13 @@ class TypingEvent {
 }
 
 /// The server's answer to something we sent (chat message, anonymous post...).
+/// A call event from the server: call:incoming, call:accepted or call:ended.
+class CallEvent {
+  final String name;
+  final Map<String, dynamic> data;
+  const CallEvent(this.name, this.data);
+}
+
 class SocketAck {
   final bool ok;
   final String? error; // a code like RATE_LIMITED, MUTED, OFFLINE ...
@@ -151,6 +158,7 @@ class ClassSocket with WidgetsBindingObserver {
   final _classActivity = StreamController<ClassActivity>.broadcast();
   final _reactions = StreamController<Map<String, dynamic>>.broadcast();
   final _messageEdited = StreamController<Map<String, dynamic>>.broadcast();
+  final _callEvents = StreamController<CallEvent>.broadcast();
 
   Stream<ChatMessage> get onMessageNew => _messageNew.stream;
 
@@ -170,6 +178,9 @@ class ClassSocket with WidgetsBindingObserver {
   Stream<Map<String, dynamic>> get onAnonHidden => _anonHidden.stream;
 
   Stream<ClassEvent> get onClassEvent => _classEvents.stream;
+
+  /// Incoming call, call answered, call ended.
+  Stream<CallEvent> get onCallEvent => _callEvents.stream;
 
   /// Someone edited one of their messages.
   Stream<Map<String, dynamic>> get onMessageEdited => _messageEdited.stream;
@@ -260,12 +271,40 @@ class ClassSocket with WidgetsBindingObserver {
   /// classes that were open.
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    // "Away" goes out the instant the app stops being in front (inactive comes
+    // before hidden and paused), while Android still lets it send. The server
+    // then pushes instead of treating this phone as reading the chat.
+    if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.hidden ||
+        state == AppLifecycleState.paused) {
+      _socket?.emit('presence', {'away': true});
+    } else if (state == AppLifecycleState.resumed) {
+      _socket?.emit('presence', {'away': false});
+    }
+
     if (state == AppLifecycleState.paused) {
-      if (_socket != null) {
+      final s = _socket;
+      if (s != null) {
         _paused = true;
-        _socket?.dispose();
+
+        // Android freezes the app almost at once, so a plain disconnect can
+        // be lost and the server would keep treating this phone as "looking
+        // at the chat" (no push, message marked as seen). Say it out loud
+        // first. The rooms are remembered so they are rejoined on resume.
+        for (final id in _rooms) {
+          s.emit('class:leave', {'classId': id});
+        }
+
         _socket = null;
         connected.value = false;
+
+        // Give the leave messages a moment to go out, then close for real
+        Future.delayed(const Duration(milliseconds: 400), () {
+          try {
+            s.disconnect();
+            s.dispose();
+          } catch (_) {}
+        });
       }
     } else if (state == AppLifecycleState.resumed && _paused) {
       _paused = false;
@@ -295,6 +334,8 @@ class ClassSocket with WidgetsBindingObserver {
       for (final id in _rooms) {
         s.emit('class:join', {'classId': id});
       }
+      final viewing = _viewing;
+      if (viewing != null) s.emit('chat:viewing', {'classId': viewing});
     });
 
     s.onDisconnect((_) => connected.value = false);
@@ -348,6 +389,11 @@ class ClassSocket with WidgetsBindingObserver {
     _listen(s, 'anon:closed', (d) => _anonClosed.add(AnonSession.fromMap(_asMap(d))));
     _listen(s, 'anon:new', (d) => _anonNew.add(AnonPost.fromMap(_asMap(d))));
     _listen(s, 'anon:hidden', (d) => _anonHidden.add(_asMap(d)));
+
+    // ── Calls ────────────────────────────────────────────────────────────────
+    for (final name in const ['call:incoming', 'call:accepted', 'call:ended']) {
+      _listen(s, name, (d) => _callEvents.add(CallEvent(name, _asMap(d))));
+    }
 
     // ── Class and member events ──────────────────────────────────────────────
     for (final name in const [
@@ -416,6 +462,26 @@ class ClassSocket with WidgetsBindingObserver {
 
   // ── Sending ────────────────────────────────────────────────────────────────
 
+  /// Sends a call event (call:invite, call:accept, ...) and waits for the answer.
+  Future<SocketAck> callRequest(
+    String event,
+    Map<String, dynamic> payload, {
+    Duration timeout = const Duration(seconds: 10),
+  }) =>
+      _emit(event, payload, timeout: timeout);
+
+  /// Waits (up to [timeout]) for the live connection to be up. Starts it if
+  /// it is not running yet.
+  Future<bool> waitConnected({Duration timeout = const Duration(seconds: 8)}) async {
+    if (connected.value) return true;
+    await connect();
+    final end = DateTime.now().add(timeout);
+    while (!connected.value && DateTime.now().isBefore(end)) {
+      await Future.delayed(const Duration(milliseconds: 200));
+    }
+    return connected.value;
+  }
+
   Future<SocketAck> _emit(
     String event,
     Map<String, dynamic> payload, {
@@ -441,6 +507,24 @@ class ClassSocket with WidgetsBindingObserver {
       timeout,
       onTimeout: () => const SocketAck(ok: false, error: 'TIMEOUT'),
     );
+  }
+
+  /// The class whose chat screen is on screen right now, if any. The server
+  /// only treats me as "reading" a chat while this says so (no notification
+  /// and "seen" ticks for the sender), and never for any other screen.
+  String? _viewing;
+
+  void setViewing(String classId) {
+    _viewing = classId;
+    _socket?.emit('chat:viewing', {'classId': classId});
+  }
+
+  /// Only clears if this class is still the one on screen, so a new chat
+  /// opening before the old one closes is never switched off by mistake.
+  void clearViewing(String classId) {
+    if (_viewing != classId) return;
+    _viewing = null;
+    _socket?.emit('chat:viewing', {'classId': null});
   }
 
   /// Start receiving live updates for a class. Call when a class screen opens.

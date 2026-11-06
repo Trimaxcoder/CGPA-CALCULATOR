@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../stores/announcement_store.dart';
 import 'class_socket.dart';
+import 'notification_service.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  CONFIGURATION
@@ -45,7 +46,7 @@ class UnauthorizedException extends ApiException {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class TokenStorage {
-  static const _accessKey  = 'access_token';
+  static const _accessKey = 'access_token';
   static const _refreshKey = 'refresh_token';
 
   static Future<void> saveTokens({
@@ -53,7 +54,7 @@ class TokenStorage {
     required String refreshToken,
   }) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_accessKey,  accessToken);
+    await prefs.setString(_accessKey, accessToken);
     await prefs.setString(_refreshKey, refreshToken);
   }
 
@@ -106,7 +107,7 @@ class ApiClient {
   Future<Map<String, String>> _headers({bool requiresAuth = true}) async {
     final headers = <String, String>{
       'Content-Type': 'application/json',
-      'Accept':       'application/json',
+      'Accept': 'application/json',
     };
     if (requiresAuth) {
       final token = await TokenStorage.getAccessToken();
@@ -163,7 +164,7 @@ class ApiClient {
     Map<String, dynamic>? body,
     bool requiresAuth = true,
   }) async {
-    final uri     = Uri.parse('${ApiConfig.baseUrl}$path');
+    final uri = Uri.parse('${ApiConfig.baseUrl}$path');
     final headers = await _headers(requiresAuth: requiresAuth);
     final response = await _send(method, uri, headers, body: body);
 
@@ -206,8 +207,7 @@ class ApiClient {
     return ApiException('Request failed', statusCode: response.statusCode);
   }
 
-  bool _isSuccess(http.Response r) =>
-      r.statusCode >= 200 && r.statusCode < 300;
+  bool _isSuccess(http.Response r) => r.statusCode >= 200 && r.statusCode < 300;
 
   Map<String, dynamic> _successBody(http.Response response) {
     final body = _tryDecode(response.body);
@@ -277,12 +277,13 @@ class ApiClient {
 
       if (response.statusCode == 200) {
         final data = _tryDecode(response.body);
-        final access  = data?['accessToken']  as String?;
+        final access = data?['accessToken'] as String?;
         final refresh = data?['refreshToken'] as String?;
-        if (access == null || refresh == null) return _RefreshResult.unavailable;
+        if (access == null || refresh == null)
+          return _RefreshResult.unavailable;
 
         await TokenStorage.saveTokens(
-          accessToken:  access,
+          accessToken: access,
           refreshToken: refresh,
         );
         return _RefreshResult.ok;
@@ -305,13 +306,9 @@ class ApiClient {
     String path,
     Map<String, dynamic> body, {
     bool requiresAuth = true,
-  }) =>
-      _request('POST', path, body: body, requiresAuth: requiresAuth);
+  }) => _request('POST', path, body: body, requiresAuth: requiresAuth);
 
-  Future<Map<String, dynamic>> put(
-    String path,
-    Map<String, dynamic> body,
-  ) =>
+  Future<Map<String, dynamic>> put(String path, Map<String, dynamic> body) =>
       _request('PUT', path, body: body);
 
   Future<Map<String, dynamic>> delete(String path) => _request('DELETE', path);
@@ -332,15 +329,16 @@ class AuthService {
     Map<String, dynamic>? grading,
   }) async {
     final data = await _client.post('/auth/register', {
-      'email':    email,
+      'email': email,
       'password': password,
-      'profile':  profile,
+      'profile': profile,
       if (grading != null) 'grading': grading,
     }, requiresAuth: false);
     await TokenStorage.saveTokens(
-      accessToken:  data['accessToken']  as String,
+      accessToken: data['accessToken'] as String,
       refreshToken: data['refreshToken'] as String,
     );
+    NotificationService.onLogin();
     return data['user'] as Map<String, dynamic>;
   }
 
@@ -350,13 +348,14 @@ class AuthService {
     required String password,
   }) async {
     final data = await _client.post('/auth/login', {
-      'email':    email,
+      'email': email,
       'password': password,
     }, requiresAuth: false);
     await TokenStorage.saveTokens(
-      accessToken:  data['accessToken']  as String,
+      accessToken: data['accessToken'] as String,
       refreshToken: data['refreshToken'] as String,
     );
+    NotificationService.onLogin();
     return data['user'] as Map<String, dynamic>;
   }
 
@@ -366,7 +365,7 @@ class AuthService {
       await _client.post('/auth/logout', {});
     } catch (_) {}
     ClassSocket().disconnect();
-    await AnnouncementStore().clear(); 
+    await AnnouncementStore().clear();
     await TokenStorage.clearTokens();
   }
 
@@ -382,11 +381,9 @@ class AuthService {
   // ── Forgot password ────────────────────────────────────────────────────────
   /// Sends a password reset email to [email].
   Future<void> forgotPassword({required String email}) async {
-    await _client.post(
-      '/auth/forgot-password',
-      {'email': email},
-      requiresAuth: false,
-    );
+    await _client.post('/auth/forgot-password', {
+      'email': email,
+    }, requiresAuth: false);
   }
 
   // ── Reset password ─────────────────────────────────────────────────────────
@@ -396,33 +393,29 @@ class AuthService {
     required String token,
     required String newPassword,
   }) async {
-    await _client.post(
-      '/auth/reset-password',
-      {'token': token, 'newPassword': newPassword},
-      requiresAuth: false,
-    );
+    await _client.post('/auth/reset-password', {
+      'token': token,
+      'newPassword': newPassword,
+    }, requiresAuth: false);
   }
 
   // ── Google Sign-In ─────────────────────────────────────────────────────────
   /// Sends the Google [idToken] to your backend and saves the returned tokens.
   Future<Map<String, dynamic>> loginWithGoogle({
-  String? idToken,
-  String? accessToken,
-}) async {
-  final data = await _client.post(
-    '/auth/google',
-    {
+    String? idToken,
+    String? accessToken,
+  }) async {
+    final data = await _client.post('/auth/google', {
       if (idToken != null) 'idToken': idToken,
       if (accessToken != null) 'accessToken': accessToken,
-    },
-    requiresAuth: false,
-  );
-  await TokenStorage.saveTokens(
-    accessToken: data['accessToken'] as String,
-    refreshToken: data['refreshToken'] as String,
-  );
-  return data['user'] as Map<String, dynamic>;
-}
+    }, requiresAuth: false);
+    await TokenStorage.saveTokens(
+      accessToken: data['accessToken'] as String,
+      refreshToken: data['refreshToken'] as String,
+    );
+    NotificationService.onLogin();
+    return data['user'] as Map<String, dynamic>;
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -457,7 +450,7 @@ class ProfileService {
   }) async {
     await _client.put('/profile/change-password', {
       'currentPassword': currentPassword,
-      'newPassword':     newPassword,
+      'newPassword': newPassword,
     });
   }
 
@@ -481,7 +474,7 @@ class CourseService {
   }) async {
     var path = '/courses';
     final params = <String>[];
-    if (year     != null) params.add('year=$year');
+    if (year != null) params.add('year=$year');
     if (semester != null) params.add('semester=$semester');
     if (params.isNotEmpty) path += '?${params.join('&')}';
     final data = await _client.get(path);
@@ -498,11 +491,11 @@ class CourseService {
     String clientId = '',
   }) async {
     final data = await _client.post('/courses', {
-      'name':     name,
-      'title':    title,
-      'score':    score,
-      'unit':     unit,
-      'year':     year,
+      'name': name,
+      'title': title,
+      'score': score,
+      'unit': unit,
+      'year': year,
       'semester': semester,
       'clientId': clientId,
     });
@@ -519,11 +512,11 @@ class CourseService {
     required int semester,
   }) async {
     final data = await _client.put('/courses/$id', {
-      'name':     name,
-      'title':    title,
-      'score':    score,
-      'unit':     unit,
-      'year':     year,
+      'name': name,
+      'title': title,
+      'score': score,
+      'unit': unit,
+      'year': year,
       'semester': semester,
     });
     return data['course'] as Map<String, dynamic>;

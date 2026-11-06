@@ -134,6 +134,7 @@ class ClassChatStore extends ChangeNotifier {
     // Join the live room first so nothing is missed while the page loads.
     // If we are offline right now, ClassSocket joins as soon as it connects.
     unawaited(_socket.joinRoom(classId));
+    _socket.setViewing(classId);
 
     // Messages that have expired for me are removed while the chat is open
     _expiryTimer = Timer.periodic(const Duration(seconds: 30), (_) {
@@ -157,6 +158,7 @@ class ClassChatStore extends ChangeNotifier {
     _readTimer?.cancel();
     _expiryTimer?.cancel();
     _socket.connected.removeListener(_onConnectionChanged);
+    _socket.clearViewing(classId);
     _socket.leaveRoom(classId);
     super.dispose();
   }
